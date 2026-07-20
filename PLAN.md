@@ -4,9 +4,16 @@
 
 ## Current status
 
-- **Active phase:** 1 (oracle + tokenizer parity)
+- **Active phase:** 1 (oracle + tokenizer parity) — ⚠-fact verification **DONE** (see `docs/qwen35_arch.md`, read it before writing any engine code); oracle script + tokenizer harness **NOT yet written**.
 - **Last gate passed:** GATE 0 (2026-07-20: `make test-c` 8/8 green, `make qwen` compiles clean `-Wall -Wextra`)
 - **Blockers:** none
+- **Python env:** `.venv` created with **uv** (`export PATH="$HOME/.local/bin:$PATH"`; system python3-venv broken, sudo needs password). CPU torch + **transformers 5.14.1** (has `Qwen3_5MoeForCausalLM` — text-only class, use it for the oracle) + safetensors installed. Pin/gate transformers ≥ 5.14 in the oracle script.
+- **Next steps for whoever resumes (in order):**
+  1. Fetch `model.safetensors.index.json` from `Qwen/Qwen3.5-35B-A3B` → resolve the fused-vs-split `in_proj_qkvz` question (docs/qwen35_arch.md "OPEN ITEM") and record the converter mapping.
+  2. Write `c/tools/make_qwen_oracle.py` per Phase-1 checklist below (pattern file: colibri `tools/make_glm_oracle.py`; all math facts already in docs/qwen35_arch.md). Print state_dict, emit `c/qwen_tiny/` + `c/ref_qwen.json` + unit fixtures.
+  3. Run the Phase-0 skeleton against qwen_tiny (`SNAP=c/qwen_tiny ./c/qwen`) — first live test of the plumbing; expect the noop forward to run (loader may need the fused-expert 3D tensors handled or oracle saved pre-unfused — decide: oracle saves per-expert unfused 2D tensors, matching the container convention).
+  4. Tokenizer parity harness (`make -C c tests/test_tok` exists; download real Qwen3.5 tokenizer.json; generate 10k cases with HF AutoTokenizer; pipe `TEXT\tID,ID,..` lines to `./c/tests/test_tok`).
+  5. Then Phase 2 (kernels) — every formula needed is in docs/qwen35_arch.md.
 - **Machine:** AMD Ryzen 7 7700X (Zen4; AVX-512F/DQ/BW/VL/VNNI/BF16 confirmed), 32 GB RAM, RTX 5070 Ti 16 GB (Blackwell **sm_120**; WSL2 driver 591.86 OK; **nvcc NOT installed** — CUDA toolkit ≥12.8 needed before Phase 5), NVMe: **910 GB free** (recorded 2026-07-20; 397B needs ≥250 GB — OK). Python 3.12.3; **no torch/transformers yet** — create `.venv` in Phase 1 (CPU torch is enough until Phase 5).
 - **Colibri reference clone:** `/tmp/claude-1000/-home-dinga-Projects-colib/de80692d-17fa-4193-8ee0-1c2cc8b7db9a/scratchpad/colibri` (scratchpad; if gone: `git clone --depth 1 https://github.com/JustVugg/colibri`).
 
@@ -95,7 +102,8 @@ colib/
 
 ## Phase 1 — Oracle, tokenizer parity, ⚠-fact verification
 
-- [ ] `python3 -m venv .venv && .venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu transformers safetensors` — record exact transformers version HERE: ______ ; hard-gate it in the oracle script.
+- [x] Python env: `.venv` via uv; CPU torch; transformers **5.14.1** (recorded; hard-gate ≥5.14 in the oracle script).
+- [x] ⚠-fact verification: all answered in `docs/qwen35_arch.md` from installed 5.14.1 source (zero-centered RMSNorm w/ `1+weight`; split GDN projections in 5.14.1 vs possibly-fused checkpoint — OPEN ITEM there; conv over qkv only, bias-free, SiLU; exact recurrence w/ q-scaling and l2norm eps 1e-6; per-head gated RMSNorm plain-weight; q_proj fuses per-head [q|gate], sigmoid gate after attention; per-head zero-centered q/k norms pre-RoPE; partial 64-dim split-half RoPE, MRoPE = no-op for text; router fp32-softmax→topk→always-renorm; fused 3D expert tensors in HF format; shared_expert_gate sigmoid scalar; MTP ignored by HF ⇒ native implementation from checkpoint names + vLLM reference).
 - [ ] `tools/make_qwen_oracle.py` (pattern: colibri `make_glm_oracle.py`): tiny-random **text-only** qwen3_5_moe — ≥5 layers (≥1 full-attn), hidden 128, 8 experts top-2 + shared expert, DeltaNet 4 K/8 V heads ×32, conv 4, head_dim 64 partial-rotary 0.25 interleaved MRoPE, vocab 512, MTP block. Emit `c/qwen_tiny/` (bf16 safetensors + configs) + `c/ref_qwen.json` = `{prompt_ids, full_ids (greedy 32 new), tf_pred}`. Print full state_dict names (defines loader name-map). `--quant {int8,int4g128}` mode: round-trip weights through `convert_qwen.py` quant functions BEFORE computing refs → `ref_qwen_int8.json`, `ref_qwen_i4.json`.
 - [ ] Also emit unit fixtures (JSON): DeltaNet single-layer in/out + intermediate (conv out, g/β, S trajectory), partial-RoPE q/k in/out, router logits→weights.
 - [ ] Write `docs/qwen35_arch.md` answering every ⚠: exact MRoPE interleaved dim pairing + rotate convention; q/k per-head norm presence/type; `attn_output_gate` fusion (q_proj out layout, sigmoid placement); router softmax + `norm_topk_prob`; `shared_expert_gate` formula; gated-RMSNorm exact form (per-head? weight placement); MTP block structure (mixer type, norms, embedding sharing); which HF code path is reference (force eager/recurrent; note chunked-vs-recurrent numerics).
