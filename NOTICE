@@ -1,0 +1,18 @@
+colib — C inference engine for Qwen3.5 MoE + Ornith-1.0
+Copyright 2026 colib contributors
+
+This product includes software developed as part of the colibri project
+(https://github.com/JustVugg/colibri), Copyright JustVugg and colibri
+contributors, licensed under the Apache License, Version 2.0.
+
+Vendored from colibri (verbatim or lightly adapted): c/st.h, c/json.h,
+c/tok.h, c/tok_unicode.h, c/tier.h, c/uring.h, c/compat.h, c/grammar.h,
+c/schema_gbnf.h, c/decode_batch.h, c/iobench.c, c/tests/* (generic tests),
+c/tools/run_tests.py, c/tools/gen_unicode.py, c/tools/clean.py,
+docs/serve_protocol.md, and the c/Makefile structure. Generic subsystem
+designs in c/qwen.c (quantized-weight container convention, expert
+tiering/streaming, sampling and speculative-decode driver, serve protocol)
+follow colibri's glm.c.
+
+colib is not a fork of colibri and supports only the Qwen3.5 / Ornith-1.0
+model families.
