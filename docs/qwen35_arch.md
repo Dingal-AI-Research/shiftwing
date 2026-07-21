@@ -1,6 +1,6 @@
 # qwen3_5_moe — verified architecture reference for the C engine
 
-Source of truth: **installed transformers 5.14.1** (`.venv/lib/python3.12/site-packages/transformers/models/qwen3_5_moe/modeling_qwen3_5_moe.py`), read line-by-line 2026-07-20. Line refs below are to that file (GitHub main was identical at read time). This answers every ⚠ item in PLAN.md Phase 1.
+Sources of truth: **installed transformers 5.14.1** (`.venv/lib/python3.12/site-packages/transformers/models/qwen3_5_moe/modeling_qwen3_5_moe.py`) and the official `Qwen/Qwen3.5-35B-A3B` `model.safetensors.index.json`, verified 2026-07-20. Line refs below are to the installed modeling file. This answers every ⚠ item in PLAN.md Phase 1.
 
 ## Norms — TWO different conventions in one model (critical)
 
@@ -16,7 +16,7 @@ Projections (transformers 5.14.1 uses **split** projections; no fused qkvz here)
 - `conv1d`: depthwise Conv1d(conv_dim = key_dim*2+value_dim, kernel 4, groups=conv_dim, **bias=False**), over concat(q,k,v) channels only, then **SiLU** (L498)
 - `A_log` [num_v_heads], `dt_bias` [num_v_heads], `norm` (gated RMSNorm above), `out_proj`: value_dim → hidden
 
-⚠ **OPEN ITEM for the converter**: the real 35B/397B checkpoints were saved with transformers 4.57.0.dev0 and may store the **fused** `linear_attn.in_proj_qkvz` (12288 for 35B) + `in_proj_ba` layout (Qwen3-Next style). No `_checkpoint_conversion_mapping` was found in 5.14.1's qwen3_5_moe. **First task of the converter: fetch `model.safetensors.index.json` of Qwen/Qwen3.5-35B-A3B and list actual names.** If fused, determine the split order empirically: load the tiny oracle... no — build a tiny fused checkpoint is impossible; instead load the real index names AND check how transformers 5.14.1 loads that checkpoint (it must work — Qwen3.5 runs on 5.14; find the mechanism, possibly in `conversion` utils or `from_pretrained` renaming). If HF 5.14.1 can genuinely load the 4.57 checkpoint, replicate its mapping; the container stores the SPLIT layout (what the forward math uses).
+**Real-checkpoint verification (resolved):** the official 35B index contains split `linear_attn.in_proj_qkv.weight`, `in_proj_z.weight`, `in_proj_a.weight`, and `in_proj_b.weight` tensors on every DeltaNet layer. It contains no `in_proj_qkvz` or `in_proj_ba` tensors. The converter therefore preserves the split layout directly; no fused-projection compatibility path is needed for the primary checkpoint.
 
 Conv state (decode): rolling buffer of the **last 4 raw (pre-conv) qkv columns**; decode step = cat(state, new) → depthwise conv valid → last column → SiLU; state ← last 4 columns (L221-236, L470-500). Prefill saves state as `pad(mixed_qkv, (4 - L, 0))` i.e. last 4 raw columns, left-zero-padded if L<4 (L487).
 
@@ -33,7 +33,19 @@ S ← S + k̃ ⊗ ((v − kv_mem) * β)
 o = Sᵀ q̃                             # [d_v]
 out_token = RMSNormGated_perhead(o, z) → out_proj
 ```
-Chunked prefill reference (chunk 64, WY decomposition): `torch_chunk_gated_delta_rule` L245-323 — mirror exactly in Phase 3; the recurrent form above is the always-correct fallback and is what HF uses for cached single-token decode.
+Chunked prefill reference (chunk 64, WY decomposition): `torch_chunk_gated_delta_rule` L245-323. `qwen.c:gdn_prefill_chunked` mirrors this path; the recurrent form remains the `GDN_CHUNK=0` fallback and is what HF uses for cached single-token decode.
+
+## CPU runtime representation (Gate 3)
+
+- Floating matrices are materialized as fp32. Int8 stays packed with one scale per row; int4-g128 stays offset-nibble packed with one scale per 128-value group. Embedding lookup dequantizes one row only.
+- Exact AVX-512/AVX2 float-activation dot products cover int8 and grouped int4. Expert int8 also permits VNNI activation quantization (`IDOT=0` disables it); attention, router, DeltaNet, and LM-head projections retain exact activation math.
+- Full-attention KV is fp32 by default or bf16 with `KV16=1`. DeltaNet recurrent and convolution state stays fp32.
+- Routed experts pass through a bounded per-layer LFRU cache. `EXPERT_RAM=N` controls resident slots and async workers issue page-cache prefetch hints before `expert_load_impl` handles a miss.
+- The Phase-4 mixed map is routed experts/qkv/z at int4-g128; shared experts,
+  attention/DeltaNet output projections, embeddings and LM head at int8; and
+  router, b/a, convolution, recurrence constants, gates and norms at fp32.
+  New mixed shards carry an optional one-byte `.qtype` tag per quantized tensor;
+  the loader retains size/snapshot-mode fallback compatibility with Gate-1 artifacts.
 
 ## Full attention layer (`self_attn`, L646-720)
 
@@ -64,7 +76,13 @@ Chunked prefill reference (chunk 64, WY decomposition): `torch_chunk_gated_delta
 
 ## MTP
 
-transformers **ignores** MTP weights: `_keys_to_ignore_on_load_unexpected = [r"^mtp.*"]` (L907, L1793) ⇒ checkpoint stores top-level `mtp.*` tensors, no HF reference implementation. Same situation colibri faced with GLM: implement natively (Phase 6); recover the block structure from the checkpoint tensor names (index.json) + vLLM's qwen3.5 MTP implementation as cross-reference. Config: `mtp_num_hidden_layers: 1`, `mtp_use_dedicated_embeddings: false` (shares embed/lm_head).
+transformers **ignores** MTP weights: `_keys_to_ignore_on_load_unexpected = [r"^mtp.*"]` (L907, L1793) ⇒ checkpoint stores top-level `mtp.*` tensors, no HF reference implementation. The real index confirms `mtp.pre_fc_norm_embedding`, `mtp.pre_fc_norm_hidden`, `mtp.fc`, one full-attention+MoE `mtp.layers.0`, and `mtp.norm`. Unlike the main stack's fused 3D experts, MTP experts are stored as per-expert gate/up/down matrices. Config: `mtp_num_hidden_layers: 1`, `mtp_use_dedicated_embeddings: false` (shares embed/lm_head). The Phase-1 oracle emits shape-compatible synthetic tensors under these names; executable MTP math and numerical references remain Phase 6 work using the checkpoint plus vLLM as reference.
+
+## Tokenizer facts
+
+- The official tokenizer is byte-level BPE with string-form merges (`"left right"`), `ignore_merges: false`, and an NFC normalizer.
+- Its split regex is Qwen-specific: combining marks join letter runs, numeric codepoints are isolated one at a time, and variation selectors behave as the optional non-letter prefix rather than `\p{M}` in the tokenizer regex engine.
+- `tokenizer_config.json` adds multimodal control tokens beyond the base `tokenizer.json`; the parity harness serializes the effective `AutoTokenizer` backend so these specials are tested too. The C tokenizer is 10,000/10,000 exact on the fixed mixed-language corpus.
 
 ## Loader name map (tiny-oracle / ForCausalLM layout = container layout)
 

@@ -1,0 +1,7 @@
+{
+  "name": "Alice's Adventures in Wonderland (Project Gutenberg #11)",
+  "url": "https://www.gutenberg.org/cache/epub/11/pg11.txt",
+  "sha256": "01b38ea4c710a84bc18d0bd41271a5a1a92b94e97b2812f4dece97d4a694725e",
+  "max_tokens": 32768,
+  "ctx_size": 512
+}

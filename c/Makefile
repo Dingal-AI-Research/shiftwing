@@ -36,7 +36,7 @@ LDFLAGS = -lm -fopenmp -static -lpsapi
 EXE     = .exe
 else
 # Linux / *BSD x86-64 — primary target (WSL2 Zen4: ARCH=native unlocks
-# AVX-512/VNNI int8/int4 dot kernels once they land in Phase 3).
+# the AVX-512/VNNI int8 and grouped-int4 kernels).
 CC      = gcc
 ARCH   ?= native
 CFLAGS  = -O3 -march=$(ARCH) -fopenmp -pthread -Wall -Wextra -Wno-unused-parameter -Wno-misleading-indentation -Wno-unused-function
@@ -67,6 +67,8 @@ endif
 
 ifeq ($(OS),Windows_NT)
 PYTHON ?= python
+else ifneq (,$(wildcard ../.venv/bin/python))
+PYTHON ?= ../.venv/bin/python
 else
 PYTHON ?= python3
 endif
@@ -75,11 +77,15 @@ endif
 # (quant kernels, sampling, deltanet, rope, router) join in Phases 2–3.
 TEST_BINS = tests/test_json$(EXE) tests/test_st$(EXE) tests/test_st_pread$(EXE) \
             tests/test_tier$(EXE) tests/test_grammar$(EXE) tests/test_schema_gbnf$(EXE) \
-            tests/test_decode_batch$(EXE) tests/test_compat_direct$(EXE)
+            tests/test_decode_batch$(EXE) tests/test_compat_direct$(EXE) \
+            tests/test_deltanet$(EXE) tests/test_gqa_rope$(EXE) tests/test_router$(EXE) \
+            tests/test_quant_matmul$(EXE) tests/test_gdn_chunk$(EXE)
 
 all: qwen$(EXE)
 
+ifneq ($(EXE),)
 qwen: qwen$(EXE)
+endif
 
 # Config stamp: make tracks file timestamps, not flag changes; record the
 # build-affecting flags so a flag change forces a relink (colibri #306).
@@ -90,7 +96,7 @@ $(shell printf '%s' '$(BUILD_CONFIG)' > .build-config)
 endif
 .build-config: ;
 
-qwen$(EXE): qwen.c st.h uring.h json.h tok.h tok_unicode.h compat.h grammar.h tier.h decode_batch.h $(CUDA_OBJ) .build-config
+qwen$(EXE): qwen.c st.h uring.h json.h tok.h tok_unicode.h tok_nfc.h compat.h grammar.h tier.h decode_batch.h $(CUDA_OBJ) .build-config
 	$(CC) $(CFLAGS) qwen.c $(CUDA_OBJ) -o qwen$(EXE) $(LDFLAGS)
 
 backend_cuda.o: backend_cuda.cu backend_cuda.h .build-config
@@ -124,8 +130,35 @@ tests/test_decode_batch$(EXE): tests/test_decode_batch.c decode_batch.h
 tests/test_compat_direct$(EXE): tests/test_compat_direct.c compat.h
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
+tests/test_deltanet$(EXE): tests/test_deltanet.c tests/fixture_util.h qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_gqa_rope$(EXE): tests/test_gqa_rope.c tests/fixture_util.h qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_router$(EXE): tests/test_router.c tests/fixture_util.h qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_quant_matmul$(EXE): tests/test_quant_matmul.c qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_gdn_chunk$(EXE): tests/test_gdn_chunk.c qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/bench_qmat$(EXE): tests/bench_qmat.c qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/bench_layer_stack$(EXE): tests/bench_layer_stack.c qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+bench-qmat: tests/bench_qmat$(EXE)
+	./tests/bench_qmat$(EXE)
+
+bench-stack: tests/bench_layer_stack$(EXE)
+	./tests/bench_layer_stack$(EXE)
+
 # tokenizer parity harness (Phase 1 gate): ./tests/test_tok tokenizer.json < cases
-tests/test_tok$(EXE): tests/test_tok.c tok.h tok_unicode.h
+tests/test_tok$(EXE): tests/test_tok.c tok.h tok_unicode.h tok_nfc.h
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
 test-c: $(TEST_BINS)
@@ -133,6 +166,9 @@ test-c: $(TEST_BINS)
 
 test-python:
 	$(PYTHON) -m unittest discover -s tests -p 'test_*.py'
+
+test-tokenizer: tests/test_tok$(EXE)
+	$(PYTHON) tests/test_tok_qwen.py --binary ./tests/test_tok$(EXE)
 
 test: test-c
 
@@ -142,11 +178,11 @@ check:
 	$(MAKE) test
 
 clean:
-	rm -f qwen$(EXE) iobench$(EXE) backend_cuda.o .build-config $(TEST_BINS) tests/test_tok$(EXE)
+	rm -f qwen$(EXE) iobench$(EXE) backend_cuda.o .build-config $(TEST_BINS) tests/test_tok$(EXE) tests/bench_qmat$(EXE) tests/bench_layer_stack$(EXE)
 
 install: qwen$(EXE)
 	$(INSTALL) -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(LIBEXECDIR) $(DESTDIR)$(LIBEXECDIR)/tools
 	$(INSTALL) -m 755 qwen$(EXE) $(DESTDIR)$(LIBEXECDIR)/qwen$(EXE)
 	$(INSTALL) -m 644 tools/*.py $(DESTDIR)$(LIBEXECDIR)/tools/
 
-.PHONY: all qwen test-c test-python test check clean install
+.PHONY: all qwen test-c test-python test-tokenizer test check bench-qmat bench-stack clean install

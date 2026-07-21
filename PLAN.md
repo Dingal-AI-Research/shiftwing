@@ -4,17 +4,17 @@
 
 ## Current status
 
-- **Active phase:** 1 (oracle + tokenizer parity) — ⚠-fact verification **DONE** (see `docs/qwen35_arch.md`, read it before writing any engine code); oracle script + tokenizer harness **NOT yet written**.
-- **Last gate passed:** GATE 0 (2026-07-20: `make test-c` 8/8 green, `make qwen` compiles clean `-Wall -Wextra`)
-- **Blockers:** none
+- **Active phase:** **PAUSED in Phase 4** (real Qwen3.5-35B-A3B CPU validation). Do not start Phase 5 until Gate 4 is resolved.
+- **Last gate passed:** GATE 3 (2026-07-20: packed AVX/VNNI kernels, chunked WY prefill, OpenMP/KV16, and bounded expert streaming; all fast-path tiny oracles 32/32).
+- **Blockers:** Gate 4 prefix agreement is **57.58%** (737/1,280 tokens; 8/20 prompts at or above 85%), below the required 85%. The bounded 1,024-token perplexity comparison passes at **2.50% relative delta**, and coherent chat plus **9.34 tok/s** decode pass. Full fixed-corpus perplexity is still pending because the evaluator needs batched expert GEMM rather than repeated GEMV to run in reasonable time.
 - **Python env:** `.venv` created with **uv** (`export PATH="$HOME/.local/bin:$PATH"`; system python3-venv broken, sudo needs password). CPU torch + **transformers 5.14.1** (has `Qwen3_5MoeForCausalLM` — text-only class, use it for the oracle) + safetensors installed. Pin/gate transformers ≥ 5.14 in the oracle script.
 - **Next steps for whoever resumes (in order):**
-  1. Fetch `model.safetensors.index.json` from `Qwen/Qwen3.5-35B-A3B` → resolve the fused-vs-split `in_proj_qkvz` question (docs/qwen35_arch.md "OPEN ITEM") and record the converter mapping.
-  2. Write `c/tools/make_qwen_oracle.py` per Phase-1 checklist below (pattern file: colibri `tools/make_glm_oracle.py`; all math facts already in docs/qwen35_arch.md). Print state_dict, emit `c/qwen_tiny/` + `c/ref_qwen.json` + unit fixtures.
-  3. Run the Phase-0 skeleton against qwen_tiny (`SNAP=c/qwen_tiny ./c/qwen`) — first live test of the plumbing; expect the noop forward to run (loader may need the fused-expert 3D tensors handled or oracle saved pre-unfused — decide: oracle saves per-expert unfused 2D tensors, matching the container convention).
-  4. Tokenizer parity harness (`make -C c tests/test_tok` exists; download real Qwen3.5 tokenizer.json; generate 10k cases with HF AutoTokenizer; pipe `TEXT\tID,ID,..` lines to `./c/tests/test_tok`).
-  5. Then Phase 2 (kernels) — every formula needed is in docs/qwen35_arch.md.
-- **Machine:** AMD Ryzen 7 7700X (Zen4; AVX-512F/DQ/BW/VL/VNNI/BF16 confirmed), 32 GB RAM, RTX 5070 Ti 16 GB (Blackwell **sm_120**; WSL2 driver 591.86 OK; **nvcc NOT installed** — CUDA toolkit ≥12.8 needed before Phase 5), NVMe: **910 GB free** (recorded 2026-07-20; 397B needs ≥250 GB — OK). Python 3.12.3; **no torch/transformers yet** — create `.venv` in Phase 1 (CPU torch is enough until Phase 5).
+  1. Reproduce a failing real-model prompt from `c/bench/qwen35_prefix.json`, then use `c/tools/compare_acts.py` to find the first divergent layer/tensor against the Q4_K reference. Investigate model math or the mixed-precision map before relaxing the approved 85% threshold.
+  2. Add batched grouped-expert matmul to the evaluation-only prefill path; the current grouped implementation is correct but processes routed assignments as repeated GEMVs (the 1,024-token C run took about 10 minutes at 0.799 scored tok/s).
+  3. Re-run the complete 20×64 prefix comparison and full hash-pinned corpus comparison. Preserve the current bounded results as a regression baseline.
+  4. Re-run `make -C c test-c test-python`, all three 32-token tiny oracles, and `git diff --check`; these were green before the final grouped-evaluation/mmap/profile edits but have not been rerun since them.
+- **Phase-4 handoff:** exact commands, revisions, hashes, timings, artifacts, and known limitations are in `docs/phase4_handoff.md`.
+- **Machine:** AMD Ryzen 7 7700X (Zen4; AVX-512F/DQ/BW/VL/VNNI/BF16 confirmed), 32 GB RAM, RTX 5070 Ti 16 GB (Blackwell **sm_120**; WSL2 driver 591.86 OK; **nvcc NOT installed** — CUDA toolkit ≥12.8 needed before Phase 5), NVMe: **910 GB free** (recorded 2026-07-20; 397B needs ≥250 GB — OK). Python 3.12.3; `.venv` has CPU torch 2.13.0 and transformers 5.14.1.
 - **Colibri reference clone:** `/tmp/claude-1000/-home-dinga-Projects-colib/de80692d-17fa-4193-8ee0-1c2cc8b7db9a/scratchpad/colibri` (scratchpad; if gone: `git clone --depth 1 https://github.com/JustVugg/colibri`).
 
 ## Scope (fixed, user-approved)
@@ -40,7 +40,7 @@ Both Qwen models are `qwen3_5_moe` (`Qwen3_5MoeForConditionalGeneration` = visio
 | vocab / eps / ctx | 248,320 untied / 1e-6 / 262,144 | same |
 | router | softmax-top-k Qwen lineage (⚠ `norm_topk_prob`) — NOT GLM's sigmoid+bias | same |
 
-**Gated DeltaNet per-layer weights:** `in_proj_qkvz`, `in_proj_ba`, depthwise `conv1d` (k=4, SiLU, over concat(q,k,v)), `A_log`, `dt_bias`, gated RMSNorm (`norm`), `out_proj`. Decode recurrence per V-head (state S = 128×128 **fp32**; K-heads repeat-interleaved to V-heads):
+**Gated DeltaNet per-layer weights:** split `in_proj_qkv`, `in_proj_z`, `in_proj_a`, `in_proj_b`, depthwise `conv1d` (k=4, SiLU, over concat(q,k,v)), `A_log`, `dt_bias`, gated RMSNorm (`norm`), `out_proj`. Decode recurrence per V-head (state S = 128×128 **fp32**; K-heads repeat-interleaved to V-heads):
 
 ```
 g = exp(-exp(A_log)·softplus(a + dt_bias));  β = σ(b);  q̃,k̃ = L2-normalized
@@ -75,7 +75,7 @@ colib/
 ├── c/
 │   ├── Makefile                # targets: qwen, test-c, CUDA=1 CUDA_ARCH=native
 │   ├── qwen.c                  # THE engine (new, self-contained; ports generic glm.c subsystems w/ attribution)
-│   ├── st.h json.h tok.h tok_unicode.h tier.h uring.h compat.h grammar.h schema_gbnf.h decode_batch.h  # vendored
+│   ├── st.h json.h tok.h tok_unicode.h tok_nfc.h tier.h uring.h compat.h grammar.h schema_gbnf.h decode_batch.h
 │   ├── backend_cuda.cu backend_cuda.h    # Phase 5 (new; generic kernels ported)
 │   ├── openai_server.py resource_plan.py doctor.py colib   # vendored+adapted (Phase 9 / Phase 4 CLI)
 │   ├── iobench.c
@@ -86,7 +86,7 @@ colib/
 └── docs/  serve_protocol.md (vendored verbatim)  qwen35_arch.md (Phase 1 findings)  ENVIRONMENT.md
 ```
 
-**Vendor decisions:** verbatim w/ attribution header: `st.h json.h tier.h uring.h compat.h tok_unicode.h grammar.h schema_gbnf.h decode_batch.h iobench.c gen_unicode.py docs/serve_protocol.md` + generic C tests. Vendored-then-gated: `tok.h` (cl100k split regex hardcoded — Phase 1 must verify vs Qwen's pretokenizer). Not vendored: `glm.c`, `olmoe.c` (port subsystems function-by-function into fresh `qwen.c`). Rewritten: converter (`convert_qwen.py` keeps quant math + shard-streaming loop + CLI surface `--repo --indir --outdir --xbits --io-bits --shared-bits --group-size --mtp --selftest --min-free-gb`; new `classify()` for Qwen tensor names; **skip vision tensors**; strip `model.language_model.` prefix). Adapted: `openai_server.py` (ChatML + Hermes `<tool_call>` JSON), `resource_plan.py` (MLA-KV formula → hybrid GDN-state+GQA-KV formula, expert regex), `doctor.py`, `coli`→`colib` CLI.
+**Vendor decisions:** verbatim w/ attribution header: `st.h json.h tier.h uring.h compat.h grammar.h schema_gbnf.h decode_batch.h iobench.c docs/serve_protocol.md` + generic C tests. Adapted after parity gating: `tok.h`, `tok_unicode.h`, and generated `tok_nfc.h` now implement Qwen's BPE/NFC behavior exactly. Not vendored: `glm.c`, `olmoe.c` (port subsystems function-by-function into fresh `qwen.c`). Rewritten: converter (`convert_qwen.py` keeps quant math + shard-streaming loop + CLI surface `--repo --indir --outdir --xbits --io-bits --shared-bits --group-size --mtp --selftest --min-free-gb`; new `classify()` for Qwen tensor names; **skip vision tensors**; strip `model.language_model.` prefix). Adapted: `openai_server.py` (ChatML + Hermes `<tool_call>` JSON), `resource_plan.py` (MLA-KV formula → hybrid GDN-state+GQA-KV formula, expert regex), `doctor.py`, `coli`→`colib` CLI.
 
 ---
 
@@ -104,41 +104,41 @@ colib/
 
 - [x] Python env: `.venv` via uv; CPU torch; transformers **5.14.1** (recorded; hard-gate ≥5.14 in the oracle script).
 - [x] ⚠-fact verification: all answered in `docs/qwen35_arch.md` from installed 5.14.1 source (zero-centered RMSNorm w/ `1+weight`; split GDN projections in 5.14.1 vs possibly-fused checkpoint — OPEN ITEM there; conv over qkv only, bias-free, SiLU; exact recurrence w/ q-scaling and l2norm eps 1e-6; per-head gated RMSNorm plain-weight; q_proj fuses per-head [q|gate], sigmoid gate after attention; per-head zero-centered q/k norms pre-RoPE; partial 64-dim split-half RoPE, MRoPE = no-op for text; router fp32-softmax→topk→always-renorm; fused 3D expert tensors in HF format; shared_expert_gate sigmoid scalar; MTP ignored by HF ⇒ native implementation from checkpoint names + vLLM reference).
-- [ ] `tools/make_qwen_oracle.py` (pattern: colibri `make_glm_oracle.py`): tiny-random **text-only** qwen3_5_moe — ≥5 layers (≥1 full-attn), hidden 128, 8 experts top-2 + shared expert, DeltaNet 4 K/8 V heads ×32, conv 4, head_dim 64 partial-rotary 0.25 interleaved MRoPE, vocab 512, MTP block. Emit `c/qwen_tiny/` (bf16 safetensors + configs) + `c/ref_qwen.json` = `{prompt_ids, full_ids (greedy 32 new), tf_pred}`. Print full state_dict names (defines loader name-map). `--quant {int8,int4g128}` mode: round-trip weights through `convert_qwen.py` quant functions BEFORE computing refs → `ref_qwen_int8.json`, `ref_qwen_i4.json`.
-- [ ] Also emit unit fixtures (JSON): DeltaNet single-layer in/out + intermediate (conv out, g/β, S trajectory), partial-RoPE q/k in/out, router logits→weights.
-- [ ] Write `docs/qwen35_arch.md` answering every ⚠: exact MRoPE interleaved dim pairing + rotate convention; q/k per-head norm presence/type; `attn_output_gate` fusion (q_proj out layout, sigmoid placement); router softmax + `norm_topk_prob`; `shared_expert_gate` formula; gated-RMSNorm exact form (per-head? weight placement); MTP block structure (mixer type, norms, embedding sharing); which HF code path is reference (force eager/recurrent; note chunked-vs-recurrent numerics).
-- [ ] Tokenizer parity `tests/test_tok_qwen.py`: download real Qwen3.5 tokenizer.json (tokenizer only); 10k mixed strings (code, CJK, emoji, whitespace runs, specials) `tok.h` (via a small C test binary) vs HF `AutoTokenizer`; fix `tok.h` split regex if Qwen's pretokenizer differs.
+- [x] `tools/make_qwen_oracle.py`: deterministic five-layer text-only tiny model; bf16/int8/int4-g128 snapshots (`qwen_tiny`, `qwen_tiny_int8`, `qwen_tiny_i4`); 32-token greedy/TF references; checkpoint-compatible synthetic MTP block; full state inventory.
+- [x] Unit fixtures (JSON): DeltaNet input/output plus conv, decay/β and state trajectory; partial RoPE q/k; router logits/top-k weights.
+- [x] `docs/qwen35_arch.md` answers every inference-critical ⚠ and records the real checkpoint's split projections and MTP tensor inventory. MTP executable math is explicitly deferred to Phase 6 because HF ignores it.
+- [x] Tokenizer parity `tests/test_tok_qwen.py`: real effective Qwen3.5 tokenizer, 10k mixed strings, exact C/HF encode parity; `tok.h` now handles Qwen merge format, NFC, marks, one-digit numeric splitting, and effective special tokens.
 
-**GATE 1:** oracle regenerates deterministically (fixed seed); tokenizer 10k/10k exact; every ⚠ has a written answer in `docs/qwen35_arch.md`.
+**GATE 1:** ✅ 2026-07-20 — all three oracle modes regenerate byte-for-byte deterministically; each reference records greedy/teacher-forced 32/32; tokenizer 10,000/10,000 encode and decode parity; every inference-critical ⚠ has a written answer in `docs/qwen35_arch.md`.
 
 ## Phase 2 — CPU token-exact correctness  ← THE CORE
 
-- [ ] fp32 reference kernels in `qwen.c`: `causal_conv1d` (prefill + 4-slot decode ring), `gdn_decode_step` (recurrence above), `gdn_prefill_seq`, `gdn_gated_rmsnorm`, `rope_partial_interleaved`, `qk_head_rmsnorm` (if confirmed), gated GQA attention prefill+decode (conventional K/V cache, 2 KV heads repeated to Q heads), `moe_router_softmax_topk` (+renorm iff confirmed), `shared_expert_gated`, per-layer `layer_types[]` driver on the colibri residual seam.
-- [ ] Loader name-map from oracle's printed state_dict (`model.language_model.layers.N.{linear_attn.*, self_attn.*, mlp.gate, mlp.experts.E.*, mlp.shared_expert.*, mlp.shared_expert_gate}` — confirm exact names in Phase 1).
-- [ ] TF/greedy self-test identical UX to colibri: `SNAP=./qwen_tiny TF=1 ./qwen` → `[ORACLE] n/32`; `REF=` override; `DEBUG_LOGITS=1` top-5 dump.
-- [ ] Debug rig: `DUMP_ACTS=1` per-layer hidden-state `.f32` dumps + `tools/compare_acts.py` (HF forward hooks; prints first divergent layer/element).
-- [ ] C unit tests from Phase-1 fixtures: `test_deltanet`, `test_gqa_rope`, `test_router` → add to TEST_BINS.
-- [ ] Quantized: run converter on qwen_tiny (int8, int4-g128), validate vs `--quant` oracles.
+- [x] fp32 reference kernels in `qwen.c`: causal conv ring, sequential GDN recurrence and gated norm, partial split-half RoPE, zero-centered per-head q/k norm, gated GQA with KV cache, softmax-top-k router, routed/shared SwiGLU experts, and the hybrid residual driver.
+- [x] Full loader name-map for split DeltaNet, attention, per-expert container matrices, router/shared experts, norms, embeddings, and LM head; Phase 2 first validated int8/int4 through eager dequantization (replaced by retained packed weights in Phase 3).
+- [x] TF/greedy self-test: `SNAP=./qwen_tiny TF=1 ./qwen` plus `REF=` and `DEBUG_LOGITS=1`; both modes compare all 32 generated tokens.
+- [x] Debug rig: `DUMP_ACTS=1` emits per-layer/token `.f32`; `tools/compare_acts.py` runs HF hooks and reports the first divergent layer/token/element.
+- [x] Fixture-driven `test_deltanet`, `test_gqa_rope`, and `test_router` are part of `TEST_BINS`.
+- [x] Quantized tiny snapshots: int8 and int4-g128 both pass their quantized oracle references.
 
-**GATE 2:** TF **32/32** on tiny oracle at fp32; 32/32 int8; 32/32 int4-g128; greedy `full_ids` match end-to-end; unit tests green.
+**GATE 2:** ✅ 2026-07-20 — TF and greedy **32/32** at fp32, int8, and int4-g128; 11 C tests and 5 Python quantization tests green; HF/C activation comparison checks 185 layer-token states per mode within 1e-4 (worst observed 8.94e-8).
 
 ## Phase 3 — CPU performance (still exact)
 
-- [ ] Port colibri AVX-512/VNNI int8/int4/g128 matmul kernels into all dense + expert matmuls (+ their accuracy tests into TEST_BINS).
-- [ ] `gdn_prefill_chunked` (WY, chunk 64, mirror HF chunked math): must match `gdn_prefill_seq` ≤1e-4 max-abs on fixtures AND keep TF 32/32. `GDN_CHUNK=0` kill-switch stays forever.
-- [ ] OpenMP across heads/experts/rows; KV bf16 option (`KV16=1`, fp32 default).
-- [ ] Integrate ported expert tiering/streaming (tier.h + expert_load_impl port + prefetch threads + heat/pin) — exercised even when RAM-resident.
+- [x] Packed matrices remain quantized after load; AVX-512/AVX2 exact int8 and grouped-int4 kernels cover every dense/expert matmul, with AVX-512 VNNI activation-int8 acceleration on expert int8 paths. Deterministic integer-dot, dequantized-matmul, zero-scale, tail, and g128 tests are in `TEST_BINS`; `IDOT=0` is the accuracy fallback.
+- [x] `gdn_prefill_chunked` mirrors Transformers 5.14.1's 64-token WY math and is wired into prompt prefill. It matches `gdn_prefill_seq` across 1/5/63/64/65/127-token tests within 1.2e-7 and the HF fixture within 4.2e-5; `GDN_CHUNK=0` remains the permanent fallback.
+- [x] OpenMP covers matrix rows, attention heads, routed experts, and prefill projections. `KV16=1` stores the KV cache in bf16 (fp32 remains default) and passes the oracle.
+- [x] Bounded per-layer expert residency uses `tier.h` LFRU heat/recency, `expert_load_impl` eviction/reload, and asynchronous file-page prefetch workers. `EXPERT_RAM=2` forces repeated streaming through the tiny oracle; full RAM residence still exercises heat and prefetch accounting.
 
-**GATE 3:** tiny oracle still 32/32 with all fast paths on; chunked==sequential on fixtures; microbenchmarks recorded here (int4 GEMM GB/s; synthetic 35B-shaped layer-stack tok/s).
+**GATE 3:** ✅ 2026-07-20 — fp32, int8, and int4-g128 tiny oracles remain TF/greedy **32/32** with `OMP_NUM_THREADS=8 KV16=1 EXPERT_RAM=2 PREFETCH_THREADS=2` (chunked prefill and IDOT defaults on). Chunked/recurrent fixture deltas are below 1e-4; 13 C tests, 5 Python tests, the x86-64-v3 clean build, and 10,000-case tokenizer parity are green. Ryzen 7 7700X, GCC 13.3, `-O3 -march=native`: 4096² int4-g128 GEMV **40.34 GB/s**; synthetic 40-layer × 9-active-expert, H=2048/I=512 stack **52.99 tok/s, 31.88 GB/s** over 0.56 GiB unique packed weights (`OMP_NUM_THREADS=8`).
 
 ## Phase 4 — Real Qwen3.5-35B-A3B on CPU + conversion pipeline
 
-- [ ] `convert_qwen.py` full pipeline from **bf16 35B** (~70 GB), shard-streaming download→convert→delete (peak disk ≈ 1 shard + ~20 GB output; preflight ≥35 GB — trivially OK on this box, could also keep source with 910 GB free).
-- [ ] Precision map (defaults): routed experts **int4-g128**; shared expert **int8**; attention q/k/v **int4-g128**, o_proj **int8**; DeltaNet in_proj_qkvz/out_proj **int4-g128**; in_proj_ba/conv1d/A_log/dt_bias/norms/router **f32**; embed+lm_head **int8**; **MTP int8** (colibri issue #8).
-- [ ] Expected container ≈19–20 GB → RAM-resident on 32 GB. Sizing: experts 40×256×3×(2048×512)≈32 B params.
-- [ ] Statistical gates (HF bf16 can't fit in 32 GB): (a) llama.cpp Q4_K GGUF greedy 64-tok prefix agreement ≥85% over 20 fixed prompts; (b) perplexity (`eval_qwen.py`) within ~5–10% of `llama-perplexity` on a fixed ~100 KB corpus; (c) coherent ChatML chat via CLI.
+- [x] `convert_qwen.py` full pipeline from **bf16 35B** (~70 GB), shard-streaming download→convert→delete. Converted official commit `59d61f3ce65a6d9863b86d2e96597125219dc754` into 14 output shards; each source shard was deleted only after durable conversion.
+- [x] Precision map (defaults): routed experts **int4-g128**; shared expert **int8**; attention q/k/v **int4-g128**, o_proj **int8**; DeltaNet in_proj_qkvz/out_proj **int4-g128**; in_proj_ba/conv1d/A_log/dt_bias/norms/router **f32**; embed+lm_head **int8**; **MTP int8** (colibri issue #8). Header-only dry-run predicts 31,333 loader tensors and ~19.1 GB text-only output without materializing a source shard.
+- [x] Container is **19,081,779,712 indexed bytes** (19,090,239,288 bytes on disk), with 31,333 logical / 62,305 physical tensors. Full loader smoke passes: 40 layers (10 attention + 30 GDN), 140 f32 / 132 int8 / 30,840 int4 matrices.
+- [ ] Statistical gates (HF bf16 can't fit in 32 GB): (a) **FAIL** — llama.cpp Q4_K GGUF greedy agreement is 57.58% over 20×64 tokens; (b) **bounded PASS** — 1,024 source tokens / 510 scored tokens give colib PPL 1.097995 vs llama.cpp 1.0712 (2.50% delta), while the full fixed corpus remains pending; (c) **PASS** — coherent ChatML output via CLI.
 
-**GATE 4:** (a)+(b)+(c) pass; CPU decode ≥ **8 tok/s** (A3B ⇒ ~1.5 GB active-weight reads/token @ ~60 GB/s DDR5 ⇒ 10–20 realistic); `PROF=1` numbers recorded here.
+**GATE 4:** ❌ **NOT PASSED / project paused 2026-07-20.** Prefix agreement misses the approved threshold and full-corpus PPL has not run. CPU performance passes: **9.34 tok/s** for 64-token decode with `OMP_NUM_THREADS=8 EXPERT_RAM=64 PREFETCH_THREADS=4` (load 14.631 s, one-token prefill 4.369 s, decode 6.852 s; detail: GDN 3.073 s, attention 0.454 s, MoE 2.615 s including 1.080 s expert load / 4,724 misses, LM head 0.687 s). Resident-all-experts was only 1.64 tok/s under WSL page pressure, so bounded copied expert caching remains the measured default. See `docs/phase4_handoff.md`.
 
 ## Phase 5 — CUDA backend (sm_120)
 

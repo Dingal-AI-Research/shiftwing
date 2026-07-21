@@ -1,0 +1,22 @@
+[
+  "Explain why the sky appears blue in three concise sentences.",
+  "Write a Python function that checks whether a string is a palindrome.",
+  "What are the main differences between TCP and UDP?",
+  "Translate 'The meeting starts tomorrow morning' into French.",
+  "Solve step by step: 17 multiplied by 23.",
+  "Summarize the causes of the French Revolution.",
+  "Give five practical tips for improving sleep quality.",
+  "Write a haiku about a rainy city at night.",
+  "Describe how photosynthesis works for a ten-year-old.",
+  "Refactor this expression for clarity: a and b or c and not d.",
+  "列出三个学习新语言的有效方法。",
+  "用两句话解释什么是机器学习。",
+  "日本語で、春の京都について短い段落を書いてください。",
+  "Explain the purpose of a database transaction and the ACID properties.",
+  "Create a JSON object representing a book with title, author, and publication year.",
+  "What security checks should an API perform before accepting a file upload?",
+  "Compare renewable and non-renewable energy sources in a small table.",
+  "A train travels 180 km in 2.5 hours. What is its average speed?",
+  "Write a polite email declining a meeting because of a scheduling conflict.",
+  "Explain recursion using a simple real-world analogy and one code example."
+]

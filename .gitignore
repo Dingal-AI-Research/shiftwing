@@ -17,6 +17,22 @@ c/olmoe.exe
 c/iobench
 c/iobench.exe
 c/tok_test
+c/tests/test_tok
+c/tests/test_tok.exe
+c/tests/test_deltanet
+c/tests/test_deltanet.exe
+c/tests/test_gqa_rope
+c/tests/test_gqa_rope.exe
+c/tests/test_router
+c/tests/test_router.exe
+c/tests/test_quant_matmul
+c/tests/test_quant_matmul.exe
+c/tests/test_gdn_chunk
+c/tests/test_gdn_chunk.exe
+c/tests/bench_qmat
+c/tests/bench_qmat.exe
+c/tests/bench_layer_stack
+c/tests/bench_layer_stack.exe
 c/backend_cuda.o
 c/backend_cuda_test
 c/backend_loader.o
@@ -42,6 +58,12 @@ c/glm_tiny_i2/
 c/glm_tiny_i4/
 c/glm_tiny_mix/
 c/glm_bench_medium/
+c/qwen_tiny/
+c/qwen_tiny_int8/
+c/qwen_tiny_i4/
+c/qwen35/
+c/.qwen35.source/
+c/acts/
 c/bench/
 
 # pesi modello / artefatti di run
@@ -70,3 +92,7 @@ c/tests/test_idot
 c/tests/test_uring
 
 .venv/
+
+# colib engine binary (rebuild with make -C c qwen)
+c/qwen
+c/qwen.exe

@@ -31,9 +31,12 @@ int main(int argc, char **argv){
         int got[4096]; int ng=tok_encode(&T,tbuf,tn,got,4096);
         int ok = (ng==ne); for(int i=0;i<ng&&ok;i++) ok = (got[i]==exp[i]);
         tot++; if(ok) pass++;
-        /* round-trip decode */
+        /* round-trip decode (normalizing tokenizers canonically return NFC) */
         char dec[8192]; int dn=tok_decode(&T,got,ng,dec,8191);
-        int drt = (dn==tn) && !memcmp(dec,tbuf,tn);
+        char *normalized=NULL; const char *expected=tbuf; int expected_n=tn;
+        if(T.use_nfc){ normalized=tok_nfc_normalize(tbuf,tn,&expected_n); expected=normalized; }
+        int drt = (dn==expected_n) && !memcmp(dec,expected,expected_n);
+        free(normalized);
         if(drt) dpass++;
         if(!ok || !drt){
             fprintf(stderr,"MISMATCH text=%s\n  exp(%d):",text,ne); for(int i=0;i<ne;i++)fprintf(stderr," %d",exp[i]);

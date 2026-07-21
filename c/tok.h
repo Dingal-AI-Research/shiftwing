@@ -1,4 +1,4 @@
-/* Tokenizer GLM-5.2 in C puro (byte-level BPE stile cl100k / tiktoken).
+/* Tokenizer byte-level BPE in C puro (GLM-5.2 and Qwen3.5).
  * Replica fedele di tokenizer.json:
  *   - model.type = BPE, ignore_merges=true, byte_fallback=false
  *   - pre_tokenizer: regex Split (pattern cl100k) + ByteLevel(add_prefix_space=false)
@@ -19,6 +19,7 @@
 #include <limits.h>
 #include "json.h"
 #include "tok_unicode.h"
+#include "tok_nfc.h"
 
 /* ---------- hash map (chiavi binarie con lunghezza) ---------- */
 typedef struct { const char *k; int klen; int v; int used; } ment;
@@ -41,6 +42,8 @@ typedef struct { char *str; int len; int id; } Special;
 typedef struct {
     hmap vocab;          /* stringa byte-level -> id */
     hmap merges;         /* "left\0right" -> rank */
+    int ignore_merges;   /* tokenizer.json model.ignore_merges */
+    int use_nfc;         /* tokenizer.json normalizer.type == NFC */
     char **id2str; int *id_added; int n_ids;   /* id -> stringa; id_added=1 se added-token (output letterale) */
     int *id_special;                            /* 1 = added-token con "special":true nel tokenizer:
                                                  * token di CONTROLLO (<|user|>, <|assistant|>, <sop>, ...),
@@ -101,8 +104,15 @@ static void tok_load(Tok *T, const char *path){
     jval *model=json_get(root,"model");
     jval *vocab=json_get(model,"vocab");
     jval *merges=json_get(model,"merges");
+    jval *ignore_merges=json_get(model,"ignore_merges");
     jval *added=json_get(root,"added_tokens");
+    jval *normalizer=json_get(root,"normalizer");
     if(!vocab||!merges){ fprintf(stderr,"tokenizer.json: missing model.vocab/merges\n"); exit(1); }
+    T->ignore_merges = ignore_merges && ignore_merges->t==J_BOOL && ignore_merges->boolean;
+    if(normalizer && normalizer->t==J_OBJ){
+        jval *type=json_get(normalizer,"type");
+        T->use_nfc = type && type->t==J_STR && !strcmp(type->str,"NFC");
+    }
 
     /* id massimo per dimensionare id2str */
     int maxid=0;
@@ -126,8 +136,15 @@ static void tok_load(Tok *T, const char *path){
     hm_init(&T->merges, mc);
     for(int i=0;i<merges->len;i++){
         jval *pr=merges->kids[i];
-        const char *l=pr->kids[0]->str, *r=pr->kids[1]->str;
-        int ll=(int)strlen(l), rl=(int)strlen(r);
+        const char *l, *r; int ll, rl;
+        if(pr->t==J_ARR && pr->len>=2 && pr->kids[0]->t==J_STR && pr->kids[1]->t==J_STR){
+            l=pr->kids[0]->str; r=pr->kids[1]->str;
+            ll=(int)strlen(l); rl=(int)strlen(r);
+        } else if(pr->t==J_STR){
+            const char *sep=strchr(pr->str,' ');
+            if(!sep){ fprintf(stderr,"tokenizer.json: malformed merge at %d\n",i); exit(1); }
+            l=pr->str; ll=(int)(sep-l); r=sep+1; rl=(int)strlen(r);
+        } else { fprintf(stderr,"tokenizer.json: malformed merge at %d\n",i); exit(1); }
         char *key=malloc(ll+1+rl); memcpy(key,l,ll); key[ll]=0; memcpy(key+ll+1,r,rl);
         hm_put(&T->merges, key, ll+1+rl, i);
     }
@@ -156,8 +173,10 @@ static void bpe_piece(Tok *T, const unsigned char *p, int a, int b, int *out, in
     for(int i=a;i<b;i++){ int bb=p[i]; memcpy(s+sl,T->byte2str[bb],T->byte2cp_len[bb]); sl+=T->byte2cp_len[bb]; }
     s[sl]=0;
     /* ignore_merges: se l'intero pezzo e' un token, emettilo diretto */
-    int whole=hm_get(&T->vocab,s,sl);
-    if(whole>=0){ if(*no<max) out[(*no)++]=whole; free(s); return; }
+    if(T->ignore_merges){
+        int whole=hm_get(&T->vocab,s,sl);
+        if(whole>=0){ if(*no<max) out[(*no)++]=whole; free(s); return; }
+    }
     /* simboli iniziali = codepoint della stringa byte-level */
     int *soff=malloc((sl+1)*sizeof(int)), *slen=malloc((sl+1)*sizeof(int)); int ns=0;
     for(int i=0;i<sl;){ uint32_t cp; int k=u8_next((const unsigned char*)s,sl,i,&cp);
@@ -202,22 +221,22 @@ static void pretok_chunk(Tok *T, const unsigned char *p, int a, int b, int *out,
                 if((d=='r'&&d2=='e')||(d=='v'&&d2=='e')||(d=='l'&&d2=='l')){ i+=3; bpe_piece(T,p,off[start],off[i],out,no,max); continue; } }
             if(d=='s'||d=='t'||d=='m'||d=='d'){ i+=2; bpe_piece(T,p,off[start],off[i],out,no,max); continue; }
         }
-        /* 2) [^\r\n\p{L}\p{N}]? \p{L}+ */
+        /* 2) Qwen: [^\r\n\p{L}\p{N}]?[\p{L}\p{M}]+ */
         {
             int j=i;
-            if(!is_L(c) && !ISNL(c) && !is_N(c)){ if(j+1<n && is_L(cp[j+1])) j++; else j=-1; }
+            if(!is_L(c) && !ISNL(c) && !is_N(c)){ if(j+1<n && (is_L(cp[j+1])||is_M(cp[j+1]))) j++; else j=-1; }
             if(j>=0){
-                if(is_L(cp[j])){ while(j<n && is_L(cp[j])) j++; i=j; bpe_piece(T,p,off[start],off[i],out,no,max); continue; }
+                if(is_L(cp[j])||is_M(cp[j])){ while(j<n && (is_L(cp[j])||is_M(cp[j]))) j++; i=j; bpe_piece(T,p,off[start],off[i],out,no,max); continue; }
             }
         }
-        /* 3) \p{N}{1,3} */
-        if(is_N(c)){ int j=i,k=0; while(j<n && is_N(cp[j]) && k<3){ j++; k++; } i=j; bpe_piece(T,p,off[start],off[i],out,no,max); continue; }
-        /* 4) ' ?[^\s\p{L}\p{N}]+[\r\n]*' */
+        /* 3) Qwen: \p{N} (one numeric codepoint per piece) */
+        if(is_N(c)){ i++; bpe_piece(T,p,off[start],off[i],out,no,max); continue; }
+        /* 4) Qwen: ' ?[^\s\p{L}\p{M}\p{N}]+[\r\n]*' */
         {
             int j=i;
-            if(c==' ' && j+1<n && !is_S(cp[j+1]) && !is_L(cp[j+1]) && !is_N(cp[j+1])) j++;
-            if(j<n && !is_S(cp[j]) && !is_L(cp[j]) && !is_N(cp[j])){
-                while(j<n && !is_S(cp[j]) && !is_L(cp[j]) && !is_N(cp[j])) j++;
+            if(c==' ' && j+1<n && !is_S(cp[j+1]) && !is_L(cp[j+1]) && !is_M(cp[j+1]) && !is_N(cp[j+1])) j++;
+            if(j<n && !is_S(cp[j]) && !is_L(cp[j]) && !is_M(cp[j]) && !is_N(cp[j])){
+                while(j<n && !is_S(cp[j]) && !is_L(cp[j]) && !is_M(cp[j]) && !is_N(cp[j])) j++;
                 while(j<n && ISNL(cp[j])) j++;
                 i=j; bpe_piece(T,p,off[start],off[i],out,no,max); continue;
             }
@@ -243,6 +262,8 @@ static void pretok_chunk(Tok *T, const unsigned char *p, int a, int b, int *out,
 
 /* ---------- encode: testo -> id (split sugli added token, poi pretok+BPE) ---------- */
 static int tok_encode(Tok *T, const char *text, int len, int *out, int max){
+    char *normalized=NULL;
+    if(T->use_nfc){ int normalized_len=0; normalized=tok_nfc_normalize(text,len,&normalized_len); text=normalized; len=normalized_len; }
     const unsigned char *p=(const unsigned char*)text; int no=0; int i=0;
     while(i<len){
         /* prossima occorrenza di un added-token a partire da >= i (match piu' lungo) */
@@ -259,7 +280,7 @@ static int tok_encode(Tok *T, const char *text, int len, int *out, int max){
         if(no<max) out[no++]=hitid;
         i=hitpos+hitlen;
     }
-    return no;
+    free(normalized); return no;
 }
 
 /* id di un added-token dato il suo contenuto (es. "<|endoftext|>"); -1 se assente */
