@@ -1,0 +1,172 @@
+{
+  "snapshot": "/home/dinga/Projects/colib/c/ornith35",
+  "model_manifest": {
+    "source": "hf://deepreinforce-ai/Ornith-1.0-35B-FP8@1ab57ce0b44950e498a88756f40ad1ed4d0f30ca",
+    "source_fingerprint": "15281dc0352464f68ec93e805283a7c070aeb06f22622d975648381009cfe1d6",
+    "source_shards": 16,
+    "output_shards": 16,
+    "data_bytes": 19081810684,
+    "tensor_count": 93277,
+    "logical_tensor_count": 31333,
+    "xbits": "int4g128",
+    "io_bits": 8,
+    "shared_bits": 8,
+    "group_size": 128,
+    "include_mtp": false
+  },
+  "expert_lowbit_manifest": {
+    "format": "colib-routed-expert-int3-sidecar-v1",
+    "complete": true,
+    "config_sha256": "3d37a307f3e7d62f57e0b4da97b99f580a3a042b5cf5f5d3147a2a05745e1a28",
+    "signature": {
+      "experts_per_file": 64,
+      "group_size": 128,
+      "iterations": 3,
+      "source_identity": "a5d79ae6440e3cb45b5eabca02134c6081a38e2a56086bc30484856cbc85d313"
+    },
+    "layers": 40,
+    "file_count": 160,
+    "tensor_count": 92160,
+    "data_bytes": 13098786560
+  },
+  "expert_q3_max_layer": null,
+  "expert_q3_min_layer": null,
+  "mode": "teacher-forced-only",
+  "reference_json": "/home/dinga/Projects/colib/c/ornith35_prefix_gate.json",
+  "reference_json_sha256": "dc55197ddc644b91da9176894ed9751a68d4026897e9ab77e17228f5d919919d",
+  "prompts_sha256": "05bcc9bd51a498ac67afcb7ad0d191892efc52b38d437866b3f66f768db9588b",
+  "prompts": 20,
+  "tf_matching_tokens": 1223,
+  "tf_compared_tokens": 1280,
+  "tf_agreement": 0.95546875,
+  "tf_prompts_at_85_percent": 20,
+  "rows": [
+    {
+      "index": 0,
+      "tf_matches": 62,
+      "tf_compared": 64,
+      "tf_agreement": 0.96875
+    },
+    {
+      "index": 1,
+      "tf_matches": 62,
+      "tf_compared": 64,
+      "tf_agreement": 0.96875
+    },
+    {
+      "index": 2,
+      "tf_matches": 61,
+      "tf_compared": 64,
+      "tf_agreement": 0.953125
+    },
+    {
+      "index": 3,
+      "tf_matches": 59,
+      "tf_compared": 64,
+      "tf_agreement": 0.921875
+    },
+    {
+      "index": 4,
+      "tf_matches": 62,
+      "tf_compared": 64,
+      "tf_agreement": 0.96875
+    },
+    {
+      "index": 5,
+      "tf_matches": 61,
+      "tf_compared": 64,
+      "tf_agreement": 0.953125
+    },
+    {
+      "index": 6,
+      "tf_matches": 62,
+      "tf_compared": 64,
+      "tf_agreement": 0.96875
+    },
+    {
+      "index": 7,
+      "tf_matches": 62,
+      "tf_compared": 64,
+      "tf_agreement": 0.96875
+    },
+    {
+      "index": 8,
+      "tf_matches": 63,
+      "tf_compared": 64,
+      "tf_agreement": 0.984375
+    },
+    {
+      "index": 9,
+      "tf_matches": 56,
+      "tf_compared": 64,
+      "tf_agreement": 0.875
+    },
+    {
+      "index": 10,
+      "tf_matches": 62,
+      "tf_compared": 64,
+      "tf_agreement": 0.96875
+    },
+    {
+      "index": 11,
+      "tf_matches": 62,
+      "tf_compared": 64,
+      "tf_agreement": 0.96875
+    },
+    {
+      "index": 12,
+      "tf_matches": 64,
+      "tf_compared": 64,
+      "tf_agreement": 1.0
+    },
+    {
+      "index": 13,
+      "tf_matches": 59,
+      "tf_compared": 64,
+      "tf_agreement": 0.921875
+    },
+    {
+      "index": 14,
+      "tf_matches": 55,
+      "tf_compared": 64,
+      "tf_agreement": 0.859375
+    },
+    {
+      "index": 15,
+      "tf_matches": 63,
+      "tf_compared": 64,
+      "tf_agreement": 0.984375
+    },
+    {
+      "index": 16,
+      "tf_matches": 61,
+      "tf_compared": 64,
+      "tf_agreement": 0.953125
+    },
+    {
+      "index": 17,
+      "tf_matches": 63,
+      "tf_compared": 64,
+      "tf_agreement": 0.984375
+    },
+    {
+      "index": 18,
+      "tf_matches": 63,
+      "tf_compared": 64,
+      "tf_agreement": 0.984375
+    },
+    {
+      "index": 19,
+      "tf_matches": 61,
+      "tf_compared": 64,
+      "tf_agreement": 0.953125
+    }
+  ],
+  "acceptance": {
+    "minimum_prompt_tf_agreement": 0.8,
+    "minimum_aggregate_tf_agreement": 0.9,
+    "required_positions_per_prompt": 64,
+    "passed": true,
+    "failures": []
+  }
+}

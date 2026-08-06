@@ -1,0 +1,210 @@
+{
+  "schema_version": 3,
+  "model": "/home/dinga/Projects/colib/c/ornith35",
+  "model_family": "ornith-1.0",
+  "model_manifest": {
+    "source": "hf://deepreinforce-ai/Ornith-1.0-35B-FP8@1ab57ce0b44950e498a88756f40ad1ed4d0f30ca",
+    "source_fingerprint": "15281dc0352464f68ec93e805283a7c070aeb06f22622d975648381009cfe1d6",
+    "source_shards": 16,
+    "output_shards": 16,
+    "data_bytes": 19081810684,
+    "tensor_count": 93277,
+    "logical_tensor_count": 31333,
+    "xbits": "int4g128",
+    "io_bits": 8,
+    "shared_bits": 8,
+    "group_size": 128,
+    "include_mtp": false
+  },
+  "expert_lowbit_manifest": null,
+  "cuda": true,
+  "configuration": {
+    "prompt": "Reply with exactly: colib ready",
+    "expected_exact_content": "colib ready",
+    "requests": 2,
+    "kv_slots": 2,
+    "max_tokens": 16,
+    "context": 4096,
+    "threads": 8,
+    "expert_ram_per_layer": null,
+    "ram_gb": 8.0,
+    "ram_headroom_gb": 1.0,
+    "cuda_expert_gb": 6.0,
+    "cuda_headroom_gb": 1.0,
+    "predictive_prefetch": false,
+    "uring_persist": false,
+    "pinned_upload": false,
+    "decode_protect": false,
+    "decode_protect_prewarm": false,
+    "expert_lowbit": null
+  },
+  "web_bundle": true,
+  "startup_s": 19.037046243000077,
+  "requests": [
+    {
+      "index": 0,
+      "ttft_s": 9.252472764999766,
+      "request_s": 10.114830471999994,
+      "content": "colib ready",
+      "usage": {
+        "prompt_tokens": 19,
+        "completion_tokens": 4,
+        "total_tokens": 23
+      }
+    },
+    {
+      "index": 1,
+      "ttft_s": 1.73945712800014,
+      "request_s": 2.0495491430001493,
+      "content": "colib ready",
+      "usage": {
+        "prompt_tokens": 43,
+        "completion_tokens": 4,
+        "total_tokens": 47
+      }
+    }
+  ],
+  "startup_health": {
+    "status": "ok",
+    "scheduler": {
+      "active": 0,
+      "queued": 0,
+      "capacity": 2,
+      "max_queue": 8,
+      "queue_timeout_seconds": 300.0,
+      "admitted": 0,
+      "completed": 0,
+      "rejected": 0,
+      "timed_out": 0,
+      "cancelled": 0
+    },
+    "kv_slots": 2,
+    "tiers": {
+      "vram": 0,
+      "ram": 5120,
+      "disk": 5120,
+      "vram_gb": 0.0,
+      "ram_gb": 7.96875
+    },
+    "hwinfo": {
+      "cores": 16,
+      "ram_total_gb": 29.375,
+      "ram_avail_gb": 17.85,
+      "gpus": 1,
+      "vram_total_gb": 15.92,
+      "cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+      "gpu": "NVIDIA GeForce RTX 5070 Ti"
+    }
+  },
+  "final_health": {
+    "status": "ok",
+    "scheduler": {
+      "active": 0,
+      "queued": 0,
+      "capacity": 2,
+      "max_queue": 8,
+      "queue_timeout_seconds": 300.0,
+      "admitted": 2,
+      "completed": 2,
+      "rejected": 0,
+      "timed_out": 0,
+      "cancelled": 0
+    },
+    "kv_slots": 2,
+    "tiers": {
+      "vram": 3510,
+      "ram": 1917,
+      "disk": 4813,
+      "vram_gb": 5.462952,
+      "ram_gb": 7.96875
+    },
+    "hwinfo": {
+      "cores": 16,
+      "ram_total_gb": 29.375,
+      "ram_avail_gb": 17.85,
+      "gpus": 1,
+      "vram_total_gb": 15.92,
+      "cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+      "gpu": "NVIDIA GeForce RTX 5070 Ti"
+    }
+  },
+  "profile": {
+    "seq": 2,
+    "turns": [
+      {
+        "request_id": "1",
+        "wall_s": 9.601622,
+        "expert_disk_s": 0.930097,
+        "expert_wait_s": 0.0,
+        "expert_matmul_s": 1.846832,
+        "attention_s": 6.720193,
+        "kv_batch_s": 0.0,
+        "lm_head_s": 0.041274,
+        "decode_wall_s": 0.840281,
+        "decode_expert_disk_s": 0.470146,
+        "decode_expert_wait_s": 0.0,
+        "decode_expert_matmul_s": 0.286898,
+        "decode_attention_s": 0.054616,
+        "decode_kv_batch_s": 0.0,
+        "decode_lm_head_s": 0.027384,
+        "expert_cpu_hits": 2646,
+        "expert_gpu_hits": 4615,
+        "expert_misses": 99,
+        "expert_read_bytes": 165445929,
+        "expert_direct_bytes": 165445632,
+        "decode_expert_cpu_hits": 217,
+        "decode_expert_gpu_hits": 1022,
+        "decode_expert_misses": 41,
+        "decode_expert_read_bytes": 68518011,
+        "decode_expert_direct_bytes": 68517888,
+        "prompt_tokens": 19,
+        "completion_tokens": 4,
+        "forwards": 4
+      },
+      {
+        "request_id": "2",
+        "wall_s": 2.025155,
+        "expert_disk_s": 1.265566,
+        "expert_wait_s": 0.0,
+        "expert_matmul_s": 0.633097,
+        "attention_s": 0.097091,
+        "kv_batch_s": 0.0,
+        "lm_head_s": 0.025504,
+        "decode_wall_s": 0.287753,
+        "decode_expert_disk_s": 0.156333,
+        "decode_expert_wait_s": 0.0,
+        "decode_expert_matmul_s": 0.110868,
+        "decode_attention_s": 0.015511,
+        "decode_kv_batch_s": 0.0,
+        "decode_lm_head_s": 0.003884,
+        "expert_cpu_hits": 407,
+        "expert_gpu_hits": 6915,
+        "expert_misses": 358,
+        "expert_read_bytes": 598279218,
+        "expert_direct_bytes": 598278144,
+        "decode_expert_cpu_hits": 68,
+        "decode_expert_gpu_hits": 1143,
+        "decode_expert_misses": 69,
+        "decode_expert_read_bytes": 115310799,
+        "decode_expert_direct_bytes": 115310592,
+        "prompt_tokens": 43,
+        "completion_tokens": 4,
+        "forwards": 4
+      }
+    ],
+    "resident": {
+      "request_id": "2",
+      "layers": 1120,
+      "device_moe": 1120,
+      "host_moe": 0,
+      "activation_h2d_bytes": 229376,
+      "activation_d2h_bytes": 229376,
+      "logits_d2h_bytes": 27811840,
+      "router_d2h_bytes": 1146880
+    }
+  },
+  "acceptance": {
+    "passed": true,
+    "failures": []
+  }
+}

@@ -1,0 +1,323 @@
+{
+  "schema_version": 4,
+  "model": "/home/dinga/Projects/colib/c/ornith397",
+  "model_family": "ornith-1.0",
+  "model_manifest": {
+    "source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+    "source_fingerprint": "4b1c5ab0824e25b3768e3c6df8392394194fce86c4e9f4f3da24e3134ccf4c94",
+    "source_shards": 122,
+    "output_shards": 122,
+    "data_bytes": 212634789241,
+    "tensor_count": 278152,
+    "logical_tensor_count": 93078,
+    "xbits": "int4g128",
+    "io_bits": 8,
+    "shared_bits": 8,
+    "group_size": 128,
+    "include_mtp": false
+  },
+  "expert_lowbit_manifest": {
+    "format": "colib-routed-expert-int3-sidecar-v1",
+    "complete": true,
+    "config_sha256": "c31964d2d920c10228a40d77afe02b19122b66f7bf3f6eb4b0809ba42527b0d6",
+    "signature": {
+      "experts_per_file": 64,
+      "group_size": 128,
+      "iterations": 3,
+      "source_identity": "93f6769bc6d8e2f7d669a8571be1471905a8e6eb487b596dd6836ee08fd2a813"
+    },
+    "layers": 60,
+    "file_count": 480,
+    "tensor_count": 276480,
+    "data_bytes": 157073113440,
+    "manifest_sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180"
+  },
+  "prompt": {
+    "user_text": "Reply with exactly: colib batch ready",
+    "expected_exact_content": "colib batch ready",
+    "raw": false,
+    "rendered_bytes": 106
+  },
+  "cuda": true,
+  "cuda_events": false,
+  "tier_configuration": {
+    "warmup_passes": 2,
+    "context": 4096,
+    "threads": 8,
+    "expert_ram_per_layer": null,
+    "ram_gb": 18.0,
+    "ram_headroom_gb": 1.0,
+    "cuda_expert_gb": 5.0,
+    "cuda_headroom_gb": 1.0,
+    "tiered_io": true,
+    "predictive_prefetch": false,
+    "uring_persist": false,
+    "pinned_upload": false,
+    "decode_protect": false,
+    "decode_protect_prewarm": false,
+    "expert_lowbit": "int3g128"
+  },
+  "runs": [
+    {
+      "mode": "concurrent",
+      "startup_s": 301.298021502,
+      "warmup_s": 254.49870373199997,
+      "elapsed_s": 93.865053708,
+      "aggregate_completion_tps": 0.10653592157000717,
+      "requests": [
+        {
+          "slot": 0,
+          "ttft_s": 87.46772305500008,
+          "request_s": 93.79884435999998,
+          "text": "colib batch ready",
+          "stats": {
+            "completion_tokens": 5,
+            "tokens_per_second": 0.796457,
+            "cache_hit_percent": 70.5667,
+            "rss_gb": 0.0,
+            "prompt_tokens": 20,
+            "length_limited": false
+          }
+        },
+        {
+          "slot": 1,
+          "ttft_s": 87.47504962199991,
+          "request_s": 93.85238574699997,
+          "text": "colib batch ready",
+          "stats": {
+            "completion_tokens": 5,
+            "tokens_per_second": 0.098812,
+            "cache_hit_percent": 75.0867,
+            "rss_gb": 0.0,
+            "prompt_tokens": 20,
+            "length_limited": false
+          }
+        }
+      ],
+      "profiles": [
+        {
+          "request_id": "6",
+          "wall_s": 50.522332,
+          "expert_disk_s": 20.313735,
+          "expert_wait_s": 0.0,
+          "expert_matmul_s": 9.04499,
+          "attention_s": 21.081635,
+          "kv_batch_s": 0.0,
+          "lm_head_s": 0.033113,
+          "decode_wall_s": 6.259907,
+          "decode_expert_disk_s": 3.923252,
+          "decode_expert_wait_s": 0.0,
+          "decode_expert_matmul_s": 2.238176,
+          "decode_attention_s": 0.064688,
+          "decode_kv_batch_s": 0.0,
+          "decode_lm_head_s": 0.030509,
+          "expert_cpu_hits": 4519,
+          "expert_gpu_hits": 6744,
+          "expert_misses": 3737,
+          "expert_read_bytes": 19102837707,
+          "expert_direct_bytes": 19102826496,
+          "decode_expert_cpu_hits": 1603,
+          "decode_expert_gpu_hits": 514,
+          "decode_expert_misses": 883,
+          "decode_expert_read_bytes": 4513729113,
+          "decode_expert_direct_bytes": 4513726464,
+          "prompt_tokens": 20,
+          "completion_tokens": 5,
+          "forwards": 5
+        },
+        {
+          "request_id": "5",
+          "wall_s": 93.749665,
+          "expert_disk_s": 36.174123,
+          "expert_wait_s": 0.0,
+          "expert_matmul_s": 15.205547,
+          "attention_s": 42.216613,
+          "kv_batch_s": 0.0,
+          "lm_head_s": 0.035728,
+          "decode_wall_s": 50.540361,
+          "decode_expert_disk_s": 20.313735,
+          "decode_expert_wait_s": 0.0,
+          "decode_expert_matmul_s": 9.04499,
+          "decode_attention_s": 21.081635,
+          "decode_kv_batch_s": 0.0,
+          "decode_lm_head_s": 0.033113,
+          "expert_cpu_hits": 7380,
+          "expert_gpu_hits": 12996,
+          "expert_misses": 6624,
+          "expert_read_bytes": 33860636064,
+          "expert_direct_bytes": 33860616192,
+          "decode_expert_cpu_hits": 4519,
+          "decode_expert_gpu_hits": 6744,
+          "decode_expert_misses": 3737,
+          "decode_expert_read_bytes": 19102837707,
+          "decode_expert_direct_bytes": 19102826496,
+          "prompt_tokens": 20,
+          "completion_tokens": 5,
+          "forwards": 5
+        }
+      ],
+      "tiers": {
+        "vram": 803,
+        "ram": 3034,
+        "disk": 26883,
+        "vram_gb": 4.999146,
+        "ram_gb": 17.995605
+      },
+      "hardware": {
+        "cores": 16,
+        "ram_total_gb": 29.375,
+        "ram_avail_gb": 2.261,
+        "gpus": 1,
+        "vram_total_gb": 15.92,
+        "cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+        "gpu": "NVIDIA GeForce RTX 5070 Ti"
+      },
+      "resident": {
+        "request_id": "5",
+        "layers": 1500,
+        "device_moe": 1500,
+        "host_moe": 0,
+        "activation_h2d_bytes": 491520,
+        "activation_d2h_bytes": 491520,
+        "logits_d2h_bytes": 29798400,
+        "router_d2h_bytes": 3686400
+      }
+    },
+    {
+      "mode": "sequential",
+      "startup_s": 206.70852464099994,
+      "warmup_s": 268.10287820400004,
+      "elapsed_s": 102.90509137900017,
+      "aggregate_completion_tps": 0.09717692162742396,
+      "requests": [
+        {
+          "slot": 0,
+          "ttft_s": 46.804599660999884,
+          "request_s": 51.872232511999755,
+          "text": "colib batch ready",
+          "stats": {
+            "completion_tokens": 5,
+            "tokens_per_second": 0.994097,
+            "cache_hit_percent": 73.3667,
+            "rss_gb": 0.0,
+            "prompt_tokens": 20,
+            "length_limited": false
+          }
+        },
+        {
+          "slot": 1,
+          "ttft_s": 45.28531239899985,
+          "request_s": 51.032227064999915,
+          "text": "colib batch ready",
+          "stats": {
+            "completion_tokens": 5,
+            "tokens_per_second": 0.875909,
+            "cache_hit_percent": 73.6667,
+            "rss_gb": 0.0,
+            "prompt_tokens": 20,
+            "length_limited": false
+          }
+        }
+      ],
+      "profiles": [
+        {
+          "request_id": "5",
+          "wall_s": 51.814013,
+          "expert_disk_s": 21.610396,
+          "expert_wait_s": 0.0,
+          "expert_matmul_s": 8.780496,
+          "attention_s": 21.352076,
+          "kv_batch_s": 0.0,
+          "lm_head_s": 0.017928,
+          "decode_wall_s": 5.013072,
+          "decode_expert_disk_s": 2.97318,
+          "decode_expert_wait_s": 0.0,
+          "decode_expert_matmul_s": 1.975948,
+          "decode_attention_s": 0.045527,
+          "decode_kv_batch_s": 0.0,
+          "decode_lm_head_s": 0.016467,
+          "expert_cpu_hits": 4658,
+          "expert_gpu_hits": 6766,
+          "expert_misses": 3576,
+          "expert_read_bytes": 18279836136,
+          "expert_direct_bytes": 18279825408,
+          "decode_expert_cpu_hits": 1687,
+          "decode_expert_gpu_hits": 514,
+          "decode_expert_misses": 799,
+          "decode_expert_read_bytes": 4084336989,
+          "decode_expert_direct_bytes": 4084334592,
+          "prompt_tokens": 20,
+          "completion_tokens": 5,
+          "forwards": 5
+        },
+        {
+          "request_id": "6",
+          "wall_s": 50.976553,
+          "expert_disk_s": 21.083737,
+          "expert_wait_s": 0.0,
+          "expert_matmul_s": 8.577994,
+          "attention_s": 21.245806,
+          "kv_batch_s": 0.0,
+          "lm_head_s": 0.019056,
+          "decode_wall_s": 5.691903,
+          "decode_expert_disk_s": 3.643582,
+          "decode_expert_wait_s": 0.0,
+          "decode_expert_matmul_s": 1.986586,
+          "decode_attention_s": 0.043371,
+          "decode_kv_batch_s": 0.0,
+          "decode_lm_head_s": 0.016422,
+          "expert_cpu_hits": 4679,
+          "expert_gpu_hits": 6766,
+          "expert_misses": 3555,
+          "expert_read_bytes": 18172488105,
+          "expert_direct_bytes": 18172477440,
+          "decode_expert_cpu_hits": 1696,
+          "decode_expert_gpu_hits": 514,
+          "decode_expert_misses": 790,
+          "decode_expert_read_bytes": 4038330690,
+          "decode_expert_direct_bytes": 4038328320,
+          "prompt_tokens": 20,
+          "completion_tokens": 5,
+          "forwards": 5
+        }
+      ],
+      "tiers": {
+        "vram": 803,
+        "ram": 3027,
+        "disk": 26890,
+        "vram_gb": 4.999146,
+        "ram_gb": 17.995605
+      },
+      "hardware": {
+        "cores": 16,
+        "ram_total_gb": 29.375,
+        "ram_avail_gb": 2.269,
+        "gpus": 1,
+        "vram_total_gb": 15.92,
+        "cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+        "gpu": "NVIDIA GeForce RTX 5070 Ti"
+      },
+      "resident": {
+        "request_id": "6",
+        "layers": 1800,
+        "device_moe": 1800,
+        "host_moe": 0,
+        "activation_h2d_bytes": 491520,
+        "activation_d2h_bytes": 491520,
+        "logits_d2h_bytes": 29798400,
+        "router_d2h_bytes": 3686400
+      }
+    }
+  ],
+  "comparison": {
+    "elapsed_speedup": 1.0963088744307583,
+    "aggregate_tps_speedup": 1.0963088744307583,
+    "outputs_match": true
+  },
+  "acceptance": {
+    "minimum_aggregate_tps": null,
+    "minimum_speedup": null,
+    "passed": true,
+    "failures": []
+  }
+}

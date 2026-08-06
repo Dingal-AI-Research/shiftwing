@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "purpose": "interactive directional benchmark; not release evidence",
+  "model": "/home/dinga/Projects/colib/c/ornith397",
+  "model_family": "ornith-1.0",
+  "engine": "/home/dinga/Projects/colib/c/qwen",
+  "engine_sha256": "6a1be8b26c67ac9da9360b52be05654e93fa3ee5e941cca5d1cd3048f8b6a046",
+  "expert_lowbit_manifest": {
+    "format": "colib-routed-expert-int3-sidecar-v1",
+    "complete": true,
+    "config_sha256": "c31964d2d920c10228a40d77afe02b19122b66f7bf3f6eb4b0809ba42527b0d6",
+    "signature": {
+      "experts_per_file": 64,
+      "group_size": 128,
+      "iterations": 3,
+      "source_identity": "93f6769bc6d8e2f7d669a8571be1471905a8e6eb487b596dd6836ee08fd2a813"
+    },
+    "layers": 60,
+    "file_count": 480,
+    "tensor_count": 276480,
+    "data_bytes": 157073113440,
+    "manifest_sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180"
+  },
+  "configuration": {
+    "prompt": "Create a complete playable Snake game as one self-contained HTML file with inline CSS and vanilla JavaScript. Include arrow-key and WASD controls, a visible score, a game-over state, collision detection, food spawning, and a restart control. Keep the entire response compact and below 800 tokens. Before ending, verify that every JavaScript block, function, HTML element, and tag is closed. Output only the complete HTML document, with no Markdown fences or explanation.",
+    "max_tokens": 1024,
+    "warmup_turns": 0,
+    "measured_turns": 1,
+    "context": 4096,
+    "threads": 8,
+    "expert_ram_gb": 20.0,
+    "cuda_expert_gb": 6.0,
+    "expert_q3": true,
+    "q3_route_atlas": false
+  },
+  "warmup": [],
+  "measured": [
+    {
+      "label": "measured 1/1",
+      "text": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<title>Snake Game</title>\n<style>\n  body { background: #1a1a1a; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: monospace; color: #fff; }\n  #wrap { text-align: center; }\n  canvas { border: 2px solid #444; background: #000; display: block; margin: 0 auto; }\n  #score { font-size: 20px; margin-bottom: 8px; }\n  #msg { color: #f44; font-size: 18px; height: 24px; margin-top: 6px; }\n  button { margin-top: 10px; padding: 8px 20px; font-size: 16px; cursor: pointer; background: #333; color: #fff; border: 1px solid #666; font-family: monospace; }\n  button:hover { background: #555; }\n</style>\n</head>\n<body>\n<div id=\"wrap\">\n  <div id=\"score\">Score: 0</div>\n  <canvas id=\"c\" width=\"400\" height=\"400\"></canvas>\n  <div id=\"msg\"></div>\n  <button id=\"btn\" onclick=\"start()\">Restart</button>\n</div>\n<script>\nconst c = document.getElementById('c');\nconst ctx = c.getContext('2d');\nconst scoreEl = document.getElementById('score');\nconst msgEl = document.getElementById('msg');\nconst btn = document.getElementById('btn');\nconst S = 20, N = c.width / S;\nlet snake, dir, next, food, score, loop, over;\n\nfunction randFood() {\n  let f;\n  do { f = { x: Math.floor(Math.random() * N), y: Math.floor(Math.random() * N) }; }\n  while (snake.some(s => s.x === f.x && s.y === f.y));\n  return f;\n}\n\nfunction start() {\n  snake = [{ x: 10, y: 10 }];\n  dir = { x: 1, y: 0 };\n  next = { x: 1, y: 0 };\n  food = randFood();\n  score = 0;\n  over = false;\n  scoreEl.textContent = 'Score: 0';\n  msgEl.textContent = '';\n  btn.textContent = 'Restart';\n  clearInterval(loop);\n  loop = setInterval(tick, 100);\n}\n\nfunction tick() {\n  if (over) return;\n  dir = next;\n  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };\n  if (head.x < 0 || head.x >= N || head.y < 0 || head.y >= N || snake.some(s => s.x === head.x && s.y === head.y)) {\n    over = true; msgEl.textContent = 'Game Over!'; btn.textContent = 'Play Again'; clearInterval(loop); return;\n  }\n  snake.unshift(head);\n  if (head.x === food.x && head.y === food.y) {\n    score += 10; scoreEl.textContent = 'Score: ' + score; food = randFood();\n  } else { snake.pop(); }\n  draw();\n}\n\nfunction draw() {\n  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, c.width, c.height);\n  ctx.fillStyle = '#0f0';\n  snake.forEach(s => ctx.fillRect(s.x * S, s.y * S, S - 2, S - 2));\n  ctx.fillStyle = '#f00';\n  ctx.fillRect(food.x * S, food.y * S, S - 2, S - 2);\n}\n\ndocument.addEventListener('keydown', e => {\n  const k = e.key;\n  if ((k === 'ArrowUp' || k === 'w' || k === 'W') && dir.y !== 1) next = { x: 0, y: -1 };\n  else if ((k === 'ArrowDown' || k === 's' || k === 'S') && dir.y !== -1) next = { x: 0, y: 1 };\n  else if ((k === 'ArrowLeft' || k === 'a' || k === 'A",
+      "wall_s": 2207.0328075140005,
+      "ttft_s": 440.30569717900016,
+      "stats": {
+        "completion_tokens": 1024,
+        "tokens_per_second": 0.579593,
+        "cache_hit_percent": 53.9741,
+        "rss_gb": 0.0,
+        "prompt_tokens": 105,
+        "length_limited": true
+      }
+    }
+  ],
+  "summary": {
+    "sustained_tps": 0.579593,
+    "median_turn_tps": 0.579593,
+    "minimum_turn_tps": 0.579593,
+    "outputs_nonempty": true,
+    "rates_finite": true
+  },
+  "hardware": {
+    "cores": 16,
+    "ram_total_gb": 29.375,
+    "ram_avail_gb": 0.503,
+    "gpus": 1,
+    "vram_total_gb": 15.92,
+    "cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+    "gpu": "NVIDIA GeForce RTX 5070 Ti"
+  },
+  "tiers": {
+    "vram": 1260,
+    "ram": 3304,
+    "disk": 26156,
+    "vram_gb": 5.998535,
+    "ram_gb": 19.995117
+  },
+  "q3_native": {
+    "uploads": 1255542,
+    "upload_bytes": 1974796812288,
+    "gemv_calls": 0,
+    "grouped_calls": 67740
+  },
+  "q3_route_atlas": null,
+  "resident": {
+    "request_id": "1",
+    "layers": 61440,
+    "device_moe": 61440,
+    "host_moe": 0,
+    "activation_h2d_bytes": 16777216,
+    "activation_d2h_bytes": 16777216,
+    "logits_d2h_bytes": 1017118720,
+    "router_d2h_bytes": 125829120
+  },
+  "profiles": [
+    {
+      "request_id": "1",
+      "wall_s": 2206.765038,
+      "expert_disk_s": 1403.308947,
+      "expert_wait_s": 0.0,
+      "expert_matmul_s": 674.274465,
+      "attention_s": 118.744316,
+      "kv_batch_s": 0.0,
+      "lm_head_s": 7.903717,
+      "decode_wall_s": 1766.693793,
+      "decode_expert_disk_s": 1287.314579,
+      "decode_expert_wait_s": 0.0,
+      "decode_expert_matmul_s": 462.857966,
+      "decode_attention_s": 7.435948,
+      "decode_kv_batch_s": 0.0,
+      "decode_lm_head_s": 7.868808,
+      "expert_cpu_hits": 124253,
+      "expert_gpu_hits": 258886,
+      "expert_misses": 294261,
+      "expert_read_bytes": 1504206616671,
+      "expert_direct_bytes": 1504205733888,
+      "decode_expert_cpu_hits": 121402,
+      "decode_expert_gpu_hits": 210215,
+      "decode_expert_misses": 282783,
+      "decode_expert_read_bytes": 1445533250013,
+      "decode_expert_direct_bytes": 1445532401664,
+      "prompt_tokens": 105,
+      "completion_tokens": 1024,
+      "forwards": 1024
+    }
+  ]
+}

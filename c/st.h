@@ -18,11 +18,13 @@
 #include <sys/stat.h>
 #include "json.h"
 #include "compat.h"
+#include "uring.h"
 
 /* tetto sulla dimensione dell'header safetensors: gli header reali sono piccoli
  * (KB..pochi MB). Un file crafted che dichiara un hlen enorme causerebbe una
  * malloc gigante prima ancora di leggere: lo respingiamo. */
 #define ST_MAX_HEADER (512ll << 20)
+#define ST_MAX_SHARDS 4096
 
 typedef struct {
     char   *name;
@@ -36,17 +38,18 @@ typedef struct {
 typedef struct {
     st_tensor *t;
     int        n, cap;
-    int        fds[512];
-    int        dfds[512];  /* gemelli O_DIRECT (aperti pigramente): -2 = non ancora provato */
-    char      *paths[512];
+    int        fds[ST_MAX_SHARDS];
+    int        dfds[ST_MAX_SHARDS];  /* gemelli O_DIRECT (aperti pigramente): -2 = non ancora provato */
+    char      *paths[ST_MAX_SHARDS];
     int        nfd;
     int       *hidx;      /* hash map nome->indice (open addressing): con ~120k tensori
                            * (GLM: 256 expert x 78 layer x 3 x 2) la scansione lineare
                            * costava decine di secondi/token (misurato sul primo run reale) */
     int        hcap;
+    uint64_t   read_bytes, direct_bytes, direct_fallbacks;
+    uint64_t   uring_batches, uring_reads, uring_fallbacks;
+    uint64_t   uring_setups, uring_reuses;
 } shards;
-#define ST_MAX_SHARDS 512
-
 static uint64_t st_hash(const char *s){
     uint64_t h=1469598103934665603ULL;
     while(*s){ h^=(unsigned char)*s++; h*=1099511628211ULL; }
@@ -102,6 +105,42 @@ static int st_open_fd(shards *S, const char *path) {
 static int st_direct_fd(shards *S, int fd) {
     for (int i = 0; i < S->nfd; i++) if (S->fds[i] == fd) return S->dfds[i];
     return -1;
+}
+
+static int st_env_enabled(const char *name) {
+    const char *v = getenv(name);
+    return v && atoi(v) != 0;
+}
+
+/* O_DIRECT requires aligned file offsets, buffers, and request lengths. Tensor
+ * payloads in safetensors are not page aligned, so read the enclosing 4 KiB
+ * extent into a bounce buffer and copy only the requested bytes. A filesystem
+ * that rejects O_DIRECT is a normal runtime condition: callers fall back to
+ * the exact buffered pread path. */
+#define ST_DIRECT_ALIGN 4096u
+static int st_pread_direct_try(shards *S, st_tensor *t, void *out) {
+    int fd = st_direct_fd(S, t->fd);
+    if (fd < 0 || t->nbytes <= 0) return -1;
+    int64_t mask = (int64_t)ST_DIRECT_ALIGN - 1;
+    int64_t aligned_off = t->off & ~mask;
+    size_t delta = (size_t)(t->off - aligned_off);
+    size_t need = delta + (size_t)t->nbytes;
+    size_t request = (need + ST_DIRECT_ALIGN - 1) & ~(size_t)(ST_DIRECT_ALIGN - 1);
+    void *bounce = NULL;
+    if (posix_memalign(&bounce, ST_DIRECT_ALIGN, request) != 0) return -1;
+    size_t got = 0;
+    while (got < need) {
+        ssize_t n = pread(fd, (char *)bounce + got, request - got,
+                          aligned_off + (int64_t)got);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) { free(bounce); return -1; }
+        got += (size_t)n;
+    }
+    memcpy(out, (char *)bounce + delta, (size_t)t->nbytes);
+    free(bounce);
+    __atomic_fetch_add(&S->read_bytes, (uint64_t)t->nbytes, __ATOMIC_RELAXED);
+    __atomic_fetch_add(&S->direct_bytes, (uint64_t)t->nbytes, __ATOMIC_RELAXED);
+    return 0;
 }
 
 /* indicizza tutti i model-*.safetensors in snap_dir */
@@ -276,8 +315,226 @@ static int64_t st_nbytes(shards *S, const char *name) {
 static void st_read_raw(shards *S, const char *name, void *out, int drop) {
     st_tensor *t = st_find(S, name);
     if (!t) { fprintf(stderr, "missing tensor: %s\n", name); exit(1); }
-    st_pread_full(t->fd, out, t->nbytes, t->off, "pread raw");
+    int try_direct = st_env_enabled("DIRECT") && t->nbytes >= ST_DIRECT_ALIGN;
+    if (!try_direct || st_pread_direct_try(S, t, out) != 0) {
+        if (try_direct)
+            __atomic_fetch_add(&S->direct_fallbacks, 1, __ATOMIC_RELAXED);
+        st_pread_full(t->fd, out, t->nbytes, t->off, "pread raw");
+        __atomic_fetch_add(&S->read_bytes, (uint64_t)t->nbytes, __ATOMIC_RELAXED);
+    }
     if (drop) posix_fadvise(t->fd, t->off, t->nbytes, POSIX_FADV_DONTNEED);
+}
+
+typedef struct {
+    st_tensor *tensor;
+    void *out, *io_buf;
+    size_t io_len, delta, need;
+    int fd;
+} st_batch_req;
+
+#ifdef __linux__
+/*
+ * A routed-expert miss calls the batch reader once per layer. Recreating an
+ * io_uring and allocating up to 60 aligned buffers for every call adds
+ * synchronization and allocator work to the storage path. Each caller thread
+ * owns one reusable ring and a bounded aligned-buffer array. The largest
+ * observed batch determines its retained capacity.
+ */
+typedef struct {
+    ColiUring ring;
+    unsigned entries;
+    int ready, disabled;
+    void **buffer;
+    size_t *capacity;
+    int nbuffer;
+} st_uring_thread_cache;
+
+static _Thread_local st_uring_thread_cache st_uring_cache;
+
+static int st_uring_cache_buffers(st_uring_thread_cache *cache, int count) {
+    if (cache->nbuffer >= count) return 0;
+    void **buffer = calloc((size_t)count, sizeof(*buffer));
+    size_t *capacity = calloc((size_t)count, sizeof(*capacity));
+    if (!buffer || !capacity) {
+        free(buffer); free(capacity); return -1;
+    }
+    for (int i = 0; i < cache->nbuffer; i++) {
+        buffer[i] = cache->buffer[i];
+        capacity[i] = cache->capacity[i];
+    }
+    free(cache->buffer); free(cache->capacity);
+    cache->buffer = buffer; cache->capacity = capacity;
+    cache->nbuffer = count;
+    return 0;
+}
+
+static int st_uring_cache_buffer(st_uring_thread_cache *cache, int index,
+                                 size_t bytes, void **out) {
+    if (st_uring_cache_buffers(cache, index + 1) != 0) return -1;
+    if (cache->capacity[index] < bytes) {
+        void *next = NULL;
+        if (posix_memalign(&next, ST_DIRECT_ALIGN, bytes) != 0) return -1;
+        free(cache->buffer[index]);
+        cache->buffer[index] = next;
+        cache->capacity[index] = bytes;
+    }
+    *out = cache->buffer[index];
+    return 0;
+}
+
+static ColiUring *st_uring_cache_ring(shards *S, unsigned entries,
+                                      unsigned workers) {
+    st_uring_thread_cache *cache = &st_uring_cache;
+    if (cache->disabled) return NULL;
+    if (cache->ready && cache->entries >= entries) {
+        __atomic_fetch_add(&S->uring_reuses, 1, __ATOMIC_RELAXED);
+        return &cache->ring;
+    }
+    if (cache->ready) {
+        coli_uring_close(&cache->ring);
+        cache->ready = 0;
+    }
+    if (coli_uring_init(&cache->ring, entries) != 0) {
+        cache->disabled = 1;
+        return NULL;
+    }
+    if (workers) coli_uring_set_workers(&cache->ring, workers);
+    cache->entries = *cache->ring.sq_entries;
+    cache->ready = 1;
+    __atomic_fetch_add(&S->uring_setups, 1, __ATOMIC_RELAXED);
+    return &cache->ring;
+}
+
+static void st_uring_cache_disable(void) {
+    st_uring_thread_cache *cache = &st_uring_cache;
+    if (cache->ready) coli_uring_close(&cache->ring);
+    cache->ready = 0;
+    cache->disabled = 1;
+}
+#endif
+
+/* Read several packed tensors as one storage transaction. This is used for
+ * routed experts, whose gate/up/down payloads and scale arrays are independent
+ * safetensors entries. io_uring is opportunistic: kernels, containers, and
+ * filesystems may disable it, in which case the same requests are replayed
+ * through the tested synchronous path. */
+static int st_read_raw_batch_uring(shards *S, const char **names, void **outs,
+                                   int nreq, int direct) {
+#ifdef __linux__
+    if (nreq <= 0) return 0;
+    int persistent = st_env_enabled("URING_PERSIST");
+    st_batch_req *req = calloc((size_t)nreq, sizeof(*req));
+    if (!req) return -1;
+    int ok = 1;
+    for (int i = 0; i < nreq; i++) {
+        st_tensor *t = st_find(S, names[i]);
+        if (!t || t->nbytes <= 0 || t->nbytes > UINT32_MAX) { ok = 0; break; }
+        req[i].tensor = t; req[i].out = outs[i];
+        if (direct) {
+            int fd = st_direct_fd(S, t->fd);
+            int64_t mask = (int64_t)ST_DIRECT_ALIGN - 1;
+            int64_t aligned_off = t->off & ~mask;
+            size_t delta = (size_t)(t->off - aligned_off);
+            size_t need = delta + (size_t)t->nbytes;
+            size_t len = (need + ST_DIRECT_ALIGN - 1) &
+                         ~(size_t)(ST_DIRECT_ALIGN - 1);
+            int alloc_error = persistent
+                ? st_uring_cache_buffer(&st_uring_cache, i, len,
+                                        &req[i].io_buf)
+                : posix_memalign(&req[i].io_buf, ST_DIRECT_ALIGN, len);
+            if (fd < 0 || len > UINT32_MAX || alloc_error != 0) {
+                ok = 0; break;
+            }
+            req[i].fd = fd; req[i].io_len = len;
+            req[i].delta = delta; req[i].need = need;
+            /* Preserve the aligned offset for submission. */
+            req[i].tensor = t;
+            (void)aligned_off;
+        } else {
+            req[i].fd = t->fd; req[i].io_buf = outs[i];
+            req[i].io_len = (size_t)t->nbytes; req[i].need = req[i].io_len;
+        }
+    }
+    unsigned entries = 1;
+    while (entries < (unsigned)nreq) entries <<= 1;
+    if (entries < 8) entries = 8;
+    ColiUring local_ring, *ring = NULL;
+    unsigned workers = getenv("URING_WORKERS") ?
+                       (unsigned)atoi(getenv("URING_WORKERS")) : 4u;
+    if (ok && persistent) ring = st_uring_cache_ring(S, entries, workers);
+    if (ok && !persistent && coli_uring_init(&local_ring, entries) == 0) {
+        ring = &local_ring;
+        __atomic_fetch_add(&S->uring_setups, 1, __ATOMIC_RELAXED);
+        if (workers) coli_uring_set_workers(ring, workers);
+    }
+    if (!ok || !ring) {
+        for (int i = 0; i < nreq; i++)
+            if (direct && !persistent) free(req[i].io_buf);
+        free(req); return -1;
+    }
+    for (int i = 0; i < nreq; i++) {
+        int64_t off = req[i].tensor->off;
+        if (direct) off &= ~((int64_t)ST_DIRECT_ALIGN - 1);
+        if (coli_uring_prep_read(ring, req[i].fd, req[i].io_buf,
+                                 req[i].io_len, off, (uint64_t)i) != 0) {
+            ok = 0; break;
+        }
+    }
+    int done = 0;
+    if (ok && coli_uring_enter(ring, (unsigned)nreq) < 0) ok = 0;
+    while (ok && done < nreq) {
+        struct io_uring_cqe cqe;
+        if (!coli_uring_peek(ring, &cqe)) {
+            if (coli_uring_enter(ring, 1) < 0) { ok = 0; break; }
+            continue;
+        }
+        int i = (int)cqe.user_data;
+        if (i < 0 || i >= nreq || cqe.res < 0 ||
+            (size_t)cqe.res < req[i].need) ok = 0;
+        done++;
+    }
+    if (!persistent) coli_uring_close(ring);
+    else if (!ok) st_uring_cache_disable();
+    if (ok) {
+        uint64_t bytes = 0;
+        for (int i = 0; i < nreq; i++) {
+            if (direct)
+                memcpy(req[i].out, (char *)req[i].io_buf + req[i].delta,
+                       (size_t)req[i].tensor->nbytes);
+            bytes += (uint64_t)req[i].tensor->nbytes;
+        }
+        __atomic_fetch_add(&S->read_bytes, bytes, __ATOMIC_RELAXED);
+        if (direct) __atomic_fetch_add(&S->direct_bytes, bytes, __ATOMIC_RELAXED);
+        __atomic_fetch_add(&S->uring_batches, 1, __ATOMIC_RELAXED);
+        __atomic_fetch_add(&S->uring_reads, (uint64_t)nreq, __ATOMIC_RELAXED);
+    }
+    for (int i = 0; i < nreq; i++)
+        if (direct && !persistent) free(req[i].io_buf);
+    free(req);
+    return ok ? 0 : -1;
+#else
+    (void)S; (void)names; (void)outs; (void)nreq; (void)direct;
+    return -1;
+#endif
+}
+
+static void st_read_raw_batch(shards *S, const char **names, void **outs,
+                              int nreq, int drop) {
+    int direct = st_env_enabled("DIRECT");
+    int used_uring = st_env_enabled("URING") &&
+                     st_read_raw_batch_uring(S, names, outs, nreq, direct) == 0;
+    if (!used_uring) {
+        if (st_env_enabled("URING"))
+            __atomic_fetch_add(&S->uring_fallbacks, 1, __ATOMIC_RELAXED);
+        for (int i = 0; i < nreq; i++) st_read_raw(S, names[i], outs[i], drop);
+        return;
+    }
+    if (drop)
+        for (int i = 0; i < nreq; i++) {
+            st_tensor *t = st_find(S, names[i]);
+            if (t) posix_fadvise(t->fd, t->off, t->nbytes,
+                                 POSIX_FADV_DONTNEED);
+        }
 }
 
 /* legge una FETTA di un tensore: n_elems a partire dall'elemento elem_off.

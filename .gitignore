@@ -29,11 +29,21 @@ c/tests/test_quant_matmul
 c/tests/test_quant_matmul.exe
 c/tests/test_gdn_chunk
 c/tests/test_gdn_chunk.exe
+c/tests/test_gdn_slots
+c/tests/test_gdn_slots.exe
+c/tests/test_attn_slots
+c/tests/test_attn_slots.exe
+c/tests/test_hybrid_slots
+c/tests/test_hybrid_slots.exe
+c/tests/test_resident_model
+c/tests/test_resident_model.exe
 c/tests/bench_qmat
 c/tests/bench_qmat.exe
 c/tests/bench_layer_stack
 c/tests/bench_layer_stack.exe
 c/backend_cuda.o
+c/tests/test_backend_cuda
+c/tests/test_backend_cuda.exe
 c/backend_cuda_test
 c/backend_loader.o
 c/coli_cuda.dll
@@ -43,6 +53,8 @@ c/tests/test_json
 c/tests/test_json.exe
 c/tests/test_st
 c/tests/test_st.exe
+c/tests/test_st_pread
+c/tests/test_st_pread.exe
 c/tests/test_tier
 c/tests/test_tier.exe
 c/tests/test_grammar
@@ -51,6 +63,18 @@ c/tests/test_schema_gbnf
 c/tests/test_schema_gbnf.exe
 c/tests/test_compat_direct
 c/tests/test_compat_direct.exe
+c/tests/test_st_batch
+c/tests/test_st_batch.exe
+c/tests/test_serve_mux
+c/tests/test_serve_mux.exe
+c/tests/test_serve_scheduler
+c/tests/test_serve_scheduler.exe
+c/tests/test_qwen_session
+c/tests/test_qwen_session.exe
+c/tests/test_qwen_session_cuda
+c/tests/test_qwen_session_cuda.exe
+c/tests/bench_tier_io
+c/tests/bench_tier_io.exe
 
 # oracoli tiny generati (make_glm_oracle.py) e dati benchmark scaricati
 c/glm_tiny/
@@ -63,6 +87,11 @@ c/qwen_tiny_int8/
 c/qwen_tiny_i4/
 c/qwen35/
 c/.qwen35.source/
+c/qwen397/
+c/.qwen397.source/
+c/ornith35/
+c/ornith397/
+c/reference/
 c/acts/
 c/bench/
 
@@ -70,6 +99,15 @@ c/bench/
 *.safetensors
 stats*.txt
 *.log
+c/qwen397_*.json
+
+# retained finalization diagnostics (not release evidence)
+c/ornith397_int4_current_engine_control.json
+c/ornith397_int4_prefix_reference.json
+c/ornith397_q3_coherence_warm_diagnostic.json
+c/ornith397_q3_expand_fixed_control.json
+c/ornith397_q3_expand_unstaged_control.json
+c/ornith397_q3_native_current_engine_control.json
 
 # script di ricerca stadio-0 (esperimenti locali, non parte del motore)
 /engine.py
@@ -92,7 +130,11 @@ c/tests/test_idot
 c/tests/test_uring
 
 .venv/
+.toolchains/
 
 # colib engine binary (rebuild with make -C c qwen)
 c/qwen
 c/qwen.exe
+
+# local source-inspection scratch output
+/embed

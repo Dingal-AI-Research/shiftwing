@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "root": "/home/dinga/Projects/colib",
+  "checks": [
+    {
+      "id": "ornith35.manifest",
+      "passed": true,
+      "summary": "complete pinned model manifest matches release identity",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith35/quantization.json",
+        "errors": [],
+        "identity": {
+          "source": "hf://deepreinforce-ai/Ornith-1.0-35B-FP8@1ab57ce0b44950e498a88756f40ad1ed4d0f30ca",
+          "source_fingerprint": "15281dc0352464f68ec93e805283a7c070aeb06f22622d975648381009cfe1d6",
+          "source_shards": 16,
+          "output_shards": 16,
+          "data_bytes": 19081810684,
+          "tensor_count": 93277,
+          "logical_tensor_count": 31333,
+          "xbits": "int4g128",
+          "io_bits": 8,
+          "shared_bits": 8,
+          "group_size": 128,
+          "include_mtp": false
+        }
+      }
+    },
+    {
+      "id": "ornith397.manifest",
+      "passed": true,
+      "summary": "complete pinned model manifest matches release identity",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397/quantization.json",
+        "errors": [],
+        "identity": {
+          "source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+          "source_fingerprint": "4b1c5ab0824e25b3768e3c6df8392394194fce86c4e9f4f3da24e3134ccf4c94",
+          "source_shards": 122,
+          "output_shards": 122,
+          "data_bytes": 212634789241,
+          "tensor_count": 278152,
+          "logical_tensor_count": 93078,
+          "xbits": "int4g128",
+          "io_bits": 8,
+          "shared_bits": 8,
+          "group_size": 128,
+          "include_mtp": false
+        }
+      }
+    },
+    {
+      "id": "ornith397.q3_manifest",
+      "passed": true,
+      "summary": "complete pinned q3 sidecar manifest matches release identity",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397/expert-q3.json",
+        "errors": [],
+        "identity": {
+          "format": "colib-routed-expert-int3-sidecar-v1",
+          "complete": true,
+          "config_sha256": "c31964d2d920c10228a40d77afe02b19122b66f7bf3f6eb4b0809ba42527b0d6",
+          "signature": {
+            "experts_per_file": 64,
+            "group_size": 128,
+            "iterations": 3,
+            "source_identity": "93f6769bc6d8e2f7d669a8571be1471905a8e6eb487b596dd6836ee08fd2a813"
+          },
+          "layers": 60,
+          "file_count": 480,
+          "tensor_count": 276480,
+          "data_bytes": 157073113440,
+          "manifest_sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180"
+        }
+      }
+    },
+    {
+      "id": "ornith397.doctor",
+      "passed": true,
+      "summary": "independent container/header/ledger/hash/resource audit passed",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397_doctor.json"
+      }
+    },
+    {
+      "id": "ornith397.q3_doctor",
+      "passed": true,
+      "summary": "independent q3 inventory/header/hash audit passed",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397_q3_doctor.json"
+      }
+    },
+    {
+      "id": "ornith397.ppl",
+      "passed": true,
+      "summary": "owner-approved q3 perplexity waiver is explicit and bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/bench/ornith397_q3_gate8_pipeline.json",
+        "engine_sha256": "d33ee2123ad0190b356daa3a19d07af561057f57b41ddfef23da420f15f26c5b",
+        "engine_source_sha256": "c7751e414009bff6059c7f79dbbf28269c68c489254cbde2b4810cc3a3b07527"
+      }
+    },
+    {
+      "id": "ornith397.coherence_review",
+      "passed": true,
+      "summary": "q3 coherence was explicitly reviewed in the bound pipeline",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/bench/ornith397_q3_gate8_pipeline.json",
+        "engine_sha256": "d33ee2123ad0190b356daa3a19d07af561057f57b41ddfef23da420f15f26c5b",
+        "engine_source_sha256": "c7751e414009bff6059c7f79dbbf28269c68c489254cbde2b4810cc3a3b07527"
+      }
+    },
+    {
+      "id": "ornith35.prefix",
+      "passed": true,
+      "summary": "teacher-forced numerical gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith35_prefix_gate.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith35.ppl",
+      "passed": true,
+      "summary": "perplexity gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith35_ppl_gate.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith35.tools",
+      "passed": true,
+      "summary": "generated HTTP tool gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith35_tool_gate.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith397.prefix",
+      "passed": true,
+      "summary": "q3 teacher-forced numerical gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397_q3_prefix_gate.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith397.coherence",
+      "passed": true,
+      "summary": "q3 four-output coherence/CUDA gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397_q3_coherence.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith397.tier",
+      "passed": true,
+      "summary": "q3 tier/coherence/throughput gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397_q3_qualification.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith397.tools",
+      "passed": true,
+      "summary": "q3 generated HTTP tool gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397_q3_tool_gate.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith35.batch",
+      "passed": true,
+      "summary": "reversed-order continuous-batch gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith35_batch_abba.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith35.cancel",
+      "passed": true,
+      "summary": "20-trial cancellation p95 gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith35_cancel_gate.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith35.web",
+      "passed": true,
+      "summary": "exact web/gateway/CUDA streaming gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith35_web_gate.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith397.batch",
+      "passed": true,
+      "summary": "reversed-order continuous-batch gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397_batch_abba.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith397.cancel",
+      "passed": true,
+      "summary": "20-trial cancellation p95 gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397_cancel_gate.json",
+        "errors": []
+      }
+    },
+    {
+      "id": "ornith397.web",
+      "passed": true,
+      "summary": "exact web/gateway/CUDA streaming gate is accepted and manifest-bound",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397_web_gate.json",
+        "errors": []
+      }
+    }
+  ],
+  "summary": {
+    "passed": true,
+    "check_count": 20,
+    "failure_count": 0,
+    "failures": [],
+    "requires_make_check": true,
+    "requires_clean_release_commit_and_v0_1_tag": true
+  }
+}

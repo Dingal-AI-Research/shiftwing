@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "purpose": "interactive directional benchmark; not release evidence",
+  "model": "/home/dinga/Projects/colib/c/ornith397",
+  "model_family": "ornith-1.0",
+  "engine": "/home/dinga/Projects/colib/c/qwen",
+  "engine_sha256": "6a1be8b26c67ac9da9360b52be05654e93fa3ee5e941cca5d1cd3048f8b6a046",
+  "expert_lowbit_manifest": {
+    "format": "colib-routed-expert-int3-sidecar-v1",
+    "complete": true,
+    "config_sha256": "c31964d2d920c10228a40d77afe02b19122b66f7bf3f6eb4b0809ba42527b0d6",
+    "signature": {
+      "experts_per_file": 64,
+      "group_size": 128,
+      "iterations": 3,
+      "source_identity": "93f6769bc6d8e2f7d669a8571be1471905a8e6eb487b596dd6836ee08fd2a813"
+    },
+    "layers": 60,
+    "file_count": 480,
+    "tensor_count": 276480,
+    "data_bytes": 157073113440,
+    "manifest_sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180"
+  },
+  "configuration": {
+    "prompt": "Reply with exactly: colib q3 ready",
+    "max_tokens": 8,
+    "warmup_turns": 1,
+    "measured_turns": 1,
+    "context": 4096,
+    "threads": 8,
+    "expert_ram_gb": 20.0,
+    "cuda_expert_gb": 6.0,
+    "expert_q3": true,
+    "q3_route_atlas": true
+  },
+  "warmup": [
+    {
+      "label": "warmup 1/1",
+      "text": "colib q3 ready",
+      "wall_s": 196.71918320999976,
+      "ttft_s": 176.79102911899918,
+      "stats": {
+        "completion_tokens": 6,
+        "tokens_per_second": 0.300168,
+        "cache_hit_percent": 42.6667,
+        "rss_gb": 0.0,
+        "prompt_tokens": 21,
+        "length_limited": false
+      }
+    }
+  ],
+  "measured": [
+    {
+      "label": "measured 1/1",
+      "text": "colib q3 ready",
+      "wall_s": 181.33601503699992,
+      "ttft_s": 175.7602536859995,
+      "stats": {
+        "completion_tokens": 6,
+        "tokens_per_second": 1.084803,
+        "cache_hit_percent": 100.0,
+        "rss_gb": 0.0,
+        "prompt_tokens": 21,
+        "length_limited": false
+      }
+    }
+  ],
+  "summary": {
+    "sustained_tps": 1.084803,
+    "median_turn_tps": 1.084803,
+    "minimum_turn_tps": 1.084803,
+    "outputs_nonempty": true,
+    "rates_finite": true
+  },
+  "hardware": {
+    "cores": 16,
+    "ram_total_gb": 29.375,
+    "ram_avail_gb": 0.27,
+    "gpus": 1,
+    "vram_total_gb": 15.92,
+    "cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+    "gpu": "NVIDIA GeForce RTX 5070 Ti"
+  },
+  "tiers": {
+    "vram": 1260,
+    "ram": 2940,
+    "disk": 26520,
+    "vram_gb": 5.998535,
+    "ram_gb": 19.995117
+  },
+  "q3_native": {
+    "uploads": 51798,
+    "upload_bytes": 81471209472,
+    "gemv_calls": 0,
+    "grouped_calls": 3240
+  },
+  "q3_route_atlas": {
+    "active": true,
+    "refreshes": 1,
+    "routes": 2597,
+    "host_entries": 2597,
+    "device_entries": 0,
+    "device_capacity": 1250,
+    "loads": 0,
+    "device_bytes": 0,
+    "uncovered": 0
+  },
+  "resident": {
+    "request_id": "2",
+    "layers": 720,
+    "device_moe": 720,
+    "host_moe": 0,
+    "activation_h2d_bytes": 196608,
+    "activation_d2h_bytes": 196608,
+    "logits_d2h_bytes": 11919360,
+    "router_d2h_bytes": 1474560
+  },
+  "profiles": [
+    {
+      "request_id": "1",
+      "wall_s": 196.578185,
+      "expert_disk_s": 69.862176,
+      "expert_wait_s": 0.0,
+      "expert_matmul_s": 98.980268,
+      "attention_s": 24.706088,
+      "kv_batch_s": 0.0,
+      "lm_head_s": 0.15739,
+      "decode_wall_s": 19.963494,
+      "decode_expert_disk_s": 12.753327,
+      "decode_expert_wait_s": 0.0,
+      "decode_expert_matmul_s": 6.570427,
+      "decode_attention_s": 0.507295,
+      "decode_kv_batch_s": 0.0,
+      "decode_lm_head_s": 0.124155,
+      "expert_cpu_hits": 2070,
+      "expert_gpu_hits": 7567,
+      "expert_misses": 6563,
+      "expert_read_bytes": 33548815593,
+      "expert_direct_bytes": 33548795904,
+      "decode_expert_cpu_hits": 622,
+      "decode_expert_gpu_hits": 914,
+      "decode_expert_misses": 2064,
+      "decode_expert_read_bytes": 10550777904,
+      "decode_expert_direct_bytes": 10550771712,
+      "prompt_tokens": 21,
+      "completion_tokens": 6,
+      "forwards": 6
+    },
+    {
+      "request_id": "2",
+      "wall_s": 86.141601,
+      "expert_disk_s": 42.915085,
+      "expert_wait_s": 0.0,
+      "expert_matmul_s": 20.926272,
+      "attention_s": 22.113765,
+      "kv_batch_s": 0.0,
+      "lm_head_s": 0.020491,
+      "decode_wall_s": 5.51099,
+      "decode_expert_disk_s": 0.0,
+      "decode_expert_wait_s": 0.0,
+      "decode_expert_matmul_s": 5.455691,
+      "decode_attention_s": 0.03712,
+      "decode_kv_batch_s": 0.0,
+      "decode_lm_head_s": 0.015684,
+      "expert_cpu_hits": 4869,
+      "expert_gpu_hits": 7567,
+      "expert_misses": 3764,
+      "expert_read_bytes": 19240856604,
+      "expert_direct_bytes": 19240845312,
+      "decode_expert_cpu_hits": 2686,
+      "decode_expert_gpu_hits": 914,
+      "decode_expert_misses": 0,
+      "decode_expert_read_bytes": 0,
+      "decode_expert_direct_bytes": 0,
+      "prompt_tokens": 21,
+      "completion_tokens": 6,
+      "forwards": 6
+    }
+  ]
+}

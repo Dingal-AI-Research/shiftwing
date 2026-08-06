@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "model_family": "ornith-1.0",
+  "model_manifest": {
+    "source": "hf://deepreinforce-ai/Ornith-1.0-35B-FP8@1ab57ce0b44950e498a88756f40ad1ed4d0f30ca",
+    "source_fingerprint": "15281dc0352464f68ec93e805283a7c070aeb06f22622d975648381009cfe1d6",
+    "source_shards": 16,
+    "output_shards": 16,
+    "data_bytes": 19081810684,
+    "tensor_count": 93277,
+    "logical_tensor_count": 31333,
+    "xbits": "int4g128",
+    "io_bits": 8,
+    "shared_bits": 8,
+    "group_size": 128,
+    "include_mtp": false
+  },
+  "expert_lowbit_manifest": null,
+  "prompt": {
+    "user_text": "Reply with exactly: colib batch ready",
+    "expected_exact_content": "colib batch ready",
+    "raw": false,
+    "rendered_bytes": 106
+  },
+  "speedups": {
+    "ab": 1.008884810185203,
+    "ba": 1.0364718121022685,
+    "geometric_mean": 1.0225852861327072,
+    "minimum": 1.008884810185203
+  },
+  "acceptance": {
+    "minimum_each": 0.95,
+    "minimum_geometric_mean": 1.0,
+    "expected_family": "ornith-1.0",
+    "expected_source": "hf://deepreinforce-ai/Ornith-1.0-35B-FP8@1ab57ce0b44950e498a88756f40ad1ed4d0f30ca",
+    "passed": true,
+    "failures": []
+  }
+}

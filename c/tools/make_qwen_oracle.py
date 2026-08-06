@@ -18,6 +18,7 @@ import transformers
 from huggingface_hub import hf_hub_download
 from packaging.version import Version
 from transformers import AutoTokenizer, Qwen3_5MoeForCausalLM, Qwen3_5MoeTextConfig
+from transformers.models.qwen3_5_moe.modeling_qwen3_5_moe import Qwen3_5MoeTextModel
 
 from convert_qwen import is_quantizable, quantize_dequantize, save_container
 
@@ -93,13 +94,35 @@ def rounded_model(mode: str, seed: int) -> Qwen3_5MoeForCausalLM:
     return model
 
 
-def synthetic_mtp(model: Qwen3_5MoeForCausalLM) -> dict[str, torch.Tensor]:
-    """Create shape-compatible MTP tensors; HF 5.14 intentionally ignores them."""
+def synthetic_mtp(
+    model: Qwen3_5MoeForCausalLM, mode: str, seed: int
+) -> dict[str, torch.Tensor]:
+    """Create a deterministic executable Qwen3.5 MTP block.
+
+    Transformers deliberately ignores the checkpoint's top-level ``mtp.*``
+    tensors.  The decoder block is copied from the tiny model's full-attention
+    layer, while the concat projection is independently initialized.  Every
+    MTP matrix is rounded through int8 for quantized snapshots, including the
+    otherwise int4-g128 tiny mode, matching the real converter precision map.
+    """
     cfg = model.config
     hidden = cfg.hidden_size
     state = model.state_dict()
+    # Keep the synthetic tiny fixture away from accidental near-ties: the C
+    # int8 kernels and PyTorch's dequantized float path may differ by a few
+    # ulps after a full decoder block, while real MTP correctness is guarded
+    # by target verification.  This fixed offset gives every fixture row a
+    # useful argmax margin without changing determinism.
+    gen = torch.Generator().manual_seed(seed + 27)
+
+    def rounded(name: str, value: torch.Tensor) -> torch.Tensor:
+        base = value.detach().to(torch.bfloat16).float()
+        if mode != "none" and is_quantizable(name, base):
+            return quantize_dequantize(base, "int8")
+        return base
+
     result: dict[str, torch.Tensor] = {
-        "mtp.fc.weight": torch.zeros(hidden, hidden * 2),
+        "mtp.fc.weight": torch.randn(hidden, hidden * 2, generator=gen) * cfg.initializer_range,
         "mtp.pre_fc_norm_embedding.weight": torch.zeros(hidden),
         "mtp.pre_fc_norm_hidden.weight": torch.zeros(hidden),
         "mtp.norm.weight": torch.zeros(hidden),
@@ -118,16 +141,98 @@ def synthetic_mtp(model: Qwen3_5MoeForCausalLM) -> dict[str, torch.Tensor]:
             "mlp.shared_expert.down_proj.weight",
             "mlp.shared_expert_gate.weight",
         }:
-            result[f"mtp.layers.0.{suffix}"] = value.detach().clone()
+            target = f"mtp.layers.0.{suffix}"
+            result[target] = rounded(target, value)
         elif suffix == "mlp.experts.gate_up_proj":
             mid = value.shape[1] // 2
             for expert in range(value.shape[0]):
-                result[f"mtp.layers.0.mlp.experts.{expert}.gate_proj.weight"] = value[expert, :mid].clone()
-                result[f"mtp.layers.0.mlp.experts.{expert}.up_proj.weight"] = value[expert, mid:].clone()
+                gate = f"mtp.layers.0.mlp.experts.{expert}.gate_proj.weight"
+                up = f"mtp.layers.0.mlp.experts.{expert}.up_proj.weight"
+                result[gate] = rounded(gate, value[expert, :mid])
+                result[up] = rounded(up, value[expert, mid:])
         elif suffix == "mlp.experts.down_proj":
             for expert in range(value.shape[0]):
-                result[f"mtp.layers.0.mlp.experts.{expert}.down_proj.weight"] = value[expert].clone()
+                target = f"mtp.layers.0.mlp.experts.{expert}.down_proj.weight"
+                result[target] = rounded(target, value[expert])
+    result["mtp.fc.weight"] = rounded("mtp.fc.weight", result["mtp.fc.weight"])
     return result
+
+
+def mtp_reference(
+    model: Qwen3_5MoeForCausalLM,
+    mtp_state: Mapping[str, torch.Tensor],
+    token_ids: list[int],
+) -> dict[str, Any]:
+    """Evaluate the vLLM/Qwen MTP equation independently of Transformers CausalLM.
+
+    For pair ``i``, the MTP block receives the main model's post-final-norm
+    hidden state at token ``i`` and the embedding of token ``i+1``.  Its logit
+    row predicts token ``i+2``.  A standalone one-layer HF text model supplies
+    the full-attention/MoE decoder math after the concat projection.
+    """
+    if len(token_ids) < 3:
+        raise ValueError("MTP reference needs at least three tokens")
+    cfg_dict = model.config.to_dict()
+    cfg_dict["num_hidden_layers"] = 1
+    cfg_dict["layer_types"] = ["full_attention"]
+    cfg = Qwen3_5MoeTextConfig(**cfg_dict)
+    block = Qwen3_5MoeTextModel(cfg).eval()
+    block_state = block.state_dict()
+    block_state["embed_tokens.weight"] = model.model.embed_tokens.weight.detach().clone()
+    block_state["norm.weight"] = mtp_state["mtp.norm.weight"].detach().clone()
+    direct_suffixes = (
+        "input_layernorm.weight",
+        "post_attention_layernorm.weight",
+        "self_attn.q_proj.weight",
+        "self_attn.k_proj.weight",
+        "self_attn.v_proj.weight",
+        "self_attn.o_proj.weight",
+        "self_attn.q_norm.weight",
+        "self_attn.k_norm.weight",
+        "mlp.gate.weight",
+        "mlp.shared_expert.gate_proj.weight",
+        "mlp.shared_expert.up_proj.weight",
+        "mlp.shared_expert.down_proj.weight",
+        "mlp.shared_expert_gate.weight",
+    )
+    for suffix in direct_suffixes:
+        block_state[f"layers.0.{suffix}"] = mtp_state[f"mtp.layers.0.{suffix}"].detach().clone()
+    gate_up = []
+    down = []
+    for expert in range(cfg.num_experts):
+        prefix = f"mtp.layers.0.mlp.experts.{expert}."
+        gate_up.append(
+            torch.cat(
+                (mtp_state[prefix + "gate_proj.weight"], mtp_state[prefix + "up_proj.weight"]),
+                dim=0,
+            )
+        )
+        down.append(mtp_state[prefix + "down_proj.weight"])
+    block_state["layers.0.mlp.experts.gate_up_proj"] = torch.stack(gate_up)
+    block_state["layers.0.mlp.experts.down_proj"] = torch.stack(down)
+    block.load_state_dict(block_state, strict=True)
+
+    ids = torch.tensor([token_ids], dtype=torch.long)
+    with torch.inference_mode():
+        main_hidden = model.model(input_ids=ids, use_cache=False).last_hidden_state
+        embedding = model.model.embed_tokens(ids[:, 1:])
+        hidden = main_hidden[:, :-1]
+
+        def rms_zero(x: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+            return x * torch.rsqrt(x.float().square().mean(dim=-1, keepdim=True) + cfg.rms_norm_eps).to(x.dtype) * (
+                1.0 + weight
+            )
+
+        embedding = rms_zero(embedding, mtp_state["mtp.pre_fc_norm_embedding.weight"])
+        hidden = rms_zero(hidden, mtp_state["mtp.pre_fc_norm_hidden.weight"])
+        fused = F.linear(torch.cat((embedding, hidden), dim=-1), mtp_state["mtp.fc.weight"])
+        mtp_hidden = block(inputs_embeds=fused, use_cache=False).last_hidden_state
+        logits = F.linear(mtp_hidden, model.lm_head.weight)
+    return {
+        "mtp_input_ids": token_ids,
+        "mtp_pred": logits[0].argmax(dim=-1).tolist(),
+        "mtp_logits": _tolist(logits[0]),
+    }
 
 
 def reference_tokens(model: Qwen3_5MoeForCausalLM, seed: int) -> dict[str, Any]:
@@ -292,15 +397,18 @@ def main() -> None:
     torch.set_num_threads(1)
     torch.use_deterministic_algorithms(True)
     model = rounded_model(args.quant, args.seed)
+    mtp_source = rounded_model("none", args.seed)
+    mtp_state = synthetic_mtp(mtp_source, args.quant, args.seed)
     outdir, refpath = output_paths(args.quant, args.output_root)
     outdir.mkdir(parents=True, exist_ok=True)
     model.config.to_json_file(outdir / "config.json", use_diff=False)
     if not args.skip_tokenizer:
         copy_tokenizer(outdir, args.tokenizer_repo)
     state = {name: value.detach().cpu() for name, value in model.state_dict().items()}
-    state.update(synthetic_mtp(model))
+    state.update(mtp_state)
     snapshot = save_container(state, outdir, args.quant)
     reference = reference_tokens(model, args.seed)
+    reference.update(mtp_reference(model, mtp_state, reference["full_ids"][:12]))
     reference.update(
         {
             "quant": args.quant,

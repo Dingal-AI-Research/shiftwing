@@ -9,7 +9,9 @@ Vendored from colibri (verbatim or lightly adapted): c/st.h, c/json.h,
 c/tok.h, c/tok_unicode.h, c/tier.h, c/uring.h, c/compat.h, c/grammar.h,
 c/schema_gbnf.h, c/decode_batch.h, c/iobench.c, c/tests/* (generic tests),
 c/tools/run_tests.py, c/tools/gen_unicode.py, c/tools/clean.py,
-docs/serve_protocol.md, and the c/Makefile structure. Generic subsystem
+docs/serve_protocol.md, c/openai_server.py (adapted from upstream commit
+81f08a09e5651ce52616dc720f68810f9021c0be), web/ (rebranded and adapted
+from the same pinned commit), and the c/Makefile structure. Generic subsystem
 designs in c/qwen.c (quantized-weight container convention, expert
 tiering/streaming, sampling and speculative-decode driver, serve protocol)
 follow colibri's glm.c.

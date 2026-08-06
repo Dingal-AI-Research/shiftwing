@@ -1,0 +1,38 @@
+{
+  "snapshot": "/home/dinga/Projects/colib/c/ornith397",
+  "model_manifest": {
+    "source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+    "source_fingerprint": "4b1c5ab0824e25b3768e3c6df8392394194fce86c4e9f4f3da24e3134ccf4c94",
+    "source_shards": 122,
+    "output_shards": 122,
+    "data_bytes": 212634789241,
+    "tensor_count": 278152,
+    "logical_tensor_count": 93078,
+    "xbits": "int4g128",
+    "io_bits": 8,
+    "shared_bits": 8,
+    "group_size": 128,
+    "include_mtp": false
+  },
+  "expert_lowbit_manifest": null,
+  "corpus": "/home/dinga/Projects/colib/c/bench/qwen35_eval.txt",
+  "corpus_sha256": "01b38ea4c710a84bc18d0bd41271a5a1a92b94e97b2812f4dece97d4a694725e",
+  "token_ids_sha256": "90d23bdd12555dfb041ee5166026b47e1f726d64f3e3a6b3dec0c8603c1f2c5e",
+  "tokens": 510,
+  "source_tokens": 1024,
+  "ctx_size": 512,
+  "chunks": 2,
+  "expert_mode": "mmap",
+  "nll": 24.915790427,
+  "ppl": 1.050067545,
+  "tok_s": 0.254,
+  "acceptance": {
+    "max_ppl": 50.0,
+    "max_relative_ppl_delta": null,
+    "passed": true,
+    "failures": [],
+    "ram_gb": 18.0,
+    "expert_ram_per_layer": null,
+    "ram_headroom_gb": 1.0
+  }
+}

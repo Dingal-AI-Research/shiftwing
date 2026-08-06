@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "model_family": "ornith-1.0",
+  "model_manifest": {
+    "source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+    "source_fingerprint": "4b1c5ab0824e25b3768e3c6df8392394194fce86c4e9f4f3da24e3134ccf4c94",
+    "source_shards": 122,
+    "output_shards": 122,
+    "data_bytes": 212634789241,
+    "tensor_count": 278152,
+    "logical_tensor_count": 93078,
+    "xbits": "int4g128",
+    "io_bits": 8,
+    "shared_bits": 8,
+    "group_size": 128,
+    "include_mtp": false
+  },
+  "expert_lowbit_manifest": {
+    "format": "colib-routed-expert-int3-sidecar-v1",
+    "complete": true,
+    "config_sha256": "c31964d2d920c10228a40d77afe02b19122b66f7bf3f6eb4b0809ba42527b0d6",
+    "signature": {
+      "experts_per_file": 64,
+      "group_size": 128,
+      "iterations": 3,
+      "source_identity": "93f6769bc6d8e2f7d669a8571be1471905a8e6eb487b596dd6836ee08fd2a813"
+    },
+    "layers": 60,
+    "file_count": 480,
+    "tensor_count": 276480,
+    "data_bytes": 157073113440,
+    "manifest_sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180"
+  },
+  "prompt": {
+    "user_text": "Reply with exactly: colib batch ready",
+    "expected_exact_content": "colib batch ready",
+    "raw": false,
+    "rendered_bytes": 106
+  },
+  "speedups": {
+    "ab": 1.1234715068953394,
+    "ba": 1.0963088744307583,
+    "geometric_mean": 1.1098070927775951,
+    "minimum": 1.0963088744307583
+  },
+  "acceptance": {
+    "minimum_each": 0.95,
+    "minimum_geometric_mean": 1.0,
+    "expected_family": "ornith-1.0",
+    "expected_source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+    "passed": true,
+    "failures": []
+  }
+}

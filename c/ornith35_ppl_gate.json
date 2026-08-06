@@ -1,0 +1,44 @@
+{
+  "snapshot": "/home/dinga/Projects/colib/c/ornith35",
+  "model_manifest": {
+    "source": "hf://deepreinforce-ai/Ornith-1.0-35B-FP8@1ab57ce0b44950e498a88756f40ad1ed4d0f30ca",
+    "source_fingerprint": "15281dc0352464f68ec93e805283a7c070aeb06f22622d975648381009cfe1d6",
+    "source_shards": 16,
+    "output_shards": 16,
+    "data_bytes": 19081810684,
+    "tensor_count": 93277,
+    "logical_tensor_count": 31333,
+    "xbits": "int4g128",
+    "io_bits": 8,
+    "shared_bits": 8,
+    "group_size": 128,
+    "include_mtp": false
+  },
+  "expert_lowbit_manifest": null,
+  "corpus": "/home/dinga/Projects/colib/c/bench/qwen35_eval.txt",
+  "corpus_sha256": "01b38ea4c710a84bc18d0bd41271a5a1a92b94e97b2812f4dece97d4a694725e",
+  "token_ids_sha256": "90d23bdd12555dfb041ee5166026b47e1f726d64f3e3a6b3dec0c8603c1f2c5e",
+  "tokens": 510,
+  "source_tokens": 1024,
+  "ctx_size": 512,
+  "chunks": 2,
+  "expert_mode": "mmap",
+  "nll": 52.531852172,
+  "ppl": 1.108495435,
+  "tok_s": 1.313,
+  "llama_runner": {
+    "command": "/home/dinga/Projects/llama.cpp/build/bin/llama-perplexity",
+    "version": "version: 1 (e920c52)\nbuilt with GNU 13.3.0 for Linux x86_64"
+  },
+  "llama_ppl": 1.1086,
+  "relative_ppl_delta": -9.432166696734701e-05,
+  "acceptance": {
+    "max_ppl": null,
+    "max_relative_ppl_delta": 0.05,
+    "passed": true,
+    "failures": [],
+    "ram_gb": 8.0,
+    "expert_ram_per_layer": null,
+    "ram_headroom_gb": 1.0
+  }
+}

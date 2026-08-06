@@ -1,0 +1,21 @@
+{
+  "bits": 3,
+  "data_bytes": 157073113440,
+  "experts_per_file": 64,
+  "experts_per_layer": 512,
+  "file_count": 480,
+  "group_size": 128,
+  "hash_workers": 8,
+  "hashes_verified": 480,
+  "headers_verified": 480,
+  "iterations": 3,
+  "layers": 60,
+  "manifest": "/home/dinga/Projects/colib/c/ornith397/expert-q3.json",
+  "manifest_sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180",
+  "passed": true,
+  "schema_version": 1,
+  "snapshot": "/home/dinga/Projects/colib/c/ornith397",
+  "source_identity": "93f6769bc6d8e2f7d669a8571be1471905a8e6eb487b596dd6836ee08fd2a813",
+  "status": "ok",
+  "tensor_count": 276480
+}

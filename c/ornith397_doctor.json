@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "status": "ok",
+  "model": "/home/dinga/Projects/colib/c/ornith397",
+  "engine": "/home/dinga/Projects/colib/c/qwen",
+  "checks": [
+    {
+      "id": "model.path",
+      "status": "pass",
+      "summary": "model directory is readable",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397"
+      }
+    },
+    {
+      "id": "model.config",
+      "status": "pass",
+      "summary": "config.json is valid"
+    },
+    {
+      "id": "model.tokenizer",
+      "status": "pass",
+      "summary": "tokenizer.json found"
+    },
+    {
+      "id": "model.container",
+      "status": "pass",
+      "summary": "278,152 tensors across 122 shard(s), 198.03 GiB payload",
+      "details": {
+        "conversion_complete": true,
+        "shards": 122,
+        "parsed_shards": 122,
+        "indexed_tensors": 278152,
+        "header_tensors": 278152,
+        "tensor_bytes": 212634789241,
+        "file_bytes": 212672804033,
+        "metadata_total_size": 212634789241
+      }
+    },
+    {
+      "id": "model.quantization",
+      "status": "pass",
+      "summary": "quantization completion manifest matches container",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397/quantization.json",
+        "source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+        "xbits": "int4g128",
+        "include_mtp": false,
+        "source_shards": 122,
+        "output_shards": 122,
+        "data_bytes": 212634789241,
+        "tensor_count": 278152
+      }
+    },
+    {
+      "id": "model.ledger",
+      "status": "pass",
+      "summary": "122 durable source commits match output metadata; all 122 output SHA-256 digests match",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/ornith397/.conversion-state.json",
+        "source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+        "source_fingerprint": "4b1c5ab0824e25b3768e3c6df8392394194fce86c4e9f4f3da24e3134ccf4c94",
+        "committed_sources": 122,
+        "output_shards": 122,
+        "logical_tensors": 93078,
+        "physical_tensors": 278152,
+        "data_bytes": 212634789241,
+        "file_bytes": 212672804033,
+        "hashes_requested": true,
+        "hashes_checked": 122,
+        "preregistered_expectations": {
+          "source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+          "source_fingerprint": "4b1c5ab0824e25b3768e3c6df8392394194fce86c4e9f4f3da24e3134ccf4c94",
+          "source_shards": 122,
+          "output_shards": 122,
+          "logical_tensors": 93078,
+          "physical_tensors": 278152,
+          "data_bytes": 212634789241
+        }
+      }
+    },
+    {
+      "id": "engine.binary",
+      "status": "pass",
+      "summary": "engine executable is ready",
+      "details": {
+        "path": "/home/dinga/Projects/colib/c/qwen"
+      }
+    },
+    {
+      "id": "accelerator.cuda",
+      "status": "pass",
+      "summary": "CUDA runtime linked; NVIDIA GeForce RTX 5070 Ti has 15.92 GiB total / 15.62 GiB free",
+      "details": {
+        "name": "NVIDIA GeForce RTX 5070 Ti",
+        "total_gib": 15.9208984375,
+        "free_gib": 15.6201171875
+      }
+    },
+    {
+      "id": "runtime.state",
+      "status": "pass",
+      "summary": "0.42 GiB for 1 slots \u00d7 4096 context"
+    },
+    {
+      "id": "runtime.resources",
+      "status": "pass",
+      "summary": "resource plan fits measured host, currently free device, and disk capacity",
+      "details": {
+        "runtime_headroom_gib": 1.0,
+        "checks": {
+          "disk": true,
+          "ram": true,
+          "vram": true
+        }
+      }
+    }
+  ],
+  "plan": {
+    "architecture": {
+      "hidden": 4096,
+      "layers": 60,
+      "full_layers": 15,
+      "linear_layers": 45,
+      "experts": 512,
+      "topk": 10
+    },
+    "container_bytes": {
+      "routed_experts": 205353216000,
+      "shared_experts": 757432500,
+      "dense_core": 6524140741,
+      "mtp": 0,
+      "total": 212634789241
+    },
+    "state_bytes": {
+      "recurrent_per_slot": 188743680,
+      "conv_per_slot": 8847360,
+      "last_hidden_per_slot": 16384,
+      "kv_per_token_per_slot": 61440,
+      "snapshot_per_slot_at_context": 449265664,
+      "sequential_switch_bytes_per_token_per_active_slot": 898531328,
+      "fixed_all_slots": 197607424,
+      "kv_all_slots": 251658240,
+      "total": 449265664
+    },
+    "tier_plan": {
+      "dense_shared_bytes": 7281573241,
+      "routed_expert_bytes_each": 6684675,
+      "cuda_expert_cache_slots": 963,
+      "cuda_expert_cache_slots_per_layer_average": 16.05,
+      "ram_expert_cache_slots_per_layer": 48,
+      "nominal_combined_expert_slots_per_layer": 64.05,
+      "nominal_combined_expert_coverage": 0.12509765625,
+      "cold_source_bytes_per_token": 4010805000,
+      "vram_required": 15247031673,
+      "ram_required": 28131933561,
+      "disk_required": 238834089746
+    },
+    "available_bytes": {
+      "gpu": 16771973120,
+      "ram": 31541358592,
+      "disk": 461536432128
+    },
+    "checks": {
+      "disk": true,
+      "ram": true,
+      "vram": true
+    },
+    "safe": true
+  }
+}

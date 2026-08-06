@@ -1,0 +1,225 @@
+{
+  "schema_version": 3,
+  "model": "/home/dinga/Projects/colib/c/ornith397",
+  "model_family": "ornith-1.0",
+  "model_manifest": {
+    "source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+    "source_fingerprint": "4b1c5ab0824e25b3768e3c6df8392394194fce86c4e9f4f3da24e3134ccf4c94",
+    "source_shards": 122,
+    "output_shards": 122,
+    "data_bytes": 212634789241,
+    "tensor_count": 278152,
+    "logical_tensor_count": 93078,
+    "xbits": "int4g128",
+    "io_bits": 8,
+    "shared_bits": 8,
+    "group_size": 128,
+    "include_mtp": false
+  },
+  "expert_lowbit_manifest": {
+    "format": "colib-routed-expert-int3-sidecar-v1",
+    "complete": true,
+    "config_sha256": "c31964d2d920c10228a40d77afe02b19122b66f7bf3f6eb4b0809ba42527b0d6",
+    "signature": {
+      "experts_per_file": 64,
+      "group_size": 128,
+      "iterations": 3,
+      "source_identity": "93f6769bc6d8e2f7d669a8571be1471905a8e6eb487b596dd6836ee08fd2a813"
+    },
+    "layers": 60,
+    "file_count": 480,
+    "tensor_count": 276480,
+    "data_bytes": 157073113440,
+    "manifest_sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180"
+  },
+  "cuda": true,
+  "configuration": {
+    "prompt": "Reply with exactly: colib ready",
+    "expected_exact_content": "colib ready",
+    "requests": 2,
+    "kv_slots": 2,
+    "max_tokens": 16,
+    "context": 4096,
+    "threads": 8,
+    "expert_ram_per_layer": null,
+    "ram_gb": 18.0,
+    "ram_headroom_gb": 1.0,
+    "cuda_expert_gb": 5.0,
+    "cuda_headroom_gb": 1.0,
+    "predictive_prefetch": false,
+    "uring_persist": false,
+    "pinned_upload": false,
+    "decode_protect": false,
+    "decode_protect_prewarm": false,
+    "expert_lowbit": "int3g128"
+  },
+  "web_bundle": true,
+  "startup_s": 303.2186667750002,
+  "requests": [
+    {
+      "index": 0,
+      "ttft_s": 160.17931461399985,
+      "request_s": 173.4170993839998,
+      "content": "colib ready",
+      "usage": {
+        "prompt_tokens": 19,
+        "completion_tokens": 4,
+        "total_tokens": 23
+      }
+    },
+    {
+      "index": 1,
+      "ttft_s": 74.14800671500052,
+      "request_s": 84.43632348200026,
+      "content": "colib ready",
+      "usage": {
+        "prompt_tokens": 39,
+        "completion_tokens": 4,
+        "total_tokens": 43
+      }
+    }
+  ],
+  "startup_health": {
+    "status": "ok",
+    "scheduler": {
+      "active": 0,
+      "queued": 0,
+      "capacity": 2,
+      "max_queue": 8,
+      "queue_timeout_seconds": 300.0,
+      "admitted": 0,
+      "completed": 0,
+      "rejected": 0,
+      "timed_out": 0,
+      "cancelled": 0
+    },
+    "kv_slots": 2,
+    "tiers": {
+      "vram": 0,
+      "ram": 3780,
+      "disk": 26940,
+      "vram_gb": 0.0,
+      "ram_gb": 17.995605
+    },
+    "hwinfo": {
+      "cores": 16,
+      "ram_total_gb": 29.375,
+      "ram_avail_gb": 2.279,
+      "gpus": 1,
+      "vram_total_gb": 15.92,
+      "cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+      "gpu": "NVIDIA GeForce RTX 5070 Ti"
+    }
+  },
+  "final_health": {
+    "status": "ok",
+    "scheduler": {
+      "active": 0,
+      "queued": 0,
+      "capacity": 2,
+      "max_queue": 8,
+      "queue_timeout_seconds": 300.0,
+      "admitted": 2,
+      "completed": 2,
+      "rejected": 0,
+      "timed_out": 0,
+      "cancelled": 0
+    },
+    "kv_slots": 2,
+    "tiers": {
+      "vram": 803,
+      "ram": 3066,
+      "disk": 26851,
+      "vram_gb": 4.999146,
+      "ram_gb": 17.995605
+    },
+    "hwinfo": {
+      "cores": 16,
+      "ram_total_gb": 29.375,
+      "ram_avail_gb": 2.279,
+      "gpus": 1,
+      "vram_total_gb": 15.92,
+      "cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+      "gpu": "NVIDIA GeForce RTX 5070 Ti"
+    }
+  },
+  "profile": {
+    "seq": 2,
+    "turns": [
+      {
+        "request_id": "1",
+        "wall_s": 170.7729,
+        "expert_disk_s": 61.379075,
+        "expert_wait_s": 0.0,
+        "expert_matmul_s": 85.609566,
+        "attention_s": 23.206123,
+        "kv_batch_s": 0.0,
+        "lm_head_s": 0.094644,
+        "decode_wall_s": 13.181087,
+        "decode_expert_disk_s": 9.069937,
+        "decode_expert_wait_s": 0.0,
+        "decode_expert_matmul_s": 3.895145,
+        "decode_attention_s": 0.140382,
+        "decode_kv_batch_s": 0.0,
+        "decode_lm_head_s": 0.063032,
+        "expert_cpu_hits": 3378,
+        "expert_gpu_hits": 6304,
+        "expert_misses": 4118,
+        "expert_read_bytes": 21050437698,
+        "expert_direct_bytes": 21050425344,
+        "decode_expert_cpu_hits": 858,
+        "decode_expert_gpu_hits": 335,
+        "decode_expert_misses": 1207,
+        "decode_expert_read_bytes": 6169955877,
+        "decode_expert_direct_bytes": 6169952256,
+        "prompt_tokens": 19,
+        "completion_tokens": 4,
+        "forwards": 4
+      },
+      {
+        "request_id": "2",
+        "wall_s": 84.321289,
+        "expert_disk_s": 32.425386,
+        "expert_wait_s": 0.0,
+        "expert_matmul_s": 15.930124,
+        "attention_s": 35.850273,
+        "kv_batch_s": 0.0,
+        "lm_head_s": 0.044185,
+        "decode_wall_s": 10.233803,
+        "decode_expert_disk_s": 7.925634,
+        "decode_expert_wait_s": 0.0,
+        "decode_expert_matmul_s": 2.231732,
+        "decode_attention_s": 0.035209,
+        "decode_kv_batch_s": 0.0,
+        "decode_lm_head_s": 0.039348,
+        "expert_cpu_hits": 3334,
+        "expert_gpu_hits": 16307,
+        "expert_misses": 6159,
+        "expert_read_bytes": 31483643949,
+        "expert_direct_bytes": 31483625472,
+        "decode_expert_cpu_hits": 788,
+        "decode_expert_gpu_hits": 318,
+        "decode_expert_misses": 1294,
+        "decode_expert_read_bytes": 6614683434,
+        "decode_expert_direct_bytes": 6614679552,
+        "prompt_tokens": 39,
+        "completion_tokens": 4,
+        "forwards": 4
+      }
+    ],
+    "resident": {
+      "request_id": "2",
+      "layers": 480,
+      "device_moe": 480,
+      "host_moe": 0,
+      "activation_h2d_bytes": 131072,
+      "activation_d2h_bytes": 131072,
+      "logits_d2h_bytes": 7946240,
+      "router_d2h_bytes": 983040
+    }
+  },
+  "acceptance": {
+    "passed": true,
+    "failures": []
+  }
+}
