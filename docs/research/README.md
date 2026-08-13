@@ -342,6 +342,7 @@ q3 release audit finish passed at 20/20 checks.
 5. [Negative release disposition](phase10_experiment_05_negative_release_disposition.md)
 6. [Q3 release evidence audit](phase10_preflight_06_q3_release_audit.md)
 7. [Q3 positive release disposition](phase10_experiment_07_q3_release_disposition.md)
+8. [Ornith35 explicit-int4 default and throughput record](phase10_experiment_08_ornith35_int4_reversion.md)
 
 The first hardening experiment upgrades `colib doctor` from presence checks to
 index/header ownership, bounds, overlap, shard, and exact payload-byte
@@ -382,3 +383,7 @@ the historical int4 rejection, records the passing Gate-8 and Gate-9 results,
 regenerates the q3 audit at 20/20, and records the green final repository
 check. It separates this evidence acceptance from the remaining clean release
 commit and `v0.1` tag actions.
+The eighth makes the Ornith35 launcher's int4 default immune to ambient
+low-bit research variables and records a fresh three-turn, 64-token
+directional measurement at 40.416843 token/s sustained with zero host-MoE
+fallback.

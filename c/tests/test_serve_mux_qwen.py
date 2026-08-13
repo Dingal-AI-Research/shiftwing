@@ -17,6 +17,8 @@ ADVISORY = {
     "RESIDENT",
     "CACHE",
     "DCACHE",
+    "Q3NATIVE",
+    "Q3ATLAS",
 }
 
 
@@ -101,7 +103,7 @@ class QwenMuxIntegrationTests(unittest.TestCase):
         self.assertEqual(events[-1][0:2], ("DONE", 42))
         self.assertIn(" STAT 3 ", events[-1][2])
         kinds = {event[0] for event in events}
-        self.assertTrue((ADVISORY - {"RESIDENT"}) <= kinds)
+        self.assertTrue((ADVISORY - {"RESIDENT", "Q3NATIVE", "Q3ATLAS"}) <= kinds)
         if os.environ.get("COLI_CUDA") == "1":
             resident = next(
                 str(event[2]) for event in events if event[0] == "RESIDENT"

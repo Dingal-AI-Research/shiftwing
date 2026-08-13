@@ -145,6 +145,25 @@ static int mux_write_data(FILE *output, uint64_t id,
     return fputc('\n', output) != EOF && fflush(output) == 0;
 }
 
+static int mux_write_prefill_begin(FILE *output, uint64_t id, int total,
+                                   int cached) {
+    return fprintf(output, "PREFILL_BEGIN %" PRIu64 " %d %d\n",
+                   id, total, cached) >= 0 && fflush(output) == 0;
+}
+
+static int mux_write_prefill_progress(FILE *output, uint64_t id,
+                                      int completed, int total,
+                                      long long elapsed_ms) {
+    return fprintf(output, "PREFILL_PROGRESS %" PRIu64 " %d %d %lld\n",
+                   id, completed, total, elapsed_ms) >= 0 && fflush(output) == 0;
+}
+
+static int mux_write_prefill_end(FILE *output, uint64_t id, int total,
+                                 long long elapsed_ms) {
+    return fprintf(output, "PREFILL_END %" PRIu64 " %d %lld\n",
+                   id, total, elapsed_ms) >= 0 && fflush(output) == 0;
+}
+
 static int mux_write_error(FILE *output, uint64_t id, const char *code) {
     return fprintf(output, "ERROR %" PRIu64 " %s\n", id, code) >= 0 &&
            fflush(output) == 0;

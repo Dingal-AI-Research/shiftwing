@@ -66,6 +66,10 @@ class APIError(Exception):
 class ClientCancelled(Exception):
     pass
 
+class FirstModelOutputTimeoutError(RuntimeError):
+    pass
+
+
 
 def error_object(error):
     return {"error": {"message": error.message, "type": error.error_type,
@@ -1066,10 +1070,29 @@ def read_engine_turn(stream, sentinel, on_bytes):
     }
 
 
+def apply_engine_defaults(env):
+    """Install engine defaults that must not be left to the engine's own fallbacks.
+
+    CTX: the engine defaults max_seq to 512 and silently truncated anything longer,
+    dropping the tail of the prompt -- including the trailing generation prompt --
+    instead of reporting it (#401).  Agent transcripts carrying tool results run
+    well past 512 tokens.
+
+    Thread count is deliberately left to OpenMP.  Restricting it to physical cores
+    looks right for AVX-512 FMA-bound code, but measured the other way on this
+    workload: a full 3575-token prefill ran 374.7s on 16 hardware threads against
+    403.0s on 8 physical cores, because the quantized matmul is latency-bound on
+    its per-group reductions and SMT fills those bubbles.
+    """
+    env.setdefault("CTX", "16384")
+    return env
+
+
 class Engine:
     def __init__(self, executable, model, cap=8, max_tokens=1024, env=None, kv_slots=1):
         child_env = dict(env or os.environ, SNAP=str(model), SERVE="1", SERVE_BATCH="1",
                          MTP="0", NGEN=str(max_tokens), KV_SLOTS=str(kv_slots))
+        apply_engine_defaults(child_env)
         self.process = subprocess.Popen(
             [str(executable)], env=child_env, stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, bufsize=0,
@@ -1077,10 +1100,29 @@ class Engine:
         self.write_lock = threading.Lock()
         self.pending_lock = threading.Lock()
         self.pending = {}
+        self.prefill_cached = {}
         self.next_request_id = 1
         self.closed = False
         self.dispatcher_error = None
         self.trace = child_env.get("COLI_ENGINE_TRACE", "0") == "1"
+        try:
+            self.first_model_output_timeout_ms = int(
+                child_env.get("FIRST_MODEL_OUTPUT_TIMEOUT_MS", "900000"))
+        except ValueError as error:
+            raise RuntimeError("FIRST_MODEL_OUTPUT_TIMEOUT_MS must be an integer") from error
+        if self.first_model_output_timeout_ms <= 0:
+            raise RuntimeError("FIRST_MODEL_OUTPUT_TIMEOUT_MS must be positive")
+        try:
+            self.prefill_first_progress_timeout_ms = int(
+                child_env.get("PREFILL_FIRST_PROGRESS_TIMEOUT_MS", "180000"))
+            self.prefill_progress_stall_timeout_ms = int(
+                child_env.get("PREFILL_PROGRESS_STALL_TIMEOUT_MS", "120000"))
+        except ValueError as error:
+            raise RuntimeError("PREFILL_PROGRESS_STALL_TIMEOUT_MS must be an integer") from error
+        if self.prefill_first_progress_timeout_ms <= 0:
+            raise RuntimeError("PREFILL_FIRST_PROGRESS_TIMEOUT_MS must be positive")
+        if self.prefill_progress_stall_timeout_ms <= 0:
+            raise RuntimeError("PREFILL_PROGRESS_STALL_TIMEOUT_MS must be positive")
         self.kv_slots = kv_slots
         self.tiers = None
         self.q3_native = None
@@ -1116,6 +1158,7 @@ class Engine:
         with self.pending_lock:
             requests = list(self.pending.values())
             self.pending.clear()
+            self.prefill_cached.clear()
         for events in requests:
             events.put(("error", error))
 
@@ -1154,6 +1197,52 @@ class Engine:
                         events = self.pending.get(request_id)
                     if events is not None:
                         events.put(("data", data))
+                elif kind == "PREFILL_BEGIN" and len(fields) == 4:
+                    request_id = fields[1]
+                    total, cached = int(fields[2]), int(fields[3])
+                    if total < 1 or cached < 0 or cached > total:
+                        raise RuntimeError("invalid PREFILL_BEGIN")
+                    with self.pending_lock:
+                        events = self.pending.get(request_id)
+                        self.prefill_cached[request_id] = cached
+                    if events is not None:
+                        events.put(("progress", {
+                            "phase": "prefill", "event": "begin",
+                            "prompt_tokens_total": total,
+                            "prompt_tokens_cached": cached,
+                            "prompt_tokens_prefilled": cached,
+                            "elapsed_ms": 0,
+                        }))
+                elif kind == "PREFILL_PROGRESS" and len(fields) == 5:
+                    request_id = fields[1]
+                    completed, total, elapsed = map(int, fields[2:])
+                    with self.pending_lock:
+                        events = self.pending.get(request_id)
+                        cached = self.prefill_cached.get(request_id, 0)
+                    if total < 1 or completed < cached or completed > total or elapsed < 0:
+                        raise RuntimeError("invalid PREFILL_PROGRESS")
+                    if events is not None:
+                        events.put(("progress", {
+                            "phase": "prefill", "event": "progress",
+                            "prompt_tokens_total": total,
+                            "prompt_tokens_cached": cached,
+                            "prompt_tokens_prefilled": completed,
+                            "elapsed_ms": elapsed,
+                        }))
+                elif kind == "PREFILL_END" and len(fields) == 4:
+                    request_id = fields[1]
+                    total, elapsed = int(fields[2]), int(fields[3])
+                    with self.pending_lock:
+                        events = self.pending.get(request_id)
+                        cached = self.prefill_cached.pop(request_id, 0)
+                    if events is not None:
+                        events.put(("progress", {
+                            "phase": "prefill", "event": "end",
+                            "prompt_tokens_total": total,
+                            "prompt_tokens_cached": cached,
+                            "prompt_tokens_prefilled": total,
+                            "elapsed_ms": elapsed,
+                        }))
                 elif kind == "DONE" and len(fields) >= 7:
                     request_id = fields[1]
                     stats = self._stats(fields[2:])
@@ -1165,6 +1254,7 @@ class Engine:
                             break
                     with self.pending_lock:
                         events = self.pending.pop(request_id, None)
+                        self.prefill_cached.pop(request_id, None)
                     if events is not None:
                         events.put(("done", stats))
                 elif kind == "HWINFO" and len(fields) >= 7:
@@ -1309,6 +1399,7 @@ class Engine:
                     message = " ".join(fields[2:]) or "engine request failed"
                     with self.pending_lock:
                         events = self.pending.pop(request_id, None)
+                        self.prefill_cached.pop(request_id, None)
                     if events is not None:
                         events.put(("error", _engine_error(fields[2:], message)))
                 else:
@@ -1321,7 +1412,7 @@ class Engine:
                 self._fail_pending(error)
 
     def generate(self, prompt, max_tokens, temperature, top_p, on_text, cache_slot=0,
-                 cancelled=None, grammar=None):
+                 cancelled=None, grammar=None, on_progress=None):
         if isinstance(cache_slot, bool) or not isinstance(cache_slot, int) or not 0 <= cache_slot < self.kv_slots:
             raise APIError(400, "Invalid cache slot.", "cache_slot")
         payload = prompt.encode("utf-8")
@@ -1370,16 +1461,69 @@ class Engine:
             raise
 
         cancel_sent = False
+
+        def request_cancel():
+            nonlocal cancel_sent
+            if cancel_sent:
+                return
+            cancel_sent = True
+            with self.write_lock:
+                self.process.stdin.write(f"CANCEL {request_id}\n".encode())
+                self.process.stdin.flush()
+
+        now = time.monotonic()
+        first_output_deadline = now + self.first_model_output_timeout_ms / 1000.0
+        progress_stall_deadline = now + self.prefill_first_progress_timeout_ms / 1000.0
+        last_progress_marker = None
+        progress_started = False
         while True:
-            kind, value = events.get()
-            if kind == "data":
+            try:
+                if first_output_deadline == float("inf"):
+                    kind, value = events.get()
+                else:
+                    remaining = min(first_output_deadline, progress_stall_deadline) - time.monotonic()
+                    kind, value = events.get(timeout=max(0.0, remaining))
+            except queue.Empty:
+                now = time.monotonic()
+                stalled = progress_stall_deadline <= first_output_deadline and now >= progress_stall_deadline
+                request_cancel()
+                acknowledged = False;ack_deadline = time.monotonic() + 2.0
+                while not acknowledged:
+                    try:
+                        ack_kind, _ = events.get(timeout=max(0.0, ack_deadline-time.monotonic()))
+                        acknowledged = ack_kind == "error"
+                    except queue.Empty:
+                        break
+                if not acknowledged and self.process.poll() is None:
+                    self.process.terminate()
+                raise FirstModelOutputTimeoutError(
+                    (f"prefill made no progress for {(self.prefill_progress_stall_timeout_ms if progress_started else self.prefill_first_progress_timeout_ms)} ms"
+                     if stalled else
+                     f"no model output within {self.first_model_output_timeout_ms} ms"))
+            if kind == "progress":
                 if not cancel_sent:
+                    marker = (value.get("prompt_tokens_cached"),
+                              value.get("prompt_tokens_prefilled"))
+                    advanced = (isinstance(marker[0], int) and isinstance(marker[1], int)
+                                and marker[1] > marker[0])
+                    if marker != last_progress_marker:
+                        last_progress_marker = marker
+                        if advanced:
+                            progress_started = True
+                            progress_stall_deadline = (time.monotonic() +
+                                                       self.prefill_progress_stall_timeout_ms / 1000.0)
+                    if on_progress:
+                        on_progress(value)
+                    if cancelled and cancelled():
+                        request_cancel()
+            elif kind == "data":
+                if not cancel_sent:
+                    if value:
+                        first_output_deadline = float("inf")
+                        progress_stall_deadline = float("inf")
                     decode(value)
                     if cancelled and cancelled():
-                        cancel_sent = True
-                        with self.write_lock:
-                            self.process.stdin.write(f"CANCEL {request_id}\n".encode())
-                            self.process.stdin.flush()
+                        request_cancel()
             elif kind == "done":
                 tail = decoder.decode(b"", final=True)
                 if tail:
@@ -1667,6 +1811,13 @@ class APIHandler(BaseHTTPRequestHandler):
                 raise APIError(404, "Not found.", None, "not_found")
         except APIError as error:
             self.send_json(error.status, self.error_body(error), request_id, error.headers)
+        except FirstModelOutputTimeoutError as error:
+            api_error = APIError(504, str(error), None,
+                                 "first_model_output_timeout", "server_error")
+            try:
+                self.send_json(504, self.error_body(api_error), request_id)
+            except OSError:
+                pass
         except ClientCancelled:
             pass
         except (BrokenPipeError, ConnectionResetError):
@@ -1789,13 +1940,34 @@ class APIHandler(BaseHTTPRequestHandler):
                     except OSError:
                         connected = False
 
+            last_progress = [None]
+
+            def progress_event(progress):
+                nonlocal connected
+                last_progress[0] = dict(progress)
+                if not connected:
+                    return
+                payload = {"object": "colib.progress", "schema_version": 1,
+                           "request_id": request_id, **progress}
+                data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                with ka_lock:
+                    try:
+                        self.wfile.write(f"data: {data}\n\n".encode())
+                        self.wfile.flush()
+                        last_write[0] = time.time()
+                    except OSError:
+                        connected = False
+
             def _keepalive():
                 ping = [{"index": 0, "delta": ({"reasoning_content": "."} if chat else {"content": ""}),
                          "logprobs": None, "finish_reason": None}]
                 while not ka_stop.wait(1.0):
                     if not connected:
                         return
-                    if time.time() - last_write[0] >= KA_GAP:
+                    gap = time.time() - last_write[0]
+                    if last_progress[0] is not None and gap >= 2.0:
+                        progress_event(last_progress[0])
+                    elif gap >= KA_GAP:
                         event(ping)
 
             if chat:
@@ -1803,6 +1975,7 @@ class APIHandler(BaseHTTPRequestHandler):
                         "logprobs": None, "finish_reason": None}])
 
             def emit(text):
+                last_progress[0] = None
                 choice = ({"index": 0, "delta": {"content": text}, "logprobs": None,
                            "finish_reason": None} if chat else
                           {"index": 0, "text": text, "logprobs": None, "finish_reason": None})
@@ -1810,6 +1983,7 @@ class APIHandler(BaseHTTPRequestHandler):
 
             def emit_reasoning(text):
                 if text:
+                    last_progress[0] = None
                     event([{"index": 0, "delta": {"reasoning_content": text},
                             "logprobs": None, "finish_reason": None}])
 
@@ -1872,9 +2046,30 @@ class APIHandler(BaseHTTPRequestHandler):
                     emit_reasoning(reason["buf"][:flush])
                     reason["buf"] = reason["buf"][flush:]
 
-            stats = self.server.engine.generate(
-                prompt, maximum, temperature, top_p, emit_model, cache_slot,
-                lambda: not connected, grammar=grammar)
+            try:
+                stats = self.server.engine.generate(
+                    prompt, maximum, temperature, top_p, emit_model, cache_slot,
+                    lambda: not connected, grammar=grammar, on_progress=progress_event)
+            except FirstModelOutputTimeoutError as error:
+                # The 200/SSE headers are already committed, so the outer HTTP error
+                # handler cannot replace this response with a JSON 504. Surface the
+                # terminal error in-band and close the stream cleanly instead.
+                ka_stop.set()
+                ka_thread.join(timeout=2)
+                payload = error_object(APIError(
+                    504, str(error), None, "first_model_output_timeout", "server_error"))
+                if connected:
+                    with ka_lock:
+                        try:
+                            data = json.dumps(payload, ensure_ascii=False,
+                                              separators=(",", ":"))
+                            self.wfile.write(f"data: {data}\n\n".encode())
+                            self.wfile.write(b"data: [DONE]\n\n")
+                            self.wfile.flush()
+                        except OSError:
+                            pass
+                self.close_connection = True
+                return
             if not reason["closed"] and reason["buf"]:
                 emit_reasoning(reason["buf"])
                 reason["buf"] = ""
@@ -2074,6 +2269,11 @@ class APIHandler(BaseHTTPRequestHandler):
                     except OSError:
                         connected[0] = False
 
+            def progress_event(progress):
+                payload = {"object": "colib.progress", "schema_version": 1,
+                           "request_id": request_id, **progress}
+                send_event("colib.progress", payload)
+
             # Anthropic has a first-class keepalive event, so the cold prefill (minutes) does
             # not need the OpenAI path's reasoning-delta trick: `ping` is in the protocol.
             def keepalive():
@@ -2121,7 +2321,7 @@ class APIHandler(BaseHTTPRequestHandler):
 
             stats = self.server.engine.generate(
                 prompt, maximum, temperature, top_p, on_text, cache_slot,
-                lambda: not connected[0], grammar=grammar)
+                lambda: not connected[0], grammar=grammar, on_progress=progress_event)
             if tools and not state["in_tool"] and state["buf"]:
                 send_event("content_block_delta", {"type": "content_block_delta", "index": 0,
                     "delta": {"type": "text_delta", "text": state["buf"]}})

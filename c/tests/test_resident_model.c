@@ -5,7 +5,7 @@ int main(void){
     setenv("MTP","0",1);setenv("KV16","0",1);setenv("EXPERT_RAM","4",1);setenv("PREFETCH_THREADS","0",1);
     static Model m;model_init(&m,"qwen_tiny_i4");Oracle o=load_oracle("ref_qwen_i4.json");
     int alt[]={9,8,7,6},*prompt[2]={o.prompt,alt},plen[2]={o.nprompt,4};enum{B=2,STEPS=8};
-    ResidentBatchState resident={0};if(!resident_batch_init(&m,&resident,B)){fprintf(stderr,"resident init failed\n");return 1;}
+    ResidentBatchState resident={0};if(!resident_batch_init(&m,&resident,B,B)){fprintf(stderr,"resident init failed\n");return 1;}
     float*logits=falloc(m.c.vocab);
     for(int slot=0;slot<B;slot++){model_reset(&m);prefill_dispatch(&m,prompt[slot],plen[slot],logits);if(!resident_import_model_slot(&m,&resident,slot,logits)){fprintf(stderr,"resident import failed\n");return 1;}}
     int slots[B]={0,1},tokens[B],got[B][STEPS];
@@ -24,7 +24,7 @@ int main(void){
         }
     }
     SessionState exported={0},disk={0};ResidentBatchState restored={0};char path[256];snprintf(path,sizeof(path),"/tmp/colib-resident-%ld.bin",(long)getpid());
-    int disk_bad=!resident_export_session(&m,&resident,0,&exported)||!session_state_write(path,&exported)||!session_state_read(&m,path,&disk)||!resident_batch_init(&m,&restored,1)||!resident_import_session(&m,&restored,0,&disk);
+    int disk_bad=!resident_export_session(&m,&resident,0,&exported)||!session_state_write(path,&exported)||!session_state_read(&m,path,&disk)||!resident_batch_init(&m,&restored,1,1)||!resident_import_session(&m,&restored,0,&disk);
     int continuation_bad=0,one=0;
     if(!disk_bad)for(int step=0;step<STEPS;step++){int a=argmax(resident.logits,m.c.vocab),b=argmax(restored.logits,m.c.vocab);if(a!=b)continuation_bad++;if(step+1<STEPS){if(!resident_forward_tokens(&m,&resident,&one,&a,1)||!resident_forward_tokens(&m,&restored,&one,&b,1)){continuation_bad++;break;}}}
     unlink(path);session_state_free(&exported);session_state_free(&disk);resident_batch_free(&m,&restored);

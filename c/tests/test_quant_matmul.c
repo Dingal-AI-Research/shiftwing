@@ -77,7 +77,12 @@ static int check_batch(int fmt){
     float*x=falloc((int64_t)B*LDX),*yb=falloc((int64_t)B*O),*yr=falloc((int64_t)B*O);for(int b=0;b<B;b++)for(int i=0;i<LDX;i++)x[(int64_t)b*LDX+i]=sinf((float)(b*101+i*17+5))*.25f;
     qmat_mul_batch(yb,x,B,LDX,&w,1);for(int b=0;b<B;b++)qmat_mul_ex(yr+(int64_t)b*O,x+(int64_t)b*LDX,&w,1);
     float md=0.f;for(int i=0;i<B*O;i++){float d=fabsf(yb[i]-yr[i]);if(d>md)md=d;}printf("qmat batch fmt=%d maxdiff=%.3g\n",fmt,md);
-    free(w.q8);free(w.q4);free(w.s);free(x);free(yb);free(yr);return fmt==1?md==0.f:md<2e-5f;
+    /* Bit-exact for every format, not merely within tolerance.  The batched path
+     * must reproduce the per-token GEMV's reduction structure exactly: two zmm
+     * accumulators per group over i+=32, reduce, scale, then sum groups in index
+     * order.  All four formats already satisfy this, so any drift is a real
+     * regression rather than an accepted quantization difference. */
+    free(w.q8);free(w.q4);free(w.s);free(x);free(yb);free(yr);return md==0.f;
 }
 int main(void){
     setenv("IDOT","1",1);

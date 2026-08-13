@@ -25,8 +25,22 @@ PYTHON = Path(os.environ.get("COLI_PYTHON", WORKSPACE_PYTHON if WORKSPACE_PYTHON
 
 
 def _runtime_env(args: argparse.Namespace) -> dict[str, str]:
+    from openai_server import apply_engine_defaults
+
     env = os.environ.copy()
     env.setdefault("SERVE_RESIDENT", "1")
+    apply_engine_defaults(env)
+    # The launcher defaults to the immutable int4 container.  Low-bit
+    # sidecars are opt-in CLI modes; do not let ambient research variables
+    # silently change the model selected by chat/serve/web.
+    env.update(
+        {
+            "EXPERT_Q2": "0",
+            "EXPERT_Q3": "0",
+            "Q3_NATIVE": "0",
+            "Q3_ROUTE_ATLAS": "0",
+        }
+    )
     if getattr(args, "session_dir", None):
         env["SESSION_DIR"] = str(Path(args.session_dir).expanduser().resolve())
     if getattr(args, "cuda", False):

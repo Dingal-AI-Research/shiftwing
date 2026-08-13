@@ -71,6 +71,9 @@ static void test_response_framing(void) {
     FILE *output = tmpfile();
     if (!output) fail("tmpfile output");
     if (!mux_write_ready(output) ||
+        !mux_write_prefill_begin(output, 5, 8200, 0) ||
+        !mux_write_prefill_progress(output, 5, 512, 8200, 9000) ||
+        !mux_write_prefill_end(output, 5, 8200, 120000) ||
         !mux_write_data(output, 5, "a\nb", 3) ||
         !mux_write_error(output, 6, "CANCELLED") ||
         !mux_write_done(output, 5, 2, 3.5, 91.25, 4.0, 7, 1))
@@ -80,6 +83,9 @@ static void test_response_framing(void) {
     size_t n = fread(got, 1, sizeof(got) - 1, output);
     const char expected[] =
         "\x01\x01READY\x01\x01\n"
+        "PREFILL_BEGIN 5 8200 0\n"
+        "PREFILL_PROGRESS 5 512 8200 9000\n"
+        "PREFILL_END 5 8200 120000\n"
         "DATA 5 3\n"
         "a\nb\n"
         "ERROR 6 CANCELLED\n"

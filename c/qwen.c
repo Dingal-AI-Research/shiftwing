@@ -173,7 +173,7 @@ typedef struct {
 } ResidentLayerState;
 
 typedef struct {
-    int nslots,max_seq,kv16;
+    int nslots,activation_capacity,max_seq,kv16;
     int *pos;
     float *last_hidden,*logits;
     ResidentLayerState *layer;
@@ -834,6 +834,40 @@ static int cuda_resident_output_try(Model*m,ResidentBatchState*s,float*hidden,
     cuda_rt.calls+=(uint64_t)B;
     cuda_rt.resident_d2h+=(uint64_t)B*c->hidden*sizeof(float);
     cuda_rt.resident_logits_d2h+=(uint64_t)B*c->vocab*sizeof(float);
+    used=1;
+done:
+    pthread_mutex_unlock(&cuda_rt.lock);return used;
+}
+
+static int cuda_resident_output_last_try(Model*m,ResidentBatchState*s,
+                                         float*hidden,float*logits,int row){
+    if(!cuda_rt.active||!s||!s->cuda_activations||row<0||
+       row>=s->activation_capacity)return 0;
+    QMat*head=&m->lm_head;Cfg*c=&m->c;
+    if(!head->cuda_eligible||(head->fmt!=1&&head->fmt!=4))return 0;
+    int used=0;pthread_mutex_lock(&cuda_rt.lock);
+    if(!m->d_final_norm){
+        size_t bytes=(size_t)c->hidden*sizeof(float);
+        if(coli_cuda_malloc(cuda_rt.ctx,(void**)&m->d_final_norm,bytes)||
+           coli_cuda_upload(cuda_rt.ctx,m->d_final_norm,m->final_norm,bytes)){
+            cuda_backend_fail("resident final norm upload");used=-1;goto done;
+        }
+    }
+    float*last_x=s->d_x+(int64_t)row*c->hidden;
+    if(coli_cuda_rmsnorm_zero_batch(cuda_rt.ctx,s->d_n,last_x,
+                                    m->d_final_norm,1,c->hidden,c->eps)||
+       cuda_qmat_batch_device_locked(s->d_logits,s->d_n,head,1)||
+       coli_cuda_download(cuda_rt.ctx,hidden,s->d_n,
+                          (size_t)c->hidden*sizeof(float))||
+       coli_cuda_download(cuda_rt.ctx,logits,s->d_logits,
+                          (size_t)c->vocab*sizeof(float))||
+       coli_cuda_sync(cuda_rt.ctx)){
+        cuda_backend_fail("resident final-row output projection");
+        used=-1;goto done;
+    }
+    cuda_rt.calls++;
+    cuda_rt.resident_d2h+=(uint64_t)c->hidden*sizeof(float);
+    cuda_rt.resident_logits_d2h+=(uint64_t)c->vocab*sizeof(float);
     used=1;
 done:
     pthread_mutex_unlock(&cuda_rt.lock);return used;
@@ -1894,22 +1928,71 @@ static void gdn_prefill_seq(float *out,float *state,const float *q,const float *
     }free(qn);free(kn);
 }
 static void gdn_prefill_chunked(float *out,float *state,const float *q,const float *k,const float *v,const float *g,const float *beta,int T,int H,int dk,int dv){
+    /* Every term below keeps the same products summed in the same order as the
+     * original chunked form.  It is NOT bit-identical to it: the accumulators
+     * moved from a scalar temporary to a contiguous row, and -ffp-contract=fast
+     * then fuses multiply-adds differently in the vectorised form.  Measured
+     * drift against the previous implementation is ~1e-8, two to four orders
+     * inside the 1e-4 gate test_gdn_chunk already applies to this primitive
+     * against gdn_prefill_seq (which it approximates rather than reproduces).
+     * What changes is how often the j-invariant factors are evaluated and how
+     * the loops are nested:
+     *   - Wqk[i][p] = dot(qq_i,kk_p)*exp(gc[i]-gc[p]) does not depend on the value
+     *     index j, yet the output loop recomputed it for all dv=128 of them.
+     *     Hoisting it turns a C^2/2*dv*dk loop into a C^2/2*dk build plus a
+     *     C^2/2*dv apply -- about 8x less arithmetic per chunk.
+     *   - exp(gc[p]) in the kc loop was evaluated dk times per (i,p).
+     *   - the innermost index is now j (contiguous saxpy) instead of a stride-dv
+     *     gather, and the head loop is parallel because S is per-head.
+     * exp(gc[i]-gc[p]) is deliberately NOT split into exp(gc[i])*exp(-gc[p]):
+     * gc is a cumulative log-gate that runs very negative, so the factors
+     * underflow separately and the product would lose the difference. */
     enum{C=64};int nc=(T+C-1)/C;float scale=1.f/sqrtf((float)dk);
-    float *qq=falloc((int64_t)C*dk),*kk=falloc((int64_t)C*dk),*vv=falloc((int64_t)C*dv),*bb=falloc(C),*gc=falloc(C);
-    float *A=falloc(C*C),*tmp=falloc(C),*vp=falloc((int64_t)C*dv),*kc=falloc((int64_t)C*dk),*vn=falloc((int64_t)C*dv);
-    for(int h=0;h<H;h++){float*S=state+(int64_t)h*dk*dv;
+    int par=parallel_work((int64_t)nc*C*C*dv);
+    #pragma omp parallel for schedule(static) if(par)
+    for(int h=0;h<H;h++){
+        float *qq=falloc((int64_t)C*dk),*kk=falloc((int64_t)C*dk),*vv=falloc((int64_t)C*dv),*bb=falloc(C),*gc=falloc(C);
+        float *A=falloc(C*C),*tmp=falloc(C),*vp=falloc((int64_t)C*dv),*kc=falloc((int64_t)C*dk),*vn=falloc((int64_t)C*dv);
+        float *W=falloc((int64_t)C*C),*qg=falloc((int64_t)C*dk),*eg=falloc(C),*acc=falloc(dv);
+        float*S=state+(int64_t)h*dk*dv;
         for(int ch=0;ch<nc;ch++){int n=T-ch*C;if(n>C)n=C;memset(qq,0,(size_t)C*dk*sizeof(float));memset(kk,0,(size_t)C*dk*sizeof(float));memset(vv,0,(size_t)C*dv*sizeof(float));memset(bb,0,C*sizeof(float));memset(gc,0,C*sizeof(float));memset(A,0,C*C*sizeof(float));
             for(int i=0;i<n;i++){int t=ch*C+i;const float*qi=q+((int64_t)t*H+h)*dk,*ki=k+((int64_t)t*H+h)*dk;float q2=0.f,k2=0.f;for(int d=0;d<dk;d++){q2+=qi[d]*qi[d];k2+=ki[d]*ki[d];}q2=1.f/sqrtf(q2+1e-6f);k2=1.f/sqrtf(k2+1e-6f);for(int d=0;d<dk;d++){qq[(int64_t)i*dk+d]=qi[d]*q2*scale;kk[(int64_t)i*dk+d]=ki[d]*k2;}memcpy(vv+(int64_t)i*dv,v+((int64_t)t*H+h)*dv,(size_t)dv*sizeof(float));bb[i]=beta[(int64_t)t*H+h];gc[i]=g[(int64_t)t*H+h]+(i?gc[i-1]:0.f);}
             for(int i=n;i<C;i++)gc[i]=i?gc[i-1]:0.f;
             for(int i=1;i<C;i++)for(int j=0;j<i;j++)A[(int64_t)i*C+j]=-bb[i]*dot(kk+(int64_t)i*dk,kk+(int64_t)j*dk,dk)*expf(gc[i]-gc[j]);
             for(int i=1;i<C;i++){for(int j=0;j<i;j++){float z0=A[(int64_t)i*C+j];for(int p=0;p<i;p++)z0+=A[(int64_t)i*C+p]*A[(int64_t)p*C+j];tmp[j]=z0;}for(int j=0;j<i;j++)A[(int64_t)i*C+j]=tmp[j];}
             for(int i=0;i<C;i++)A[(int64_t)i*C+i]=1.f;
-            for(int i=0;i<C;i++){for(int j=0;j<dv;j++){float z0=0.f;for(int p=0;p<C;p++)z0+=A[(int64_t)i*C+p]*vv[(int64_t)p*dv+j]*bb[p];vp[(int64_t)i*dv+j]=z0;}for(int d=0;d<dk;d++){float z0=0.f;for(int p=0;p<C;p++)z0+=A[(int64_t)i*C+p]*kk[(int64_t)p*dk+d]*bb[p]*expf(gc[p]);kc[(int64_t)i*dk+d]=z0;}}
-            for(int i=0;i<C;i++)for(int j=0;j<dv;j++){float z0=0.f;for(int d=0;d<dk;d++)z0+=kc[(int64_t)i*dk+d]*S[(int64_t)d*dv+j];vn[(int64_t)i*dv+j]=vp[(int64_t)i*dv+j]-z0;}
-            for(int i=0;i<n;i++){float*yo=out+((int64_t)(ch*C+i)*H+h)*dv;for(int j=0;j<dv;j++){float z0=0.f;for(int d=0;d<dk;d++)z0+=qq[(int64_t)i*dk+d]*expf(gc[i])*S[(int64_t)d*dv+j];for(int p=0;p<=i;p++)z0+=dot(qq+(int64_t)i*dk,kk+(int64_t)p*dk,dk)*expf(gc[i]-gc[p])*vn[(int64_t)p*dv+j];yo[j]=z0;}}
-            float last=gc[C-1];for(int d=0;d<dk;d++)for(int j=0;j<dv;j++){float z0=S[(int64_t)d*dv+j]*expf(last);for(int i=0;i<C;i++)z0+=kk[(int64_t)i*dk+d]*expf(last-gc[i])*vn[(int64_t)i*dv+j];S[(int64_t)d*dv+j]=z0;}
+            for(int i=0;i<C;i++){
+                float*vpi=vp+(int64_t)i*dv,*kci=kc+(int64_t)i*dk;
+                for(int j=0;j<dv;j++)vpi[j]=0.f;
+                for(int d=0;d<dk;d++)kci[d]=0.f;
+                for(int p=0;p<C;p++){float a=A[(int64_t)i*C+p],b=bb[p],e=expf(gc[p]);
+                    const float*vvp=vv+(int64_t)p*dv,*kkp=kk+(int64_t)p*dk;
+                    for(int j=0;j<dv;j++)vpi[j]+=a*vvp[j]*b;
+                    for(int d=0;d<dk;d++)kci[d]+=a*kkp[d]*b*e;}
+            }
+            for(int i=0;i<C;i++){
+                const float*kci=kc+(int64_t)i*dk;float*vni=vn+(int64_t)i*dv,*vpi=vp+(int64_t)i*dv;
+                for(int j=0;j<dv;j++)acc[j]=0.f;
+                for(int d=0;d<dk;d++){float a=kci[d];const float*Sd=S+(int64_t)d*dv;for(int j=0;j<dv;j++)acc[j]+=a*Sd[j];}
+                for(int j=0;j<dv;j++)vni[j]=vpi[j]-acc[j];
+            }
+            for(int i=0;i<n;i++){const float*qqi=qq+(int64_t)i*dk;float e=expf(gc[i]);eg[i]=e;
+                for(int d=0;d<dk;d++)qg[(int64_t)i*dk+d]=qqi[d]*e;
+                for(int p=0;p<=i;p++)W[(int64_t)i*C+p]=dot(qqi,kk+(int64_t)p*dk,dk)*expf(gc[i]-gc[p]);}
+            for(int i=0;i<n;i++){float*yo=out+((int64_t)(ch*C+i)*H+h)*dv;const float*qgi=qg+(int64_t)i*dk;
+                for(int j=0;j<dv;j++)yo[j]=0.f;
+                for(int d=0;d<dk;d++){float a=qgi[d];const float*Sd=S+(int64_t)d*dv;for(int j=0;j<dv;j++)yo[j]+=a*Sd[j];}
+                for(int p=0;p<=i;p++){float a=W[(int64_t)i*C+p];const float*vnp=vn+(int64_t)p*dv;for(int j=0;j<dv;j++)yo[j]+=a*vnp[j];}}
+            float last=gc[C-1],el=expf(last);
+            for(int i=0;i<C;i++)eg[i]=expf(last-gc[i]);
+            for(int d=0;d<dk;d++){float*Sd=S+(int64_t)d*dv;
+                for(int j=0;j<dv;j++)Sd[j]=Sd[j]*el;
+                for(int i=0;i<C;i++){float a=kk[(int64_t)i*dk+d]*eg[i];const float*vni=vn+(int64_t)i*dv;
+                    for(int j=0;j<dv;j++)Sd[j]+=a*vni[j];}}
         }
-    }free(qq);free(kk);free(vv);free(bb);free(gc);free(A);free(tmp);free(vp);free(kc);free(vn);
+        free(qq);free(kk);free(vv);free(bb);free(gc);free(A);free(tmp);free(vp);free(kc);free(vn);
+        free(W);free(qg);free(eg);free(acc);
+    }
 }
 static void gdn_forward(Model *m,Layer *l,const float *x,float *out){
     Cfg *c=&m->c; GdnW *w=&l->gdn; int kh=c->lin_k_heads,vh=c->lin_v_heads,dk=c->lin_k_dim,dv=c->lin_v_dim;
@@ -1965,6 +2048,155 @@ static void attn_forward(Model *m,Layer *l,const float *x,float *out){
     }
     qmat_mul_ex(out,ctx,&w->o,0); free(qp);free(q);free(gate);free(k);free(v);free(ctx);free(scores);
 }
+/* ---- bit-exact panel GEMM for grouped low-bit weights ---------------------
+ * The per-row loop below keeps the packed weight row hot but still re-decodes it
+ * for every token, and with the row loop outermost it walks the whole activation
+ * matrix once per output row (O passes over X, not one).  This path decodes a
+ * panel of QMAT_PR rows into fp32 once and reuses it across a block of tokens,
+ * so X is read once per row panel instead of once per row.
+ *
+ * Bit-exactness with the per-token GEMV is a hard requirement, not a tolerance.
+ * It holds because int4/int3 codes are small integers that fp32 represents
+ * exactly, so the decoded panel contains precisely the values dot_q4_group and
+ * dot_q3_group materialise.  Three things must therefore be preserved verbatim:
+ *   - scales stay UNFOLDED (folding turns s*sum(q*x) into sum(q*s)*x),
+ *   - each format keeps its accumulator layout: two zmm accumulators over
+ *     i+=32 for int4, one over i+=16 for int3, then the same _mm512_reduce_add_ps,
+ *   - per-group results are scaled and summed in group-index order.
+ * The scalar tail runs after the reduce, exactly as the group helpers do.
+ *
+ * This is not the earlier scalar nibble-expansion attempt.  That one replaced the
+ * AVX dot with scalar expansion and added no token reuse, so it was both slower
+ * and numerically different; here the AVX reduction is reproduced unchanged and
+ * the win comes from decode-once plus the token block.
+ */
+#if defined(__AVX512F__) && defined(__AVX512BW__)
+#define QMAT_PANEL 1
+/* Rows per panel tile and tokens per micro tile.  QMAT_PR is the reuse factor
+ * for the activation block: X is re-read O/QMAT_PR times per call, so raising it
+ * is the only lever on activation traffic.  The ceiling is the register file --
+ * bit-exactness needs QMAT_PR*QMAT_PT*2 zmm accumulators live for int4. */
+#ifndef QMAT_PR
+#define QMAT_PR 4
+#endif
+#ifndef QMAT_PT
+#define QMAT_PT 2
+#endif
+
+static _Thread_local float *qmat_panel_buf;static _Thread_local int64_t qmat_panel_cap;
+static float *qmat_panel_scratch(int64_t n){
+    if(qmat_panel_cap<n){float*p=realloc(qmat_panel_buf,(size_t)n*sizeof(float));if(!p)die("OOM qmat panel");qmat_panel_buf=p;qmat_panel_cap=n;}
+    return qmat_panel_buf;
+}
+static int qmat_panel_block(void){
+    static int v=-1;if(v<0){const char*e=getenv("QMAT_NBB");v=e?atoi(e):128;if(v<QMAT_PT)v=QMAT_PT;}return v;
+}
+/* QMAT_PANEL=0 restores the per-row fallback for A/B measurement. */
+static int qmat_panel_batch_enabled(void){
+    static int v=-1;if(v<0){const char*e=getenv("QMAT_PANEL");v=e?atoi(e)!=0:1;}return v;
+}
+/* Unscaled decode of one weight row.  Group boundaries are multiples of gs, so
+ * decoding the row contiguously yields the same values the per-group helpers
+ * compute from their group-relative pointers. */
+static void qmat_panel_decode(const QMat *w,int row,float *out){
+    const uint8_t *q=w->q4+(int64_t)row*w->rb;int I=w->I,i=0;
+    if(w->fmt==4){
+        const __m128i mask=_mm_set1_epi8(15);const __m512i eight=_mm512_set1_epi32(8);
+        for(;i+32<=I;i+=32){
+            __m128i by=_mm_loadu_si128((const __m128i*)(q+(i>>1)));
+            __m128i lo=_mm_and_si128(by,mask),hi=_mm_and_si128(_mm_srli_epi16(by,4),mask);
+            __m128i n0=_mm_unpacklo_epi8(lo,hi),n1=_mm_unpackhi_epi8(lo,hi);
+            _mm512_storeu_ps(out+i,_mm512_cvtepi32_ps(_mm512_sub_epi32(_mm512_cvtepu8_epi32(n0),eight)));
+            _mm512_storeu_ps(out+i+16,_mm512_cvtepi32_ps(_mm512_sub_epi32(_mm512_cvtepu8_epi32(n1),eight)));
+        }
+        for(;i<I;i++){uint8_t b=q[i>>1];out[i]=(float)(((i&1)?(b>>4):(b&15))-8);}
+        return;
+    }
+    for(;i<I;i++)out[i]=(float)q3_value(q,i);
+}
+/* One quant group: QMAT_PR rows x QMAT_PT tokens of dot products. */
+static inline void qmat_tile_q4(float *out,const float *wp,int64_t ws,
+                                const float *const *xs,int n){
+    __m512 a0[QMAT_PT][QMAT_PR],a1[QMAT_PT][QMAT_PR];
+    for(int t=0;t<QMAT_PT;t++)for(int r=0;r<QMAT_PR;r++){a0[t][r]=_mm512_setzero_ps();a1[t][r]=_mm512_setzero_ps();}
+    int i=0;
+    for(;i+32<=n;i+=32){
+        __m512 w0[QMAT_PR],w1[QMAT_PR];
+        for(int r=0;r<QMAT_PR;r++){w0[r]=_mm512_loadu_ps(wp+(int64_t)r*ws+i);w1[r]=_mm512_loadu_ps(wp+(int64_t)r*ws+i+16);}
+        for(int t=0;t<QMAT_PT;t++){
+            __m512 x0=_mm512_loadu_ps(xs[t]+i),x1=_mm512_loadu_ps(xs[t]+i+16);
+            for(int r=0;r<QMAT_PR;r++){a0[t][r]=_mm512_fmadd_ps(x0,w0[r],a0[t][r]);a1[t][r]=_mm512_fmadd_ps(x1,w1[r],a1[t][r]);}
+        }
+    }
+    for(int t=0;t<QMAT_PT;t++)for(int r=0;r<QMAT_PR;r++)out[t*QMAT_PR+r]=_mm512_reduce_add_ps(_mm512_add_ps(a0[t][r],a1[t][r]));
+    for(;i<n;i++)for(int t=0;t<QMAT_PT;t++)for(int r=0;r<QMAT_PR;r++)out[t*QMAT_PR+r]+=xs[t][i]*wp[(int64_t)r*ws+i];
+}
+static inline void qmat_tile_q3(float *out,const float *wp,int64_t ws,
+                                const float *const *xs,int n){
+    __m512 acc[QMAT_PT][QMAT_PR];
+    for(int t=0;t<QMAT_PT;t++)for(int r=0;r<QMAT_PR;r++)acc[t][r]=_mm512_setzero_ps();
+    int i=0;
+    for(;i+16<=n;i+=16){
+        __m512 wv[QMAT_PR];
+        for(int r=0;r<QMAT_PR;r++)wv[r]=_mm512_loadu_ps(wp+(int64_t)r*ws+i);
+        for(int t=0;t<QMAT_PT;t++){
+            __m512 xv=_mm512_loadu_ps(xs[t]+i);
+            for(int r=0;r<QMAT_PR;r++)acc[t][r]=_mm512_fmadd_ps(xv,wv[r],acc[t][r]);
+        }
+    }
+    for(int t=0;t<QMAT_PT;t++)for(int r=0;r<QMAT_PR;r++)out[t*QMAT_PR+r]=_mm512_reduce_add_ps(acc[t][r]);
+    for(;i<n;i++)for(int t=0;t<QMAT_PT;t++)for(int r=0;r<QMAT_PR;r++)out[t*QMAT_PR+r]+=xs[t][i]*wp[(int64_t)r*ws+i];
+}
+static int qmat_mul_batch_panel(float *y,const float *x,int B,int ldx,const QMat *w,int par){
+    /* The decode is paid once per (row panel, token block) and so costs O*I per
+     * block regardless of B, i.e. ~1/B relative to the O*I*B of compute.  Below
+     * ~16 tokens that overhead stops paying for itself and the per-row path is
+     * faster, so short speculative blocks keep the old kernel. */
+    if((w->fmt!=3&&w->fmt!=4)||B<16||w->O<QMAT_PR||w->gs<=0||w->ng<=0)return 0;
+    const int O=w->O,I=w->I,ng=w->ng,gs=w->gs,orows=(O/QMAT_PR)*QMAT_PR;
+    int NB=qmat_panel_block();if(NB>B)NB=B;
+    for(int b0=0;b0<B;b0+=NB){
+        int nb=B-b0;if(nb>NB)nb=NB;
+        int ntile=(nb/QMAT_PT)*QMAT_PT;
+        #pragma omp parallel for schedule(static) if(par)
+        for(int o0=0;o0<orows;o0+=QMAT_PR){
+            /* One scratch block: the decoded row panel followed by the running
+             * per-(token,row) accumulators.  The group loop is outside the token
+             * loop so a group's QMAT_PR*gs decoded weights stay in L1 across the
+             * whole token block; the accumulators are what carry the group-order
+             * summation that bit-exactness depends on. */
+            float *wp=qmat_panel_scratch((int64_t)QMAT_PR*I+(int64_t)nb*QMAT_PR);
+            float *run=wp+(int64_t)QMAT_PR*I;
+            for(int r=0;r<QMAT_PR;r++)qmat_panel_decode(w,o0+r,wp+(int64_t)r*I);
+            for(int k=0;k<ntile*QMAT_PR;k++)run[k]=0.f;
+            for(int g=0;g<ng;g++){
+                int base=g*gs,n=gs;if(base+n>I)n=I-base;if(n<=0)continue;
+                float sc[QMAT_PR];
+                for(int r=0;r<QMAT_PR;r++)sc[r]=w->s[(int64_t)(o0+r)*ng+g];
+                for(int j=0;j<ntile;j+=QMAT_PT){
+                    const float *xs[QMAT_PT];
+                    for(int t=0;t<QMAT_PT;t++)xs[t]=x+(int64_t)(b0+j+t)*ldx+base;
+                    float d[QMAT_PT*QMAT_PR];
+                    if(w->fmt==4)qmat_tile_q4(d,wp+base,I,xs,n);
+                    else qmat_tile_q3(d,wp+base,I,xs,n);
+                    for(int t=0;t<QMAT_PT;t++)for(int r=0;r<QMAT_PR;r++)
+                        run[(j+t)*QMAT_PR+r]+=d[t*QMAT_PR+r]*sc[r];
+                }
+            }
+            for(int j=0;j<ntile;j++)for(int r=0;r<QMAT_PR;r++)
+                y[(int64_t)(b0+j)*O+o0+r]=run[j*QMAT_PR+r];
+            for(int j=ntile;j<nb;j++)for(int r=0;r<QMAT_PR;r++)
+                y[(int64_t)(b0+j)*O+o0+r]=qmat_dot_row(w,o0+r,x+(int64_t)(b0+j)*ldx);
+        }
+    }
+    if(orows<O){
+        #pragma omp parallel for schedule(static) if(par)
+        for(int o=orows;o<O;o++)for(int b=0;b<B;b++)y[(int64_t)b*O+o]=qmat_dot_row(w,o,x+(int64_t)b*ldx);
+    }
+    return 1;
+}
+#endif
+
 /* y[B,O] = X[B,I] @ W^T with one pass over the weights for the whole batch.
  * The per-token GEMV path re-reads an expert's matrices for every routed token,
  * which is pure memory traffic on a bandwidth-bound CPU; hoisting the weight-row
@@ -1985,15 +2217,12 @@ static void qmat_mul_batch(float *y,const float *x,int B,int ldx,const QMat *w,i
             for(int b=0;b<B;b++)y[(int64_t)b*w->O+o]=(float)dot_i8i8(row,q+(int64_t)b*w->I,w->I)*s*sx[b];}
         free(q);free(sx);return;
     }
-    if(w->fmt==4){
-        /* Keep each token's exact SIMD reduction order while placing tokens
-         * inside the output-row loop.  The packed row remains hot for all B
-         * activations without replacing AVX dot products with scalar nibble
-         * expansion (which was both slower and numerically different). */
-        #pragma omp parallel for schedule(static) if(par)
-        for(int o=0;o<w->O;o++)for(int b=0;b<B;b++)y[(int64_t)b*w->O+o]=qmat_dot_row(w,o,x+(int64_t)b*ldx);
-        return;
-    }
+#ifdef QMAT_PANEL
+    if(qmat_panel_batch_enabled()&&qmat_mul_batch_panel(y,x,B,ldx,w,par))return;
+#endif
+    /* Fallback: keep each token's exact SIMD reduction order while placing tokens
+     * inside the output-row loop, so the packed row stays hot for all B
+     * activations.  Used for int8/f32, tiny batches, and non-AVX-512 builds. */
     #pragma omp parallel for schedule(static) if(par)
     for(int o=0;o<w->O;o++)for(int b=0;b<B;b++)y[(int64_t)b*w->O+o]=qmat_dot_row(w,o,x+(int64_t)b*ldx);
 }
@@ -2239,6 +2468,34 @@ static Expert *expert_load_impl(Model*m,MoeW*w,int eid,const int*protect,int np)
     int slot=expert_victim_slot(m,w,protect,np);
     if(slot<0)die("expert cache smaller than routed top-k");if(m->decode_prewarmer)__atomic_fetch_add(&m->decode_prewarm_loads,1,__ATOMIC_RELAXED);else __atomic_fetch_add(&m->tier_misses,1,__ATOMIC_RELAXED);Expert*e=&w->expert[slot];expert_prefetch_evict(m,w,e->eid);free_qmat(&e->gate);free_qmat(&e->up);free_qmat(&e->down);double t0=m->prof_detail?now_s():0.;load_expert(m,e,w->layer,eid);if(m->prof_detail){m->prof_expert_load+=now_s()-t0;m->prof_expert_misses++;}
     if(getenv("TIER_TRACE"))fprintf(stderr,"[TIER] layer=%d slot=%d expert=%d\n",w->layer,slot,eid);pthread_mutex_unlock(&w->lock);return e;
+}
+static void expert_cuda_heat_prewarm(Model*m){
+#ifdef COLI_CUDA
+    if(!m||!cuda_rt.active||!m->emap_loaded||
+       !st_env_enabled("CUDA_EXPERT_PREWARM"))return;
+    size_t cap=(size_t)m->c.n_layers*m->c.n_experts,n=0;
+    Q3AtlasCandidate*candidate=xcalloc(cap,sizeof(*candidate));
+    for(int li=0;li<m->c.n_layers;li++){MoeW*w=&m->layer[li].moe;
+        for(int eid=0;eid<m->c.n_experts;eid++)if(w->heat[eid])
+            candidate[n++]=(Q3AtlasCandidate){li,eid,w->heat[eid],w->last[eid]};}
+    qsort(candidate,n,sizeof(*candidate),q3_atlas_candidate_cmp);
+    size_t one=expert_packed_bytes(m),reserve=(size_t)m->c.topk*one;
+    size_t usable=cuda_rt.expert_budget>reserve?
+        cuda_rt.expert_budget-reserve:0;
+    size_t chosen=one?usable/one:0;if(chosen>n)chosen=n;
+    /* Upload cold-to-hot so the bounded LRU leaves the hottest entries most
+     * recent when the cache reaches its budget. */
+    for(size_t i=chosen;i>0;i--){Q3AtlasCandidate*c=&candidate[i-1];
+        Expert*e=expert_load_impl(m,&m->layer[c->layer].moe,c->eid,NULL,0);
+        cuda_expert_preload(e);
+    }
+    if(coli_cuda_sync(cuda_rt.ctx))cuda_backend_fail("expert heat-map prewarm");
+    else fprintf(stderr,"[CUDA_PREWARM] map=%s candidates=%zu experts=%zu bytes=%.3fGiB\n",
+        m->emap_path,n,chosen,(double)(chosen*one)/(1024.*1024.*1024.));
+    free(candidate);
+#else
+    (void)m;
+#endif
 }
 static void expert_load_many(Model*m,MoeW*w,const int*eid,int n,Expert**out){
     if(n<=0)return;if(n==1){out[0]=expert_load_impl(m,w,eid[0],eid,n);return;}
@@ -2568,10 +2825,15 @@ static void moe_prefill_grouped(Model*m,Layer*l,const float*x,int T,float*out){
      * scatter the weighted results back. The expert's weights are streamed once
      * per layer instead of once per routed token. */
     int *tok=xcalloc(T,sizeof(int));float *wt=falloc(T),*xb=falloc((int64_t)T*H);
+    /* No cuda_expert_preload here.  This function has no CUDA matmul: mlp_batch
+     * goes through qmat_mul_batch, whose cuda_qmat_batch_try rejects B>8, so the
+     * work always lands on the CPU panel GEMM and an uploaded copy is never read.
+     * With a prompt-sized batch essentially every expert is routed, so preloading
+     * pushed all 40x256 of them through a 6GiB LRU that holds ~3.8k: measured
+     * 38,927 uploads, 27,111 evictions, 0 cache hits, and MoE prefill 2.2x slower
+     * than the same build with the GPU idle (272.3s vs 124.7s).  The heat-map
+     * prewarm at startup is what populates the device cache for decode. */
     for(int eid=0;eid<E;eid++)if(used[eid]){Expert*e=expert_load_impl(m,w,eid,NULL,0);
-#ifdef COLI_CUDA
-        cuda_expert_preload(e);
-#endif
         int B=0;
         for(int t=0;t<T;t++)for(int j=0;j<K;j++)if(idx[(int64_t)t*K+j]==eid){tok[B]=t;wt[B]=weight[(int64_t)t*K+j];B++;break;}
         if(!B)continue;
@@ -2603,9 +2865,11 @@ static void layer_forward_slot_batch(Model*m,Layer*l,float*x,int B,const int*slo
     free(n);free(mix);free(moe);
 }
 static void resident_batch_free(Model*m,ResidentBatchState*s);
-static int resident_batch_init(Model*m,ResidentBatchState*s,int nslots){
-    if(!m||!s||nslots<1||nslots>MUX_MAX_SLOTS)return 0;memset(s,0,sizeof(*s));Cfg*c=&m->c;
-    s->nslots=nslots;s->max_seq=m->max_seq;s->kv16=m->kv16;s->pos=xcalloc(nslots,sizeof(int));
+static int resident_batch_init(Model*m,ResidentBatchState*s,int nslots,
+                               int activation_capacity){
+    if(!m||!s||nslots<1||nslots>MUX_MAX_SLOTS||activation_capacity<nslots||activation_capacity>16)return 0;memset(s,0,sizeof(*s));Cfg*c=&m->c;
+    s->nslots=nslots;s->activation_capacity=activation_capacity;
+    s->max_seq=m->max_seq;s->kv16=m->kv16;s->pos=xcalloc(nslots,sizeof(int));
     s->last_hidden=falloc((int64_t)nslots*c->hidden);s->logits=falloc((int64_t)nslots*c->vocab);
     s->layer=xcalloc(c->n_layers,sizeof(ResidentLayerState));
     int cd=2*c->lin_k_heads*c->lin_k_dim+c->lin_v_heads*c->lin_v_dim,kvrows=c->n_kv_heads*c->head_dim;
@@ -2649,10 +2913,10 @@ static int resident_batch_init(Model*m,ResidentBatchState*s,int nslots){
             s->cuda_activations=0;
     }
     if(s->cuda_activations){
-        size_t hb=(size_t)nslots*c->hidden*sizeof(float);
-        size_t gb=(size_t)nslots*c->lin_v_heads*sizeof(float);
-        size_t rb=(size_t)nslots*c->n_experts*sizeof(float);
-        size_t lb=(size_t)nslots*c->vocab*sizeof(float);
+        size_t hb=(size_t)activation_capacity*c->hidden*sizeof(float);
+        size_t gb=(size_t)activation_capacity*c->lin_v_heads*sizeof(float);
+        size_t rb=(size_t)activation_capacity*c->n_experts*sizeof(float);
+        size_t lb=(size_t)activation_capacity*c->vocab*sizeof(float);
         if(coli_cuda_malloc(cuda_rt.ctx,(void**)&s->d_x,hb)||
            coli_cuda_malloc(cuda_rt.ctx,(void**)&s->d_n,hb)||
            coli_cuda_malloc(cuda_rt.ctx,(void**)&s->d_n16,hb/2)||
@@ -2724,11 +2988,20 @@ static int resident_import_model_slot(Model*m,ResidentBatchState*s,int slot,cons
 #endif
     return 1;
 }
-static int resident_forward_tokens(Model*m,ResidentBatchState*s,const int*slot,const int*token,int B){
-    if(!m||!s||!slot||!token||B<1||B>s->nslots)return 0;Cfg*c=&m->c;
-    float*x=falloc((int64_t)B*c->hidden),*n=falloc((int64_t)B*c->hidden),*bl=falloc((int64_t)B*c->vocab);int*pos=xcalloc(B,sizeof(int));
-    unsigned char seen[MUX_MAX_SLOTS]={0};int ok=1,output_done=0;
-    for(int row=0;row<B;row++){int sid=slot[row];if(sid<0||sid>=s->nslots||seen[sid]||token[row]<0||token[row]>=c->vocab||s->pos[sid]>=s->max_seq){ok=0;break;}seen[sid]=1;pos[row]=s->pos[sid];qmat_row(x+(int64_t)row*c->hidden,&m->embed,token[row]);}
+static int resident_forward_tokens_ex(Model*m,ResidentBatchState*s,const int*slot,
+                                      const int*token,int B,int output_mode,
+                                      int allow_repeated){
+    if(!m||!s||!slot||!token||B<1||B>s->activation_capacity||output_mode<0||output_mode>2)return 0;Cfg*c=&m->c;
+    float*x=falloc((int64_t)B*c->hidden),*n=falloc((int64_t)B*c->hidden),*bl=output_mode?falloc(output_mode==1?(int64_t)B*c->vocab:c->vocab):NULL;int*pos=xcalloc(B,sizeof(int));
+    int count[MUX_MAX_SLOTS]={0},ok=1,output_done=0,repeated_ok=0;
+#ifdef COLI_CUDA
+    repeated_ok=allow_repeated&&s->cuda_activations;
+#else
+    (void)allow_repeated;
+#endif
+    for(int row=0;row<B;row++){int sid=slot[row];if(sid<0||sid>=s->nslots||
+        (count[sid]&&!repeated_ok)||token[row]<0||token[row]>=c->vocab||
+        s->pos[sid]+count[sid]>=s->max_seq){ok=0;break;}pos[row]=s->pos[sid]+count[sid]++;qmat_row(x+(int64_t)row*c->hidden,&m->embed,token[row]);}
 #ifdef COLI_CUDA
     if(ok&&s->cuda_activations){
         float*moe=falloc((int64_t)B*c->hidden);
@@ -2771,9 +3044,11 @@ static int resident_forward_tokens(Model*m,ResidentBatchState*s,const int*slot,c
             }
             if(m->prof_detail)m->prof_moe+=now_s()-moe_t0;
         }
-        if(ok){
+        if(ok&&output_mode){
             double lm_t0=m->prof_detail?now_s():0.;
-            int output_used=cuda_resident_output_try(m,s,n,bl,B);
+            int output_used=output_mode==1?
+                cuda_resident_output_try(m,s,n,bl,B):
+                cuda_resident_output_last_try(m,s,n,bl,B-1);
             if(output_used<0)ok=0;
             else if(output_used>0)output_done=1;
             else{
@@ -2781,7 +3056,7 @@ static int resident_forward_tokens(Model*m,ResidentBatchState*s,const int*slot,c
                 if(coli_cuda_download(cuda_rt.ctx,x,s->d_x,
                                       (size_t)B*c->hidden*sizeof(float))||
                    coli_cuda_sync(cuda_rt.ctx)){
-                    cuda_backend_fail("resident final-norm boundary");ok=0;
+                    cuda_backend_fail("resident output boundary");ok=0;
                 }else cuda_rt.resident_d2h+=(uint64_t)B*c->hidden*sizeof(float);
                 pthread_mutex_unlock(&cuda_rt.lock);
             }
@@ -2791,16 +3066,26 @@ static int resident_forward_tokens(Model*m,ResidentBatchState*s,const int*slot,c
     }else
 #endif
     for(int li=0;ok&&li<c->n_layers;li++){ResidentLayerState*r=&s->layer[li];layer_forward_slot_batch(m,&m->layer[li],x,B,slot,pos,r,s->nslots,r->conv,r->gdn,r->k,r->v,r->k16,r->v16,s->max_seq);}
-    if(ok&&!output_done){
-        #pragma omp parallel for schedule(static) if(B>1)
-        for(int row=0;row<B;row++)rmsnorm_zero(n+(int64_t)row*c->hidden,x+(int64_t)row*c->hidden,m->final_norm,c->hidden,c->eps);
-        double lm_t0=m->prof_detail?now_s():0.;qmat_mul_batch(bl,n,B,c->hidden,&m->lm_head,1);
+    if(ok&&output_mode&&!output_done){
+        if(output_mode==1){
+            #pragma omp parallel for schedule(static) if(B>1)
+            for(int row=0;row<B;row++)rmsnorm_zero(n+(int64_t)row*c->hidden,x+(int64_t)row*c->hidden,m->final_norm,c->hidden,c->eps);
+        }else rmsnorm_zero(n,x+(int64_t)(B-1)*c->hidden,m->final_norm,c->hidden,c->eps);
+        double lm_t0=m->prof_detail?now_s():0.;
+        if(output_mode==1)qmat_mul_batch(bl,n,B,c->hidden,&m->lm_head,1);
+        else qmat_mul_ex(bl,n,&m->lm_head,1);
         if(m->prof_detail)m->prof_lm+=now_s()-lm_t0;
     }
     if(ok){
-        for(int row=0;row<B;row++){int sid=slot[row];memcpy(s->last_hidden+(int64_t)sid*c->hidden,n+(int64_t)row*c->hidden,(size_t)c->hidden*sizeof(float));memcpy(s->logits+(int64_t)sid*c->vocab,bl+(int64_t)row*c->vocab,(size_t)c->vocab*sizeof(float));s->pos[sid]++;}
+        for(int sid=0;sid<s->nslots;sid++)s->pos[sid]+=count[sid];
+        if(output_mode==1)for(int row=0;row<B;row++){int sid=slot[row];memcpy(s->last_hidden+(int64_t)sid*c->hidden,n+(int64_t)row*c->hidden,(size_t)c->hidden*sizeof(float));memcpy(s->logits+(int64_t)sid*c->vocab,bl+(int64_t)row*c->vocab,(size_t)c->vocab*sizeof(float));}
+        else if(output_mode==2){int sid=slot[B-1];memcpy(s->last_hidden+(int64_t)sid*c->hidden,n,(size_t)c->hidden*sizeof(float));memcpy(s->logits+(int64_t)sid*c->vocab,bl,(size_t)c->vocab*sizeof(float));}
     }
     free(x);free(n);free(bl);free(pos);return ok;
+}
+static int resident_forward_tokens(Model*m,ResidentBatchState*s,const int*slot,
+                                   const int*token,int B){
+    return resident_forward_tokens_ex(m,s,slot,token,B,1,0);
 }
 static void dump_hidden(Model *m,int li,const float *x){
     if(!m->dump_acts)return; const char *dir=getenv("ACTS_DIR");if(!dir)dir="acts"; mkdir(dir,0755); char p[2048];snprintf(p,sizeof(p),"%s/layer-%03d-token-%06d.f32",dir,li,m->pos);FILE*f=fopen(p,"wb");if(f){fwrite(x,sizeof(float),m->c.hidden,f);fclose(f);}
@@ -2853,12 +3138,19 @@ static int use_gdn_chunk(void){const char*e=getenv("GDN_CHUNK");return !e||atoi(
 static void gdn_prefill_layer(Model*m,Layer*l,const float*x,int T,float*out){
     Cfg*c=&m->c;GdnW*w=&l->gdn;int kh=c->lin_k_heads,vh=c->lin_v_heads,dk=c->lin_k_dim,dv=c->lin_v_dim,kd=kh*dk,vd=vh*dv,cd=2*kd+vd,K=c->conv_kernel,ratio=vh/kh;
     float*raw=falloc((int64_t)T*cd),*mix=falloc((int64_t)T*cd),*z=falloc((int64_t)T*vd),*aa=falloc((int64_t)T*vh),*bb=falloc((int64_t)T*vh),*q=falloc((int64_t)T*vh*dk),*k=falloc((int64_t)T*vh*dk),*v=falloc((int64_t)T*vd),*gg=falloc((int64_t)T*vh),*beta=falloc((int64_t)T*vh),*core=falloc((int64_t)T*vd);
-    int par=parallel_work((int64_t)T*c->hidden*cd);
-    #pragma omp parallel for schedule(static) if(par)
-    for(int t=0;t<T;t++){qmat_mul_ex(raw+(int64_t)t*cd,x+(int64_t)t*c->hidden,&w->qkv,0);qmat_mul_ex(z+(int64_t)t*vd,x+(int64_t)t*c->hidden,&w->z,0);qmat_mul_ex(bb+(int64_t)t*vh,x+(int64_t)t*c->hidden,&w->b,0);qmat_mul_ex(aa+(int64_t)t*vh,x+(int64_t)t*c->hidden,&w->a,0);}
+    /* Batched projections.  Parallelising over tokens with a B=1 GEMV inside kept
+     * the inner matmul single-threaded (parallel_work refuses to nest) and never
+     * reached the batched path, so every token re-decoded the whole weight matrix.
+     * qmat_mul_batch is bit-exact with the per-token GEMV, so this is a pure
+     * scheduling change. */
+    qmat_mul_batch(raw,x,T,c->hidden,&w->qkv,0);
+    qmat_mul_batch(z,x,T,c->hidden,&w->z,0);
+    qmat_mul_batch(bb,x,T,c->hidden,&w->b,0);
+    qmat_mul_batch(aa,x,T,c->hidden,&w->a,0);
     for(int t=0;t<T;t++){memcpy(w->conv_state+(int64_t)(t%K)*cd,raw+(int64_t)t*cd,(size_t)cd*sizeof(float));for(int ch=0;ch<cd;ch++){float acc=0.f;for(int tap=0;tap<K;tap++){int src=t-(K-1-tap);if(src>=0)acc+=w->conv[(int64_t)ch*K+tap]*raw[(int64_t)src*cd+ch];}mix[(int64_t)t*cd+ch]=siluf(acc);}for(int h=0;h<vh;h++){int hk=h/ratio;memcpy(q+((int64_t)t*vh+h)*dk,mix+(int64_t)t*cd+(int64_t)hk*dk,(size_t)dk*sizeof(float));memcpy(k+((int64_t)t*vh+h)*dk,mix+(int64_t)t*cd+kd+(int64_t)hk*dk,(size_t)dk*sizeof(float));memcpy(v+((int64_t)t*vh+h)*dv,mix+(int64_t)t*cd+2*kd+(int64_t)h*dv,(size_t)dv*sizeof(float));gg[(int64_t)t*vh+h]=-expf(w->A_log[h])*softplusf_stable(aa[(int64_t)t*vh+h]+w->dt_bias[h]);beta[(int64_t)t*vh+h]=sigmoidf_stable(bb[(int64_t)t*vh+h]);}}
     if(use_gdn_chunk())gdn_prefill_chunked(core,w->state,q,k,v,gg,beta,T,vh,dk,dv);else gdn_prefill_seq(core,w->state,q,k,v,gg,beta,T,vh,dk,dv);
-    for(int t=0;t<T;t++){for(int h=0;h<vh;h++){float*co=core+((int64_t)t*vh+h)*dv;float ms=0.f;for(int j=0;j<dv;j++)ms+=co[j]*co[j];float r=1.f/sqrtf(ms/(float)dv+c->eps);for(int j=0;j<dv;j++)co[j]=co[j]*r*w->norm[j]*siluf(z[((int64_t)t*vh+h)*dv+j]);}qmat_mul_ex(out+(int64_t)t*c->hidden,core+(int64_t)t*vd,&w->out,0);}
+    for(int t=0;t<T;t++)for(int h=0;h<vh;h++){float*co=core+((int64_t)t*vh+h)*dv;float ms=0.f;for(int j=0;j<dv;j++)ms+=co[j]*co[j];float r=1.f/sqrtf(ms/(float)dv+c->eps);for(int j=0;j<dv;j++)co[j]=co[j]*r*w->norm[j]*siluf(z[((int64_t)t*vh+h)*dv+j]);}
+    qmat_mul_batch(out,core,T,vd,&w->out,0);
     free(raw);free(mix);free(z);free(aa);free(bb);free(q);free(k);free(v);free(gg);free(beta);free(core);
 }
 
@@ -2881,7 +3173,15 @@ static void gdn_decode_block(Model*m,Layer*l,const float*x,int T,int base,float*
     float*raw=falloc((int64_t)T*cd),*mix=falloc((int64_t)T*cd),*z=falloc((int64_t)T*vd),*aa=falloc((int64_t)T*vh),*bb=falloc((int64_t)T*vh),*q=falloc((int64_t)T*vh*dk),*k=falloc((int64_t)T*vh*dk),*v=falloc((int64_t)T*vd),*gg=falloc((int64_t)T*vh),*beta=falloc((int64_t)T*vh),*core=falloc((int64_t)T*vd);
     qmat_mul_batch(raw,x,T,c->hidden,&w->qkv,0);qmat_mul_batch(z,x,T,c->hidden,&w->z,0);qmat_mul_batch(aa,x,T,c->hidden,&w->a,0);qmat_mul_batch(bb,x,T,c->hidden,&w->b,0);
     for(int t=0;t<T;t++){int pos=base+t;memcpy(w->conv_state+(int64_t)(pos%K)*cd,raw+(int64_t)t*cd,(size_t)cd*sizeof(float));for(int ch=0;ch<cd;ch++){float acc=0.f;for(int tap=0;tap<K;tap++){int src=pos-(K-1-tap);if(src>=0)acc+=w->conv[(int64_t)ch*K+tap]*w->conv_state[(int64_t)(src%K)*cd+ch];}mix[(int64_t)t*cd+ch]=siluf(acc);}for(int h=0;h<vh;h++){int hk=h/ratio;memcpy(q+((int64_t)t*vh+h)*dk,mix+(int64_t)t*cd+(int64_t)hk*dk,(size_t)dk*sizeof(float));memcpy(k+((int64_t)t*vh+h)*dk,mix+(int64_t)t*cd+kd+(int64_t)hk*dk,(size_t)dk*sizeof(float));memcpy(v+((int64_t)t*vh+h)*dv,mix+(int64_t)t*cd+2*kd+(int64_t)h*dv,(size_t)dv*sizeof(float));gg[(int64_t)t*vh+h]=-expf(w->A_log[h])*softplusf_stable(aa[(int64_t)t*vh+h]+w->dt_bias[h]);beta[(int64_t)t*vh+h]=sigmoidf_stable(bb[(int64_t)t*vh+h]);}}
-    gdn_prefill_seq(core,w->state,q,k,v,gg,beta,T,vh,dk,dv);
+    /* The blocked WY form resumes correctly from carried state -- it never sees
+     * the absolute ring index, which the causal convolution above has already
+     * consumed -- and test_gdn_chunk pins that: a chunk-aligned split is
+     * bit-identical to a single call, an unaligned one agrees to ~6e-8.  It is
+     * ~13x faster than the token recurrence for a prompt-sized block, but it
+     * pads to a 64-token chunk, so short speculative blocks still use the
+     * sequential rule where that padding would dominate. */
+    if(T>=64&&use_gdn_chunk())gdn_prefill_chunked(core,w->state,q,k,v,gg,beta,T,vh,dk,dv);
+    else gdn_prefill_seq(core,w->state,q,k,v,gg,beta,T,vh,dk,dv);
     for(int t=0;t<T;t++)for(int h=0;h<vh;h++){float*co=core+((int64_t)t*vh+h)*dv;float ms=0.f;for(int j=0;j<dv;j++)ms+=co[j]*co[j];float r=1.f/sqrtf(ms/(float)dv+c->eps);for(int j=0;j<dv;j++)co[j]=co[j]*r*w->norm[j]*siluf(z[((int64_t)t*vh+h)*dv+j]);}
     qmat_mul_batch(out,core,T,vd,&w->out,0);
     free(raw);free(mix);free(z);free(aa);free(bb);free(q);free(k);free(v);free(gg);free(beta);free(core);
@@ -3065,6 +3365,22 @@ static int resident_import_session(Model*m,ResidentBatchState*r,int slot,const S
 #endif
     if(roff!=s->recurrent_n||koff!=s->kv_n)return 0;qmat_mul_ex(r->logits+(int64_t)slot*c->vocab,r->last_hidden+(int64_t)slot*c->hidden,&m->lm_head,1);return 1;
 }
+static int resident_clear_slot(Model*m,ResidentBatchState*r,int slot){
+    SessionState zero={0};size_t rn=recurrent_state_floats(m);
+    if(!session_state_reserve(m,&zero,rn,0))return 0;
+    zero.pos=0;zero.hidden=m->c.hidden;zero.layers=m->c.n_layers;
+    zero.kv16=m->kv16;zero.recurrent_n=rn;zero.kv_n=0;
+    int ok=resident_import_session(m,r,slot,&zero);
+    session_state_free(&zero);return ok;
+}
+
+static int resident_clone_slot(Model*m,ResidentBatchState*r,int dst,int src){
+    SessionState state={0};
+    int ok=resident_export_session(m,r,src,&state)&&
+           resident_import_session(m,r,dst,&state);
+    session_state_free(&state);return ok;
+}
+
 /* Extend one resident slot through the existing block-verification path.
  * A chat continuation commonly contributes 10-100 uncached template/user
  * tokens.  Running those as independent decode steps throws away the same
@@ -3137,7 +3453,12 @@ static double forward_prefill_core(Model*m,const int*token,int T,float*logits,in
     if(m->prof_detail)m->prof_lm+=now_s()-lm_t0;
     if(score_count)*score_count=scored;free(x);free(n);free(mix);free(moe);return nll;
 }
-static void forward_prefill(Model*m,const int*token,int T,float*logits){(void)forward_prefill_core(m,token,T,logits,-1,NULL,0,NULL);}
+/* grouped_moe=1: stream each expert's weights once per layer instead of once per
+ * routed token.  On CPU this is bit-identical to the per-token path (mlp_batch and
+ * mlp_one both bottom out in qmat_dot_row with allow_idot=1, and the grouped scatter
+ * preserves top-k accumulation order), and it is already what run_eval_ids defaults
+ * to -- which is why the PPL gate has always been fast and this path has not. */
+static void forward_prefill(Model*m,const int*token,int T,float*logits){(void)forward_prefill_core(m,token,T,logits,-1,NULL,1,NULL);}
 static void prefill_dispatch(Model*m,const int*token,int T,float*logits){if(m->dump_acts)for(int i=0;i<T;i++)forward_token(m,token[i],logits);else forward_prefill(m,token,T,logits);}
 static int argmax(const float *x,int n){int b=0;for(int i=1;i<n;i++)if(x[i]>x[b])b=i;return b;}
 static void print_top5(const float *x,int n,int step){ int id[5]={-1,-1,-1,-1,-1};for(int j=0;j<5;j++)for(int i=0;i<n;i++){int used=0;for(int p=0;p<j;p++)if(id[p]==i)used=1;if(!used&&(id[j]<0||x[i]>x[id[j]]))id[j]=i;}fprintf(stderr,"[LOGITS %d]",step);for(int j=0;j<5;j++)fprintf(stderr," %d:%.7g",id[j],x[id[j]]);fputc('\n',stderr); }
@@ -3274,7 +3595,11 @@ static int run_eval_ids(Model*m,const char*path){
     int first=getenv("EVAL_CHUNK")?chunk/2:0,scored=0;float*logits=falloc(m->c.vocab);double nll=0.,t0=now_s();
     int grouped=getenv("EVAL_GROUPED")?atoi(getenv("EVAL_GROUPED"))!=0:1;
     for(int c=0;c<nchunk;c++){int count=0,base=c*chunk;model_reset(m);nll+=forward_prefill_core(m,ids+base,chunk,logits,first,&count,grouped,NULL);scored+=count;}
-    double sec=now_s()-t0,ppl=exp(nll/scored);printf("[PPL] tokens=%d nll=%.9f ppl=%.9f tok_s=%.3f\n",scored,nll,ppl,scored/sec);free(ids);free(logits);return 0;
+    double sec=now_s()-t0,ppl=exp(nll/scored);printf("[PPL] tokens=%d nll=%.9f ppl=%.9f tok_s=%.3f\n",scored,nll,ppl,scored/sec);
+    /* Prefill-only breakdown.  The CLI's [PERF_DETAIL] resets these counters
+     * before decode, so this is the one place the prefill split is observable. */
+    if(m->prof_detail){double known=m->prof_gdn+m->prof_attn+m->prof_moe+m->prof_lm;fprintf(stderr,"[PREFILL_DETAIL] tokens=%d total=%.3fs (%.2f tok/s) gdn=%.3fs attn=%.3fs moe=%.3fs (load=%.3fs misses=%llu) lm=%.3fs other=%.3fs\n",n,sec,n/sec,m->prof_gdn,m->prof_attn,m->prof_moe,m->prof_expert_load,(unsigned long long)m->prof_expert_misses,m->prof_lm,sec-known);}
+    free(ids);free(logits);return 0;
 }
 static int run_prefix_ids(Model*m,const char*path,int ngen){FILE*f=fopen(path,"rb");if(!f){perror(path);return 1;}char*line=NULL;size_t cap=0;ssize_t z;float*logits=falloc(m->c.vocab);int row=0;while((z=getline(&line,&cap,f))>=0){int*ids=xcalloc(m->max_seq,sizeof(int)),n=0;char*p=line,*end;while(*p){long v=strtol(p,&end,10);if(end==p){p++;continue;}if(n>=m->max_seq)die("PREFIX_IDS prompt exceeds CTX");ids[n++]=(int)v;p=end;}if(!n){free(ids);continue;}model_reset(m);prefill_dispatch(m,ids,n,logits);printf("PREFIX %d:",row);for(int i=0;i<ngen;i++){int id=argmax(logits,m->c.vocab);printf(" %d",id);if(m->debug_logits){fprintf(stderr,"[ROW %d]",row);print_top5(logits,m->c.vocab,i);}if(cfg_is_eos(&m->c,id))break;if(i+1<ngen)forward_token(m,id,logits);}printf("\n");row++;free(ids);}free(line);free(logits);fclose(f);return 0;}
 
@@ -3302,8 +3627,120 @@ static int run_tfprefix_ids(Model*m,const char*path){
 }
 
 typedef struct {
+    int active,*ids,total,cached,completed,batch,live_slot,source_slot,staging_slot;
+    int layer,block_tokens;
+    float *x,*n,*mix,*logits;
+    uint64_t id;
+    double started;
+} ServePrefillJob;
+
+static void serve_prefill_abort(ServePrefillJob*job){
+    if(!job)return;free(job->ids);free(job->x);free(job->n);free(job->mix);
+    free(job->logits);memset(job,0,sizeof(*job));
+}
+
+static int serve_prefill_begin(Model*m,ResidentBatchState*resident,
+                               ServePrefillJob*job,uint64_t id,int live_slot,
+                               int source_slot,int staging_slot,int*ids,int total,int cached,
+                               int batch){
+    if(!m||!resident||!job||job->active||!ids||total<1||cached<0||
+       cached>total||total>m->max_seq||batch<1||
+       batch>resident->activation_capacity)return 0;
+    int ok=cached?(source_slot==staging_slot?1:
+                  resident_clone_slot(m,resident,staging_slot,source_slot)):
+                  resident_clear_slot(m,resident,staging_slot);
+    if(!ok)return 0;
+    SessionState state={0};
+    if(cached)ok=resident_export_session(m,resident,staging_slot,&state)&&
+                 session_state_restore(m,&state,NULL);
+    else model_reset(m);
+    session_state_free(&state);if(!ok)return 0;
+    /* job->ids is deliberately NOT set until every failure path is behind us.
+     * serve_prefill_abort() frees job->ids, and the caller also frees its own
+     * `ids` when this returns 0, so taking ownership before the token-range
+     * check below made an out-of-vocab token a double free that killed the
+     * engine child. */
+    job->active=1;job->total=total;job->cached=cached;
+    job->completed=cached;job->batch=batch;job->live_slot=live_slot;
+    job->source_slot=source_slot;job->staging_slot=staging_slot;job->id=id;
+    job->block_tokens=total-cached;
+    if(job->block_tokens){Cfg*c=&m->c;int T=job->block_tokens;
+        job->x=falloc((int64_t)T*c->hidden);
+        job->n=falloc((int64_t)T*c->hidden);
+        job->mix=falloc((int64_t)T*c->hidden);
+        job->logits=falloc(c->vocab);
+        for(int t=0;t<T;t++){int token=ids[cached+t];
+            if(token<0||token>=c->vocab){serve_prefill_abort(job);return 0;}
+            qmat_row(job->x+(int64_t)t*c->hidden,&m->embed,token);
+        }
+    }
+    job->ids=ids;job->started=now_s();return 1;
+}
+
+static int serve_prefill_step(Model*m,ResidentBatchState*resident,
+                              ServePrefillJob*job){
+    if(!job||!job->active)return -1;
+    int T=job->block_tokens;if(!T)return 1;Cfg*c=&m->c;
+    if(job->layer<c->n_layers){int li=job->layer;Layer*l=&m->layer[li];
+        expert_predict_submit(m,&l->moe);
+        #pragma omp parallel for schedule(static) if(T>1)
+        for(int t=0;t<T;t++)rmsnorm_zero(job->n+(int64_t)t*c->hidden,
+            job->x+(int64_t)t*c->hidden,l->input_norm,c->hidden,c->eps);
+        double core_t0=m->prof_detail?now_s():0.;
+        if(l->type==LT_LINEAR)
+            gdn_decode_block(m,l,job->n,T,job->cached,job->mix);
+        else{
+#ifdef COLI_CUDA
+            int prior=cuda_suppress;if(cuda_spec_full_enabled())cuda_suppress=0;
+#endif
+            for(int t=0;t<T;t++){m->pos=job->cached+t;
+                attn_forward(m,l,job->n+(int64_t)t*c->hidden,
+                             job->mix+(int64_t)t*c->hidden);}
+#ifdef COLI_CUDA
+            cuda_suppress=prior;
+#endif
+        }
+        if(m->prof_detail){if(l->type==LT_LINEAR)m->prof_gdn+=now_s()-core_t0;
+                          else m->prof_attn+=now_s()-core_t0;}
+        #pragma omp parallel for schedule(static) if(T>1)
+        for(int t=0;t<T;t++){float*xt=job->x+(int64_t)t*c->hidden;
+            float*mt=job->mix+(int64_t)t*c->hidden;
+            for(int h=0;h<c->hidden;h++)xt[h]+=mt[h];
+            rmsnorm_zero(job->n+(int64_t)t*c->hidden,xt,l->post_norm,
+                         c->hidden,c->eps);}
+        double moe_t0=m->prof_detail?now_s():0.;
+        moe_prefill_grouped(m,l,job->n,T,job->mix);
+        if(m->prof_detail)m->prof_moe+=now_s()-moe_t0;
+        #pragma omp parallel for schedule(static) if(T>1)
+        for(int64_t i=0;i<(int64_t)T*c->hidden;i++)job->x[i]+=job->mix[i];
+        job->layer++;
+        long long done=(long long)T*job->layer/c->n_layers;
+        if(done>=T)done=T-1;
+        job->completed=job->cached+(int)done;
+        if(job->layer<c->n_layers)return 0;
+    }
+    rmsnorm_zero(job->n,job->x+(int64_t)(T-1)*c->hidden,
+                 m->final_norm,c->hidden,c->eps);
+    memcpy(m->last_hidden,job->n,(size_t)c->hidden*sizeof(float));
+    double lm_t0=m->prof_detail?now_s():0.;
+    qmat_mul_ex(job->logits,job->n,&m->lm_head,1);
+    if(m->prof_detail)m->prof_lm+=now_s()-lm_t0;
+    m->pos=job->total;
+    if(!resident_import_model_slot(m,resident,job->staging_slot,job->logits))
+        return -1;
+    job->completed=job->total;return 1;
+}
+
+static int serve_prefill_commit(Model*m,ResidentBatchState*resident,
+                                ServePrefillJob*job){
+    if(!job||!job->active||job->completed!=job->total)return 0;
+    return resident_clone_slot(m,resident,job->live_slot,job->staging_slot);
+}
+
+typedef struct {
     SessionState state;int state_valid;
     int*history,nhistory,history_cap;
+    int*prompt_checkpoint_history,nprompt_checkpoint,prompt_checkpoint_cap,prompt_checkpoint_valid;
     float*logits;
     double started,request_started,prof_start[5],decode_prof_start[5];
     double cuda_prof_start[8],decode_cuda_prof_start[8];
@@ -3311,12 +3748,15 @@ typedef struct {
     uint64_t read_start,direct_start,cuda_tx_start,decode_cuda_tx_start;
     uint64_t decode_tier_hit_start,decode_tier_gpu_hit_start;
     uint64_t decode_tier_miss_start,decode_read_start,decode_direct_start;
+    ServePrefillJob prefill;
 } MuxRuntimeSlot;
 
 typedef struct {
     char magic[8];
     uint32_t version,hidden,layers,kv16,pos,nhistory,reserved;
-    uint64_t recurrent_n,kv_n,checksum;
+    uint64_t recurrent_n,kv_n;
+    uint64_t model_manifest_fp,tokenizer_fp,template_fp,kv_format_fp,engine_state_fp;
+    uint64_t checksum;
 } MuxSessionDiskHeader;
 
 static int mux_history_set(MuxRuntimeSlot*r,const int*ids,int n){
@@ -3327,7 +3767,22 @@ static int mux_history_append(MuxRuntimeSlot*r,int id){
     if(r->nhistory==r->history_cap){int cap=r->history_cap?r->history_cap*2:256;int*p=realloc(r->history,(size_t)cap*sizeof(int));if(!p)return 0;r->history=p;r->history_cap=cap;}
     r->history[r->nhistory++]=id;return 1;
 }
+static int mux_prompt_checkpoint_set(MuxRuntimeSlot*r,const int*ids,int n){
+    if(r->prompt_checkpoint_cap<n){int cap=r->prompt_checkpoint_cap?r->prompt_checkpoint_cap:256;while(cap<n)cap*=2;int*p=realloc(r->prompt_checkpoint_history,(size_t)cap*sizeof(int));if(!p)return 0;r->prompt_checkpoint_history=p;r->prompt_checkpoint_cap=cap;}
+    memcpy(r->prompt_checkpoint_history,ids,(size_t)n*sizeof(int));r->nprompt_checkpoint=n;r->prompt_checkpoint_valid=1;return 1;
+}
+static int mux_prompt_checkpoint_prefix(const MuxRuntimeSlot*r,const int*ids,int n){return r->prompt_checkpoint_valid&&r->nprompt_checkpoint<=n&&!memcmp(r->prompt_checkpoint_history,ids,(size_t)r->nprompt_checkpoint*sizeof(int));}
+static int mux_common_prefix(const int*a,int na,const int*b,int nb){int n=na<nb?na:nb,i=0;while(i<n&&a[i]==b[i])i++;return i;}
 static int mux_exact_prefix(const MuxRuntimeSlot*r,const int*ids,int n){return r->state_valid&&r->nhistory<=n&&!memcmp(r->history,ids,(size_t)r->nhistory*sizeof(int));}
+static int tok_encode_serve(Tok*t,const char*text,int len,int*out,int cap){
+    static const char marker[]="<|im_start|>assistant\n<think>\n";const int marker_n=(int)sizeof(marker)-1;
+    int start=0,total=0;
+    for(int i=0;i+marker_n<=len;i++)if(!memcmp(text+i,marker,(size_t)marker_n)){
+        int end=i+marker_n,got=tok_encode(t,text+start,end-start,out+total,cap-total);if(got<=0)return got;total+=got;start=end;i=end-1;
+    }
+    if(start<len){int got=tok_encode(t,text+start,len-start,out+total,cap-total);if(got<=0)return got;total+=got;}
+    return total;
+}
 static double mux_cache_hit_percent(const Model*m,const MuxRuntimeSlot*r){
     uint64_t cpu=m->tier_hits-r->decode_tier_hit_start;
     uint64_t gpu=m->tier_gpu_hits-r->decode_tier_gpu_hit_start;
@@ -3339,8 +3794,36 @@ static uint64_t mux_session_checksum(const SessionState*s,const int*history,int 
     if(s->kv16)h=session_hash_add(h,s->kv_bf16,s->kv_n*sizeof(uint16_t));else h=session_hash_add(h,s->kv,s->kv_n*sizeof(float));
     return session_hash_add(h,s->last_hidden,(size_t)s->hidden*sizeof(float));
 }
-static int mux_session_write(const char*path,const SessionState*s,const int*history,int n){
-    if(!path||!s||!history||n<1||n!=s->pos)return 0;MuxSessionDiskHeader h={{'C','O','L','I','M','U','X','S'},1,(uint32_t)s->hidden,(uint32_t)s->layers,(uint32_t)s->kv16,(uint32_t)s->pos,(uint32_t)n,0,(uint64_t)s->recurrent_n,(uint64_t)s->kv_n,mux_session_checksum(s,history,n)};
+static uint64_t mux_session_named_fingerprint(const char*name,const char*fallback){
+    const char*value=getenv(name);if(!value||!*value)value=fallback;
+    return session_hash_add(1469598103934665603ULL,value,strlen(value));
+}
+static uint64_t mux_session_engine_fingerprint(Model*m){
+    uint64_t values[]={(uint64_t)m->c.hidden,(uint64_t)m->c.n_layers,
+        (uint64_t)m->c.vocab,(uint64_t)m->max_seq,(uint64_t)m->kv16,
+        (uint64_t)recurrent_state_floats(m)};
+    return session_hash_add(1469598103934665603ULL,values,sizeof(values));
+}
+static void mux_session_fill_fingerprints(Model*m,MuxSessionDiskHeader*h){
+    h->model_manifest_fp=mux_session_named_fingerprint("COLIB_MODEL_MANIFEST_FINGERPRINT","model-manifest-unspecified");
+    h->tokenizer_fp=mux_session_named_fingerprint("COLIB_TOKENIZER_FINGERPRINT","tokenizer-unspecified");
+    h->template_fp=mux_session_named_fingerprint("COLIB_TEMPLATE_FINGERPRINT","template-unspecified");
+    h->kv_format_fp=mux_session_named_fingerprint("COLIB_KV_FORMAT_FINGERPRINT",m->kv16?"bf16":"fp32");
+    h->engine_state_fp=mux_session_engine_fingerprint(m);
+}
+static int mux_session_fingerprints_match(Model*m,const MuxSessionDiskHeader*h){
+    MuxSessionDiskHeader expected={0};mux_session_fill_fingerprints(m,&expected);
+    return h->model_manifest_fp==expected.model_manifest_fp&&
+        h->tokenizer_fp==expected.tokenizer_fp&&h->template_fp==expected.template_fp&&
+        h->kv_format_fp==expected.kv_format_fp&&h->engine_state_fp==expected.engine_state_fp;
+}
+
+static int mux_session_write(Model*m,const char*path,const SessionState*s,const int*history,int n){
+    if(!m||!path||!s||!history||n<1||n!=s->pos)return 0;MuxSessionDiskHeader h={0};
+    memcpy(h.magic,"COLIMUXS",8);h.version=2;h.hidden=(uint32_t)s->hidden;h.layers=(uint32_t)s->layers;
+    h.kv16=(uint32_t)s->kv16;h.pos=(uint32_t)s->pos;h.nhistory=(uint32_t)n;
+    h.recurrent_n=(uint64_t)s->recurrent_n;h.kv_n=(uint64_t)s->kv_n;
+    mux_session_fill_fingerprints(m,&h);h.checksum=mux_session_checksum(s,history,n);
     char tmp[2304];snprintf(tmp,sizeof(tmp),"%s.tmp.%ld",path,(long)getpid());FILE*f=fopen(tmp,"wb");if(!f)return 0;int ok=fwrite(&h,1,sizeof(h),f)==sizeof(h)&&fwrite(history,sizeof(int),(size_t)n,f)==(size_t)n&&fwrite(s->recurrent,sizeof(float),s->recurrent_n,f)==s->recurrent_n;
     if(ok)ok=s->kv16?fwrite(s->kv_bf16,sizeof(uint16_t),s->kv_n,f)==s->kv_n:fwrite(s->kv,sizeof(float),s->kv_n,f)==s->kv_n;
     if(ok)ok=fwrite(s->last_hidden,sizeof(float),(size_t)s->hidden,f)==(size_t)s->hidden&&fflush(f)==0&&fsync(fileno(f))==0;
@@ -3348,7 +3831,7 @@ static int mux_session_write(const char*path,const SessionState*s,const int*hist
 }
 static int mux_session_read(Model*m,const char*path,SessionState*s,int**history,int*n){
     if(!m||!path||!s||!history||!n)return 0;FILE*f=fopen(path,"rb");if(!f)return 0;MuxSessionDiskHeader h;
-    int ok=fread(&h,1,sizeof(h),f)==sizeof(h)&&!memcmp(h.magic,"COLIMUXS",8)&&h.version==1&&h.hidden==(uint32_t)m->c.hidden&&h.layers==(uint32_t)m->c.n_layers&&h.kv16==(uint32_t)m->kv16&&h.pos<=(uint32_t)m->max_seq&&h.nhistory==h.pos&&h.nhistory>0&&h.recurrent_n==(uint64_t)recurrent_state_floats(m)&&h.kv_n==(uint64_t)session_kv_scalars(m,(int)h.pos);
+    int ok=fread(&h,1,sizeof(h),f)==sizeof(h)&&!memcmp(h.magic,"COLIMUXS",8)&&h.version==2&&mux_session_fingerprints_match(m,&h)&&h.hidden==(uint32_t)m->c.hidden&&h.layers==(uint32_t)m->c.n_layers&&h.kv16==(uint32_t)m->kv16&&h.pos<=(uint32_t)m->max_seq&&h.nhistory==h.pos&&h.nhistory>0&&h.recurrent_n==(uint64_t)recurrent_state_floats(m)&&h.kv_n==(uint64_t)session_kv_scalars(m,(int)h.pos);
     if(!ok){fclose(f);return 0;}SessionState loaded={0};size_t rn=(size_t)h.recurrent_n,kn=(size_t)h.kv_n;if(!session_state_reserve(m,&loaded,rn,kn)){fclose(f);return 0;}
     loaded.pos=(int)h.pos;loaded.hidden=(int)h.hidden;loaded.layers=(int)h.layers;loaded.kv16=(int)h.kv16;loaded.recurrent_n=rn;loaded.kv_n=kn;int*ids=xcalloc((size_t)h.nhistory,sizeof(int));
     ok=fread(ids,sizeof(int),(size_t)h.nhistory,f)==(size_t)h.nhistory&&fread(loaded.recurrent,sizeof(float),rn,f)==rn;
@@ -3360,8 +3843,8 @@ static int mux_session_read(Model*m,const char*path,SessionState*s,int**history,
 static void mux_session_path(char*out,size_t cap,const char*dir,int slot){snprintf(out,cap,"%s/slot-%02d.colimux",dir,slot);}
 static int mux_checkpoint_slot(Model*m,ResidentBatchState*resident,int resident_mode,MuxRuntimeSlot*r,int slot,const char*dir){
     if(!dir||!r->state_valid||r->nhistory<1)return 1;char path[2304];mux_session_path(path,sizeof(path),dir,slot);
-    if(resident_mode){SessionState state={0};int ok=resident_export_session(m,resident,slot,&state)&&mux_session_write(path,&state,r->history,r->nhistory);session_state_free(&state);return ok;}
-    return mux_session_write(path,&r->state,r->history,r->nhistory);
+    if(resident_mode){SessionState state={0};int ok=resident_export_session(m,resident,slot,&state)&&mux_session_write(m,path,&state,r->history,r->nhistory);session_state_free(&state);return ok;}
+    return mux_session_write(m,path,&r->state,r->history,r->nhistory);
 }
 
 /* Functional Phase-9 reference loop. Slots are switched through exact
@@ -3377,7 +3860,23 @@ static int run_serve_mux(Model*m){
     m->prof_detail=1;
     int nslots=getenv("KV_SLOTS")?atoi(getenv("KV_SLOTS")):1;mux_scheduler sched;if(!mux_scheduler_init(&sched,nslots)){fprintf(stderr,"KV_SLOTS must be 1..16\n");return 2;}
     int resident_mode=getenv("SERVE_RESIDENT")&&atoi(getenv("SERVE_RESIDENT"))!=0;ResidentBatchState resident={0};
-    if(resident_mode&&!resident_batch_init(m,&resident,nslots)){fprintf(stderr,"resident batch state allocation failed\n");return 2;}
+    int prefill_batch=getenv("PREFILL_BATCH")?atoi(getenv("PREFILL_BATCH")):8;
+    if(prefill_batch<1||prefill_batch>8){fprintf(stderr,"PREFILL_BATCH must be 1..8\n");return 2;}
+    const char*prefill_backend=getenv("SERVE_PREFILL_BACKEND");
+    int micro_requested=resident_mode&&nslots==1&&
+        (!prefill_backend||strcmp(prefill_backend,"serial"));
+#ifdef COLI_CUDA
+    micro_requested=micro_requested&&cuda_rt.active;
+#else
+    micro_requested=0;
+#endif
+    int resident_slots=nslots+(micro_requested?1:0);
+    int activation_capacity=resident_slots>prefill_batch?resident_slots:prefill_batch;
+    if(resident_mode&&!resident_batch_init(m,&resident,resident_slots,activation_capacity)){fprintf(stderr,"resident batch state allocation failed\n");return 2;}
+    int micro_enabled=0;
+#ifdef COLI_CUDA
+    micro_enabled=micro_requested&&resident.cuda_activations;
+#endif
     MuxRuntimeSlot runtime[MUX_MAX_SLOTS];memset(runtime,0,sizeof(runtime));int eof=0;const char*session_dir=getenv("SESSION_DIR");
     if(session_dir&&*session_dir){if(mkdir(session_dir,0755)!=0&&errno!=EEXIST){fprintf(stderr,"SESSION_DIR create failed: %s\n",strerror(errno));resident_batch_free(m,&resident);return 2;}
         for(int slot=0;slot<nslots;slot++){char path[2304];mux_session_path(path,sizeof(path),session_dir,slot);int n=0;
@@ -3387,21 +3886,48 @@ static int run_serve_mux(Model*m){
     if(!mux_write_ready(stdout))return 2;telemetry_startup_emit(m);
     for(;;){
         int rows[MUX_MAX_SLOTS],active=mux_scheduler_decode_rows(&sched,rows,MUX_MAX_SLOTS);
-        struct pollfd pfd={.fd=fileno(stdin),.events=POLLIN};int pr=eof?0:poll(&pfd,1,active?0:-1);
+        int has_prefill=0;for(int i=0;i<nslots;i++)has_prefill|=runtime[i].prefill.active;
+        struct pollfd pfd={.fd=fileno(stdin),.events=POLLIN};int pr=eof?0:poll(&pfd,1,(active||has_prefill)?0:-1);
         if(pr<0&&errno==EINTR)continue;if(pr<0)return 2;
         if(pr>0&&(pfd.revents&(POLLIN|POLLHUP))){
             mux_frame frame={0};mux_parse_error pe={0};mux_frame_kind kind=mux_read_frame(stdin,&frame,0,&pe);
             if(kind==MUX_FRAME_EOF){eof=1;mux_frame_clear(&frame);}
             else if(kind==MUX_FRAME_ERROR){mux_write_error(stdout,0,pe.code?pe.code:"BAD_FRAME");mux_frame_clear(&frame);if(pe.fatal)return 2;continue;}
-            else if(kind==MUX_FRAME_CANCEL){const char*code=mux_scheduler_cancel(&sched,frame.id);if(code)mux_write_error(stdout,frame.id,code);else{int slot=mux_scheduler_find(&sched,frame.id);if(!mux_checkpoint_slot(m,&resident,resident_mode,&runtime[slot],slot,session_dir))mux_write_error(stdout,frame.id,"INTERNAL");else mux_write_error(stdout,frame.id,"CANCELLED");mux_scheduler_release(&sched,slot,NULL);}mux_frame_clear(&frame);continue;}
+            else if(kind==MUX_FRAME_CANCEL){
+                int slot=mux_scheduler_find(&sched,frame.id);
+                const char*code=mux_scheduler_cancel(&sched,frame.id);
+                if(code)mux_write_error(stdout,frame.id,code);
+                else if(slot>=0&&runtime[slot].prefill.active){
+                    serve_prefill_abort(&runtime[slot].prefill);
+                    mux_write_error(stdout,frame.id,"CANCELLED");
+                    mux_scheduler_release(&sched,slot,NULL);
+                }else{
+                    if(!mux_checkpoint_slot(m,&resident,resident_mode,
+                                            &runtime[slot],slot,session_dir))
+                        mux_write_error(stdout,frame.id,"INTERNAL");
+                    else mux_write_error(stdout,frame.id,"CANCELLED");
+                    mux_scheduler_release(&sched,slot,NULL);
+                }
+                mux_frame_clear(&frame);continue;
+            }
             else{
                 const char*code=mux_scheduler_submit(&sched,frame.id,frame.slot,frame.max_tokens,frame.temperature,frame.top_p);
                 if(!code&&(frame.temperature!=0.f||frame.top_p!=1.f))code="BAD_REQUEST";
                 if(code){mux_write_error(stdout,frame.id,code);mux_frame_clear(&frame);continue;}
                 m->decode_phase=0;
-                int*ids=xcalloc(m->max_seq,sizeof(int));int n=m->has_tok?tok_encode(&m->T,(const char*)frame.payload,(int)frame.nbytes,ids,m->max_seq):0;
+                /* Tokenize with a cap derived from the payload length, not from
+                 * max_seq: every token consumes at least one input byte, so
+                 * nbytes+1 cannot truncate.  Encoding into a max_seq-sized buffer
+                 * silently dropped the tail of an over-long prompt -- including the
+                 * trailing generation prompt -- instead of reporting it (#401). */
+                int idcap=(int)frame.nbytes+1;
+                int*ids=xcalloc(idcap,sizeof(int));int n=m->has_tok?tok_encode_serve(&m->T,(const char*)frame.payload,(int)frame.nbytes,ids,idcap):0;
                 if(n<=0){mux_write_error(stdout,frame.id,"EMPTY_PROMPT");mux_scheduler_release(&sched,frame.slot,NULL);free(ids);mux_frame_clear(&frame);continue;}
-                MuxRuntimeSlot*r=&runtime[frame.slot];int reuse=mux_exact_prefix(r,ids,n),prepared=1;
+                if(n>m->max_seq){char ce[96];snprintf(ce,sizeof(ce),"CONTEXT_EXCEEDED %d %d",n,m->max_seq);mux_write_error(stdout,frame.id,ce);mux_scheduler_release(&sched,frame.slot,NULL);free(ids);mux_frame_clear(&frame);continue;}
+                MuxRuntimeSlot*r=&runtime[frame.slot];int reuse=mux_exact_prefix(r,ids,n),checkpoint_reuse=!reuse&&micro_enabled&&mux_prompt_checkpoint_prefix(r,ids,n),prepared=1;
+                int cached=reuse?r->nhistory:(checkpoint_reuse?r->nprompt_checkpoint:0);
+                if(!cached&&r->prompt_checkpoint_valid){int common=mux_common_prefix(r->prompt_checkpoint_history,r->nprompt_checkpoint,ids,n);fprintf(stderr,"[SESSION] prompt-prefix-miss slot=%d checkpoint=%d prompt=%d common=%d checkpoint_token=%d prompt_token=%d\n",frame.slot,r->nprompt_checkpoint,n,common,common<r->nprompt_checkpoint?r->prompt_checkpoint_history[common]:-1,common<n?ids[common]:-1);}
+                int prefill_source=checkpoint_reuse?nslots:frame.slot;
                 r->request_started=now_s();r->prof_start[0]=m->prof_expert_load;r->prof_start[1]=m->prof_moe;r->prof_start[2]=m->prof_gdn;r->prof_start[3]=m->prof_attn;r->prof_start[4]=m->prof_lm;
                 r->tier_hit_start=m->tier_hits;r->tier_gpu_hit_start=m->tier_gpu_hits;
                 r->tier_miss_start=m->tier_misses;r->read_start=m->S.read_bytes;
@@ -3409,8 +3935,22 @@ static int run_serve_mux(Model*m){
 #ifdef COLI_CUDA
                 {unsigned long long tx=0;if(cuda_rt.active&&!coli_cuda_profile_snapshot(cuda_rt.ctx,&tx,r->cuda_prof_start))r->cuda_tx_start=(uint64_t)tx;else{r->cuda_tx_start=0;memset(r->cuda_prof_start,0,sizeof(r->cuda_prof_start));}}
 #endif
-                if(reuse&&session_dir)fprintf(stderr,"[SESSION] exact-extension slot=%d cached=%d prompt=%d\n",frame.slot,r->nhistory,n);
+                if(cached&&session_dir)fprintf(stderr,"[SESSION] exact-extension slot=%d source=%s cached=%d prompt=%d\n",frame.slot,checkpoint_reuse?"prompt-checkpoint":"live",cached,n);
                 if(resident_mode){
+                if(micro_enabled){
+                    if(!serve_prefill_begin(m,&resident,&r->prefill,frame.id,
+                                            frame.slot,prefill_source,nslots,ids,n,cached,
+                                            prefill_batch)){
+                        mux_write_error(stdout,frame.id,"INTERNAL");
+                        mux_scheduler_release(&sched,frame.slot,NULL);
+                        free(ids);mux_frame_clear(&frame);continue;
+                    }
+                    r->prompt_checkpoint_valid=0;
+                    if(!mux_write_prefill_begin(stdout,frame.id,n,cached)||
+                       !mux_write_prefill_progress(stdout,frame.id,cached,n,0))
+                        return 2;
+                    mux_frame_clear(&frame);continue;
+                }
                     if(reuse){
                         int suffix=n-r->nhistory;
                         const char*block=getenv("SERVE_SUFFIX_BLOCK");
@@ -3449,6 +3989,53 @@ static int run_serve_mux(Model*m){
             }
         }
         active=mux_scheduler_decode_rows(&sched,rows,MUX_MAX_SLOTS);
+        int prefill_slot=-1;
+        for(int i=0;i<nslots;i++)if(runtime[i].prefill.active){prefill_slot=i;break;}
+        if(prefill_slot>=0){
+            MuxRuntimeSlot*r=&runtime[prefill_slot];ServePrefillJob*job=&r->prefill;
+            int step=serve_prefill_step(m,&resident,job);
+            long long elapsed=(long long)((now_s()-job->started)*1000.);
+            if(!mux_write_prefill_progress(stdout,job->id,job->completed,
+                                           job->total,elapsed))return 2;
+            if(step<0){
+                uint64_t id=job->id;serve_prefill_abort(job);
+                mux_write_error(stdout,id,"INTERNAL");
+                mux_scheduler_release(&sched,prefill_slot,NULL);continue;
+            }
+            if(!step)continue;
+            if(!serve_prefill_commit(m,&resident,job)){
+                uint64_t id=job->id;serve_prefill_abort(job);
+                mux_write_error(stdout,id,"INTERNAL");
+                mux_scheduler_release(&sched,prefill_slot,NULL);continue;
+            }
+            int n=job->total;uint64_t id=job->id;
+            if(!mux_prompt_checkpoint_set(r,job->ids,n))r->prompt_checkpoint_valid=0;
+            free(r->history);r->history=job->ids;r->nhistory=n;
+            r->history_cap=n;job->ids=NULL;r->state_valid=1;
+            if(!mux_write_prefill_end(stdout,id,n,elapsed))return 2;
+            r->decode_tier_hit_start=m->tier_hits;
+            r->decode_tier_gpu_hit_start=m->tier_gpu_hits;
+            r->decode_tier_miss_start=m->tier_misses;
+            r->decode_read_start=m->S.read_bytes;
+            r->decode_direct_start=m->S.direct_bytes;
+            r->decode_prof_start[0]=m->prof_expert_load;
+            r->decode_prof_start[1]=m->prof_moe;
+            r->decode_prof_start[2]=m->prof_gdn;
+            r->decode_prof_start[3]=m->prof_attn;
+            r->decode_prof_start[4]=m->prof_lm;
+#ifdef COLI_CUDA
+            {unsigned long long tx=0;
+                if(cuda_rt.active&&!coli_cuda_profile_snapshot(
+                    cuda_rt.ctx,&tx,r->decode_cuda_prof_start))
+                    r->decode_cuda_tx_start=(uint64_t)tx;
+                else{r->decode_cuda_tx_start=0;memset(
+                    r->decode_cuda_prof_start,0,
+                    sizeof(r->decode_cuda_prof_start));}}
+#endif
+            r->started=now_s();
+            mux_scheduler_prefill_done(&sched,prefill_slot,n);
+            serve_prefill_abort(job);continue;
+        }
         if(!active){if(eof)break;continue;}
         if(resident_mode){
             int token[MUX_MAX_SLOTS],stop[MUX_MAX_SLOTS],limited[MUX_MAX_SLOTS],did_advance[MUX_MAX_SLOTS]={0},advance_slot[MUX_MAX_SLOTS],advance_token[MUX_MAX_SLOTS],nadvance=0;
@@ -3496,7 +4083,7 @@ static int run_serve_mux(Model*m){
         }
     }
     resident_batch_free(m,&resident);
-    for(int i=0;i<nslots;i++){session_state_free(&runtime[i].state);free(runtime[i].history);free(runtime[i].logits);}return 0;
+    for(int i=0;i<nslots;i++){serve_prefill_abort(&runtime[i].prefill);session_state_free(&runtime[i].state);free(runtime[i].history);free(runtime[i].prompt_checkpoint_history);free(runtime[i].logits);}return 0;
 }
 
 #ifndef QWEN_NO_MAIN
@@ -3506,6 +4093,7 @@ int main(void){
     cuda_backend_start();
     cuda_validate_vram_plan(&m);
     cuda_model_preload_dense(&m);
+    expert_cuda_heat_prewarm(&m);
 #else
     if(getenv("COLI_CUDA")&&atoi(getenv("COLI_CUDA"))!=0)fprintf(stderr,"[CUDA] binary was built without CUDA=1; using CPU\n");
 #endif
@@ -3520,7 +4108,8 @@ int main(void){
     printf("weights loaded in %.2fs, tokenizer=%s, format=%s, matrices=%d/%d/%d/%d/%d f32/i8/i2/i3/i4, experts/layer=%d, KV=%s, MTP=%s\n",m.dense_load_s,m.has_tok?"yes":"no",format,m.matrix_f32,m.matrix_i8,m.matrix_i2,m.matrix_i3,m.matrix_i4,m.expert_cap,m.kv16?"bf16":"fp32",m.mtp.enabled?"active":"off");if(getenv("LOAD_ONLY")&&atoi(getenv("LOAD_ONLY"))!=0)return 0;if(getenv("TF")&&strcmp(getenv("TF"),"0"))return run_oracle(&m,snap);if(getenv("EVAL_IDS"))return run_eval_ids(&m,getenv("EVAL_IDS"));if(getenv("PREFIX_IDS"))return run_prefix_ids(&m,getenv("PREFIX_IDS"),getenv("NGEN")?atoi(getenv("NGEN")):64);if(getenv("TFPREFIX_IDS"))return run_tfprefix_ids(&m,getenv("TFPREFIX_IDS"));
     int ids[4096],nids=0;const char *prompt=getenv("PROMPT");if(!prompt)prompt=c->vocab<1000?"!":"Hello";char*chatbuf=NULL;if(getenv("CHAT")&&atoi(getenv("CHAT"))!=0){size_t z=strlen(prompt)+128;chatbuf=xcalloc(z,1);snprintf(chatbuf,z,"<|im_start|>user\n%s<|im_end|>\n<|im_start|>assistant\n<think>\n",prompt);prompt=chatbuf;}
     if(m.has_tok)nids=tok_encode(&m.T,prompt,(int)strlen(prompt),ids,4096);else ids[nids++]=1;if(nids<=0)die("empty prompt");
-    float *logits=falloc(c->vocab);model_reset(&m);double pt=now_s();if(m.mtp.enabled)prefill_mtp(&m,ids,nids,logits);else prefill_dispatch(&m,ids,nids,logits);pt=now_s()-pt;int warm=getenv("WARMUP")?atoi(getenv("WARMUP")):0;if(warm>0){if(m.mtp.enabled){suppress_emit=1;generate_mtp_greedy(&m,logits,warm,0);suppress_emit=0;m.mtp.proposed=m.mtp.accepted=m.mtp.target_forwards=m.mtp.emitted=0;m.mtp.draft_misses=m.mtp.verify_misses=m.mtp.replay_misses=0;m.mtp.draft_s=m.mtp.verify_s=m.mtp.replay_s=0.;}else for(int i=0;i<warm;i++){int p=argmax(logits,c->vocab);if(cfg_is_eos(c,p))break;if(i+1<warm)forward_token(&m,p,logits);}model_reset(&m);double wt=now_s();if(m.mtp.enabled)prefill_mtp(&m,ids,nids,logits);else prefill_dispatch(&m,ids,nids,logits);pt=now_s()-wt;fprintf(stderr,"[WARMUP] %d-token route/kernel warmup complete\n",warm);}m.prof_gdn=m.prof_attn=m.prof_moe=m.prof_lm=m.prof_expert_load=0.;m.prof_expert_misses=0;tier_counters_reset(&m);
+    float *logits=falloc(c->vocab);model_reset(&m);double pt=now_s();if(m.mtp.enabled)prefill_mtp(&m,ids,nids,logits);else prefill_dispatch(&m,ids,nids,logits);pt=now_s()-pt;int warm=getenv("WARMUP")?atoi(getenv("WARMUP")):0;if(warm>0){if(m.mtp.enabled){suppress_emit=1;generate_mtp_greedy(&m,logits,warm,0);suppress_emit=0;m.mtp.proposed=m.mtp.accepted=m.mtp.target_forwards=m.mtp.emitted=0;m.mtp.draft_misses=m.mtp.verify_misses=m.mtp.replay_misses=0;m.mtp.draft_s=m.mtp.verify_s=m.mtp.replay_s=0.;}else for(int i=0;i<warm;i++){int p=argmax(logits,c->vocab);if(cfg_is_eos(c,p))break;if(i+1<warm)forward_token(&m,p,logits);}model_reset(&m);double wt=now_s();if(m.mtp.enabled)prefill_mtp(&m,ids,nids,logits);else prefill_dispatch(&m,ids,nids,logits);pt=now_s()-wt;fprintf(stderr,"[WARMUP] %d-token route/kernel warmup complete\n",warm);}if(m.prof_detail){double known=m.prof_gdn+m.prof_attn+m.prof_moe+m.prof_lm;fprintf(stderr,"[PREFILL_DETAIL] tokens=%d total=%.3fs (%.2f tok/s) gdn=%.3fs attn=%.3fs moe=%.3fs (load=%.3fs misses=%llu) lm=%.3fs other=%.3fs\n",nids,pt,nids/pt,m.prof_gdn,m.prof_attn,m.prof_moe,m.prof_expert_load,(unsigned long long)m.prof_expert_misses,m.prof_lm,pt-known);}
+    m.prof_gdn=m.prof_attn=m.prof_moe=m.prof_lm=m.prof_expert_load=0.;m.prof_expert_misses=0;tier_counters_reset(&m);
 #ifdef COLI_CUDA
     cuda_rt.batch_transactions=cuda_rt.batch_routes=cuda_rt.batch_unique_experts=0;
     coli_cuda_profile_reset(cuda_rt.ctx);

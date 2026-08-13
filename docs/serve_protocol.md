@@ -63,20 +63,26 @@ CANCEL <id>\n
   when the new tokenized payload is an exact extension of the stored history.
   Invalid or incompatible checkpoint files are ignored.
 
-Prefill is serial. In the snapshot reference, active decode rows are
-round-robin but evaluated sequentially. With `SERVE_RESIDENT=1`, every active
-slot contributes one row to the resident forward. CUDA builds use
-device-resident GDN/GQA state when eligible. The eligible mixed-precision path
-also retains the residual stream, norms, routed/shared experts, final norm,
-and LM head on device; only router metadata and model outputs return to the
-host. Guarded GQA allocation falls back to the host path if it cannot retain
-512 MiB of free VRAM.
+With `SERVE_RESIDENT=1`, a one-slot CUDA server uses transactional incremental
+prefill by default. `PREFILL_BATCH` selects 1-8 causal rows (default 8); rows
+use an internal staging slot and the live conversation is replaced only after
+the final batch succeeds. Intermediate batches do not calculate vocabulary
+logits, and the final batch calculates the LM head only for its last row.
+`SERVE_PREFILL_BACKEND=serial` retains the prior correctness path. The mux
+returns to input polling between microbatches, allowing `CANCEL` to discard
+staging state while preserving the previous live conversation. Other server
+shapes currently retain serial prefill. During decode, every active slot
+contributes one row to the resident forward. CUDA builds use device-resident
+GDN/GQA state when eligible.
 
 ## Responses (engine → server)
 
 Per request, in order:
 
 ```
+PREFILL_BEGIN <id> <total> <cached>
+PREFILL_PROGRESS <id> <completed> <total> <elapsed_ms>
+PREFILL_END <id> <total> <elapsed_ms>
 DATA <id> <n>\n<n bytes of UTF-8>\n        # a decoded token's text; repeated
 TOPK <id> 5 <logprob> <hextext> ... ×5     # candidates for the sampled token (SERVE_TOPK=1)
 HITS <rows> <cols> <hex>                   # ~every 6 tokens: routed-expert bitmap since last HITS
@@ -88,6 +94,11 @@ REPIN <layer> <eid> <old_tier> <gpu>       # live re-pin swap events, as they ha
 ...
 DONE <id> STAT <emitted> <tok_s> <hit_pct> <rss_gb> <prompt_tokens> <length_limited>
 ```
+
+`PREFILL_BEGIN`, monotonic `PREFILL_PROGRESS`, and `PREFILL_END` are
+request-control frames emitted before the first `DATA`. `completed` includes
+exact-prefix cached tokens. Gateways should surface them as progress, but must
+not treat them as model output or use them to disarm a first-output deadline.
 
 Errors replace the stream: `ERROR <id> <CODE>` with codes `BAD_FRAME`, `BAD_REQUEST`,
 `SLOT_BUSY`, `DUPLICATE_ID`, `EMPTY_PROMPT`, `NOT_FOUND` (CANCEL of unknown id),

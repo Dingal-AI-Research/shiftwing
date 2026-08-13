@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "purpose": "post-release Ornith35 int4 directional throughput record; not release evidence",
+  "date": "2026-08-06",
+  "model": "c/ornith35",
+  "model_family": "ornith-1.0",
+  "quantization": {
+    "base": "int4g128",
+    "group_size": 128,
+    "expert_q3": false,
+    "q3_native": false,
+    "q3_route_atlas": false,
+    "manifest_sha256": "b9b54701d38c0ea2836c9863f320f0f61ce4e70eac8cf7444babe146c0b6115d"
+  },
+  "configuration": {
+    "prompt": "Count from one to one hundred, one number per line, and do not stop early.",
+    "max_tokens": 64,
+    "warmup_turns": 1,
+    "measured_turns": 3,
+    "context": 4096,
+    "threads": 8,
+    "expert_ram_gb": 20.0,
+    "cuda_expert_gb": 6.0
+  },
+  "measured_turn_tps": [
+    39.832177,
+    41.082213,
+    40.355589
+  ],
+  "summary": {
+    "sustained_tps": 40.416842596135325,
+    "median_turn_tps": 40.355589,
+    "minimum_turn_tps": 39.832177,
+    "completion_tokens_per_turn": 64,
+    "outputs_nonempty": true,
+    "rates_finite": true
+  },
+  "hardware": {
+    "cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+    "cores": 16,
+    "ram_total_gb": 29.375,
+    "gpu": "NVIDIA GeForce RTX 5070 Ti",
+    "vram_total_gb": 15.92
+  },
+  "final_tiers": {
+    "vram_experts": 3855,
+    "ram_experts": 6385,
+    "disk_experts": 0,
+    "vram_gb": 5.999908,
+    "ram_gb": 15.9375
+  },
+  "resident": {
+    "layers": 10240,
+    "device_moe": 10240,
+    "host_moe": 0
+  },
+  "engine_sha256": "8659db94bb6904b8710389848532af6e2d2b169bd790a6b3c9bd3ed2bdb9c467",
+  "raw_artifact": {
+    "path": "c/bench/ornith35_int4_tps_20260806.json",
+    "sha256": "d8ebdea459032d014e20284f45b77b054773b777a4d10173d5dc14599d8ed8f4"
+  }
+}

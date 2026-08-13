@@ -112,8 +112,10 @@ independent expert VRAM LRU (8 GiB by default), while CPU prefill remains the
 correct fallback. The measured Gate-5 command and all kill-switches are in
 [docs/phase5_cuda.md](docs/phase5_cuda.md).
 
-The release q3 path sets `EXPERT_Q3=1` and expands the packed host payload to
-the already benchmarked q4 CUDA representation. The optional native path adds
+The launcher explicitly selects the int4 container by default, even if
+low-bit research variables are present in its parent environment. The opt-in
+q3 path (`--expert-q3`) sets `EXPERT_Q3=1` and expands the packed host payload
+to the already benchmarked q4 CUDA representation. The optional native path adds
 `Q3_NATIVE=1`; its atlas additionally sets `Q3_ROUTE_ATLAS=1` and
 `DECODE_PROTECT=1`, with `RAM_GB=20` and
 `CUDA_EXPERT_GB=6` on the reference machine. It keeps q3 packed in VRAM and

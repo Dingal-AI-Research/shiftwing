@@ -5,6 +5,7 @@ import socket
 import subprocess
 import time
 import unittest
+from unittest import mock
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -68,6 +69,40 @@ class ColibCliTests(unittest.TestCase):
         argv = namespace["_server_argv"](args)
         self.assertEqual(Path(argv[0]), namespace["PYTHON"])
         self.assertTrue(Path(argv[0]).is_file())
+
+    def test_runtime_defaults_to_int4_despite_ambient_sidecars(self) -> None:
+        namespace = runpy.run_path(str(CLI), run_name="colib_cli_test")
+        parser = namespace["build_parser"]()
+        args = parser.parse_args(
+            ["serve", "--model", str(ROOT / "qwen_tiny_i4")]
+        )
+        ambient = {
+            "EXPERT_Q2": "1",
+            "EXPERT_Q3": "1",
+            "Q3_NATIVE": "1",
+            "Q3_ROUTE_ATLAS": "1",
+        }
+        with mock.patch.dict(os.environ, ambient):
+            env = namespace["_runtime_env"](args)
+        for name in ambient:
+            self.assertEqual(env[name], "0", name)
+
+    def test_runtime_enables_q3_only_when_requested(self) -> None:
+        namespace = runpy.run_path(str(CLI), run_name="colib_cli_test")
+        parser = namespace["build_parser"]()
+        args = parser.parse_args(
+            [
+                "serve",
+                "--model",
+                str(ROOT / "qwen_tiny_i4"),
+                "--cuda",
+                "--expert-q3",
+            ]
+        )
+        env = namespace["_runtime_env"](args)
+        self.assertEqual(env["EXPERT_Q3"], "1")
+        self.assertEqual(env["Q3_NATIVE"], "0")
+        self.assertEqual(env["Q3_ROUTE_ATLAS"], "0")
 
     def test_runtime_refuses_missing_selected_q3_tensor(self) -> None:
         env = os.environ.copy()

@@ -18,6 +18,7 @@ from openai_server import (  # noqa: E402
     APIServer,
     ClientCancelled,
     Engine,
+    FirstModelOutputTimeoutError,
     generation_options,
     parse_tool_calls,
     render_chat,
@@ -493,6 +494,7 @@ class FakeEngine:
     def __init__(self) -> None:
         self.prompts: list[str] = []
         self.chunks = ["Hel", "lo"]
+        self.first_output_timeout = False
 
     def generate(
         self,
@@ -504,8 +506,19 @@ class FakeEngine:
         cache_slot=0,
         cancelled=None,
         grammar=None,
+        on_progress=None,
     ):
         self.prompts.append(prompt)
+        if on_progress:
+            on_progress({
+                "phase": "prefill", "event": "progress",
+                "prompt_tokens_total": 3,
+                "prompt_tokens_cached": 0,
+                "prompt_tokens_prefilled": 2,
+                "elapsed_ms": 12,
+            })
+        if self.first_output_timeout:
+            raise FirstModelOutputTimeoutError("No real model output within 180000 ms")
         for chunk in self.chunks:
             on_text(chunk)
         return {
@@ -573,6 +586,25 @@ class QwenHTTPGatewayTests(unittest.TestCase):
             wire = response.read()
         self.assertIn(b'"content":"Hel"', wire)
         self.assertIn(b'"content":"lo"', wire)
+        self.assertIn(b'"object":"colib.progress"', wire)
+        self.assertIn(b'"prompt_tokens_prefilled":2', wire)
+        self.assertIn(b'"schema_version":1', wire)
+        self.assertTrue(wire.endswith(b"data: [DONE]\n\n"))
+
+    def test_streaming_timeout_is_reported_in_band_after_headers(self) -> None:
+        self.engine.first_output_timeout = True
+        with self.post(
+            {
+                "model": "qwen-tiny",
+                "messages": [{"role": "user", "content": "Hi"}],
+                "stream": True,
+                "temperature": 0,
+                "top_p": 1,
+            }
+        ) as response:
+            self.assertEqual(response.status, 200)
+            wire = response.read()
+        self.assertIn(b'"code":"first_model_output_timeout"', wire)
         self.assertTrue(wire.endswith(b"data: [DONE]\n\n"))
 
     def test_nonstreaming_separates_qwen_reasoning(self) -> None:
@@ -609,7 +641,10 @@ class QwenHTTPGatewayTests(unittest.TestCase):
             for line in wire.decode().splitlines()
             if line.startswith("data: {")
         ]
-        deltas = [event["choices"][0]["delta"] for event in events]
+        progress = [event for event in events if event["object"] == "colib.progress"]
+        self.assertTrue(progress)
+        deltas = [event["choices"][0]["delta"] for event in events
+                  if event["object"] != "colib.progress"]
         reasoning = "".join(delta.get("reasoning_content", "") for delta in deltas)
         content = "".join(delta.get("content", "") for delta in deltas)
         self.assertEqual(reasoning, "private chain")
