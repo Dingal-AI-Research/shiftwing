@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import math
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,31 @@ SPEC.loader.exec_module(qualifier)
 
 
 class TieredQualifierTests(unittest.TestCase):
+    def test_prefill_cache_controls_default_off(self):
+        args = qualifier._argument_parser().parse_args(["--model", "."])
+        self.assertEqual(args.prefill_cache_bypass, 0)
+        self.assertEqual(args.prefill_load_pipeline, 0)
+
+    def test_prefill_load_pipeline_requires_cache_bypass(self):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(TOOLS / "qualify_tiered_model.py"),
+                "--model",
+                ".",
+                "--prefill-load-pipeline",
+                "1",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn(
+            "prefill-load-pipeline requires prefill-cache-bypass",
+            completed.stderr,
+        )
+
     def test_ornith_qualification_uses_snapshot_template(self):
         template = """\
 {% for message in messages -%}[{{ message.role }}]{{ message.content }}

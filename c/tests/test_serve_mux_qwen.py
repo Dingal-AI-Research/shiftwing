@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -17,6 +18,7 @@ ADVISORY = {
     "RESIDENT",
     "CACHE",
     "DCACHE",
+    "PFPIPE",
     "Q3NATIVE",
     "Q3ATLAS",
 }
@@ -25,6 +27,7 @@ ADVISORY = {
 def run_engine(
     wire: bytes,
     *,
+    env_overrides: dict[str, str] | None = None,
     resident: bool = True,
     session_dir: Path | None = None,
     suffix_block: bool = False,
@@ -43,6 +46,8 @@ def run_engine(
     )
     if session_dir is not None:
         env["SESSION_DIR"] = str(session_dir)
+    if env_overrides:
+        env.update(env_overrides)
     if suffix_block:
         env["SERVE_SUFFIX_BLOCK"] = "1"
     return subprocess.run(
@@ -121,6 +126,13 @@ class QwenMuxIntegrationTests(unittest.TestCase):
         self.assertEqual(len(payload), 2 * int(rows) * int(cols))
         hits = next(str(event[2]) for event in events if event[0] == "HITS")
         _, rows, cols, payload = hits.split()
+        cache = next(str(event[2]) for event in events if event[0] == "CACHE")
+        dcache = next(str(event[2]) for event in events if event[0] == "DCACHE")
+        pfpipe = next(str(event[2]) for event in events if event[0] == "PFPIPE")
+        self.assertEqual(len(cache.split()), 9)
+        self.assertEqual(len(dcache.split()), 9)
+        self.assertEqual(len(pfpipe.split()), 10)
+        self.assertEqual(pfpipe.split()[1:3], ["42", "0"])
         self.assertEqual(len(payload), 2 * ((int(rows) * int(cols) + 7) // 8))
         if os.environ.get("COLI_CUDA") == "1":
             stderr = got.stderr.decode(errors="replace")
@@ -131,6 +143,208 @@ class QwenMuxIntegrationTests(unittest.TestCase):
                 self.assertGreaterEqual(int(perf.split()[9]), 0)
                 for value in perf.split()[10:18]:
                     self.assertGreaterEqual(float(value), 0.0)
+
+    def test_ordered_prefill_expert_io_batch_preserves_exact_output(self) -> None:
+        # Tiny vocabulary-safe byte-fallback tokens; ordinary multi-byte text
+        # can merge to a tokenizer id above this fixture's truncated vocab.
+        prompt = b"!\x00\x01"
+        wire = (
+            f"SUBMIT 43 0 {len(prompt)} 5 0 1\n".encode()
+            + prompt
+            + b"\n"
+        )
+        common = {
+            "PIPE": "1",
+            "URING": "1",
+            "URING_PERSIST": "1",
+        }
+        control = run_engine(
+            wire,
+            env_overrides={**common, "PREFILL_EXPERT_BATCH": "1"},
+        )
+        candidate = run_engine(
+            wire,
+            env_overrides={**common, "PREFILL_EXPERT_BATCH": "4"},
+        )
+        self.assertEqual(
+            control.returncode, 0, control.stderr.decode(errors="replace")
+        )
+        self.assertEqual(
+            candidate.returncode, 0, candidate.stderr.decode(errors="replace")
+        )
+
+        def semantic(payload: bytes):
+            events = parse_output(payload)
+            return [
+                event for event in events if event[0] in {"DATA", "ERROR"}
+            ] + [
+                (event[0], event[1])
+                for event in events
+                if event[0] == "DONE"
+            ]
+
+        self.assertEqual(semantic(control.stdout), semantic(candidate.stdout))
+        control_uring = re.search(
+            rb"uring-batches=([0-9]+)", control.stderr
+        )
+        candidate_uring = re.search(
+            rb"uring-batches=([0-9]+)", candidate.stderr
+        )
+        self.assertIsNotNone(control_uring)
+        self.assertIsNotNone(candidate_uring)
+        self.assertLess(
+            int(candidate_uring.group(1)), int(control_uring.group(1))
+        )
+
+    def test_cold_prefill_device_threshold_preserves_exact_output(self) -> None:
+        # A cold prefill expert may execute on CUDA once it serves enough rows
+        # to amortize uploading its weights. The upload uses scratch outside the
+        # weight cache, so decode residents are never evicted. Output must not
+        # change, and a threshold no batch can reach must keep the host path.
+        prompt = b"!\x00\x01"
+        wire = (
+            f"SUBMIT 44 0 {len(prompt)} 5 0 1\n".encode()
+            + prompt
+            + b"\n"
+        )
+        common = {"PIPE": "1", "URING": "1", "URING_PERSIST": "1"}
+        control = run_engine(
+            wire, env_overrides={**common, "PREFILL_COLD_DEVICE": "0"}
+        )
+        unreachable = run_engine(
+            wire, env_overrides={**common, "PREFILL_COLD_DEVICE": "100000"}
+        )
+        self.assertEqual(
+            control.returncode, 0, control.stderr.decode(errors="replace")
+        )
+        self.assertEqual(
+            unreachable.returncode, 0, unreachable.stderr.decode(errors="replace")
+        )
+
+        def semantic(payload: bytes):
+            events = parse_output(payload)
+            return [
+                event for event in events if event[0] in {"DATA", "ERROR"}
+            ] + [
+                (event[0], event[1])
+                for event in events
+                if event[0] == "DONE"
+            ]
+
+        self.assertEqual(semantic(control.stdout), semantic(unreachable.stdout))
+        # A threshold beyond any achievable batch must leave the device path
+        # unused, which is what makes the flag safe to default off.
+        for payload in (control.stderr, unreachable.stderr):
+            match = re.search(rb"\[COLD_PREFILL\] experts=([0-9]+)", payload)
+            if match is not None:
+                self.assertEqual(int(match.group(1)), 0)
+
+    def test_prefill_load_pipeline_emits_deltas_and_preserves_output(self) -> None:
+        prompt = b"!\x00\x01"
+        wire = (
+            f"SUBMIT 45 0 {len(prompt)} 5 0 1\n".encode()
+            + prompt
+            + b"\n"
+        )
+        common = {
+            "PIPE": "1",
+            "URING": "0",
+            "DIRECT": "0",
+            "PREFETCH_LOAD": "0",
+            "PREFILL_EXPERT_BATCH": "1",
+            "EXPERT_RAM": "2",
+        }
+        control = run_engine(wire, env_overrides=common)
+        candidate = run_engine(
+            wire,
+            env_overrides={
+                **common,
+                "PREFILL_CACHE_BYPASS": "1",
+                "PREFILL_LOAD_PIPELINE": "1",
+            },
+        )
+        self.assertEqual(
+            control.returncode, 0, control.stderr.decode(errors="replace")
+        )
+        self.assertEqual(
+            candidate.returncode, 0, candidate.stderr.decode(errors="replace")
+        )
+
+        def semantic(payload: bytes):
+            events = parse_output(payload)
+            return [
+                event
+                for event in events
+                if event[0] in {"DATA", "ERROR"}
+            ] + [(event[0], event[1]) for event in events if event[0] == "DONE"]
+
+        self.assertEqual(semantic(control.stdout), semantic(candidate.stdout))
+        control_row = next(
+            str(event[2]).split()
+            for event in parse_output(control.stdout)
+            if event[0] == "PFPIPE"
+        )
+        candidate_row = next(
+            str(event[2]).split()
+            for event in parse_output(candidate.stdout)
+            if event[0] == "PFPIPE"
+        )
+        self.assertEqual(control_row[1:6], ["45", "0", "0", "0", "0"])
+        self.assertEqual(candidate_row[1:3], ["45", "1"])
+        self.assertGreater(int(candidate_row[3]), 1)
+        self.assertGreaterEqual(int(candidate_row[4]), int(candidate_row[3]))
+        self.assertGreater(int(candidate_row[5]), 0)
+        for value in candidate_row[6:10]:
+            self.assertGreaterEqual(float(value), 0.0)
+        self.assertGreater(float(candidate_row[6]), 0.0)
+        self.assertGreater(float(candidate_row[8]), 0.0)
+        self.assertGreater(float(candidate_row[9]), 0.0)
+
+    def test_two_active_slots_keep_prefill_pipeline_deltas_request_exact(self) -> None:
+        prompt_a = b"!"
+        prompt_b = b"?\x00\x01"
+
+        def submit(request_id: int, slot: int, prompt: bytes) -> bytes:
+            return (
+                f"SUBMIT {request_id} {slot} {len(prompt)} 2 0 1\n".encode()
+                + prompt
+                + b"\n"
+            )
+
+        env = {
+            "PIPE": "1",
+            "URING": "0",
+            "DIRECT": "0",
+            "PREFETCH_LOAD": "0",
+            "PREFILL_EXPERT_BATCH": "4",
+            "PREFILL_CACHE_BYPASS": "1",
+            "PREFILL_LOAD_PIPELINE": "1",
+        }
+        wire_a = submit(51, 0, prompt_a)
+        wire_b = submit(52, 1, prompt_b)
+        standalone_a = run_engine(wire_a, env_overrides=env)
+        standalone_b = run_engine(wire_b, env_overrides=env)
+        combined = run_engine(wire_a + wire_b, env_overrides=env)
+        for result in (standalone_a, standalone_b, combined):
+            self.assertEqual(
+                result.returncode, 0, result.stderr.decode(errors="replace")
+            )
+
+        def rows(payload: bytes) -> dict[int, list[str]]:
+            parsed = {}
+            for event in parse_output(payload):
+                if event[0] == "PFPIPE":
+                    fields = str(event[2]).split()
+                    parsed[int(fields[1])] = fields
+            return parsed
+
+        row_a = rows(standalone_a.stdout)[51]
+        row_b = rows(standalone_b.stdout)[52]
+        combined_rows = rows(combined.stdout)
+        # Active flag, batch count, expert count and actual bytes are exact;
+        # wall-clock fields are intentionally not compared across processes.
+        self.assertEqual(combined_rows[51][2:6], row_a[2:6])
+        self.assertEqual(combined_rows[52][2:6], row_b[2:6])
 
     def test_queued_cancel_prevents_decode_and_releases_slot(self) -> None:
         wire = (

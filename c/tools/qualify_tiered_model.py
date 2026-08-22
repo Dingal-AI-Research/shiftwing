@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -31,6 +32,14 @@ DEFAULT_PROMPTS = [
     "Summarize the trade-off between caching more data in RAM and reading it "
     "from NVMe on demand. Include one failure mode of each approach.",
 ]
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _load_prompts(path: Path | None) -> list[str]:
@@ -220,7 +229,7 @@ def _run_pass(
     return turns
 
 
-def main() -> int:
+def _argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--engine", type=Path, default=ROOT / "qwen")
@@ -248,6 +257,68 @@ def main() -> int:
         choices=(0, 1),
         default=0,
         help="stage routed-expert H2D transfers through a reusable pinned arena",
+    )
+    parser.add_argument(
+        "--prefetch-threads",
+        type=int,
+        default=0,
+        help=(
+            "async reader threads for experts the router has already "
+            "selected. 0 makes every expert read synchronous, so disk time "
+            "is fully exposed instead of overlapping compute. Distinct from "
+            "the predictive PREFETCH_LOAD learner, which measured negative"
+        ),
+    )
+    parser.add_argument(
+        "--prefill-cold-device",
+        type=int,
+        default=0,
+        help=(
+            "rows a cold prefill expert must serve before its weights are "
+            "uploaded and executed on CUDA; 0 keeps the host path. Uploads use "
+            "scratch outside the weight cache so decode residents are not evicted"
+        ),
+    )
+    parser.add_argument(
+        "--cuda-attn",
+        type=int,
+        choices=(0, 1),
+        default=1,
+        help=(
+            "run full-attention layers on CUDA. Must be a recorded flag: the "
+            "engine environment is isolated, so an ambient CUDA_ATTN is stripped "
+            "and would silently not apply"
+        ),
+    )
+    parser.add_argument(
+        "--cuda-spec-gdn",
+        type=int,
+        choices=(0, 1),
+        default=0,
+        help=(
+            "route linear-attention (GDN) prefill through the batched CUDA block "
+            "kernel instead of the host path; off by default"
+        ),
+    )
+    parser.add_argument(
+        "--prefill-expert-batch",
+        type=int,
+        default=1,
+        help="cold grouped-prefill experts per ordered I/O submission",
+    )
+    parser.add_argument(
+        "--prefill-cache-bypass",
+        type=int,
+        choices=(0, 1),
+        default=0,
+        help="load prefill cache misses transiently without evicting decode residents",
+    )
+    parser.add_argument(
+        "--prefill-load-pipeline",
+        type=int,
+        choices=(0, 1),
+        default=0,
+        help="overlap transient prefill expert loading with expert compute",
     )
     parser.add_argument(
         "--decode-protect",
@@ -278,6 +349,16 @@ def main() -> int:
         help="select complete grouped-int3 routed-expert sidecars",
     )
     parser.add_argument(
+        "--expert-map",
+        type=Path,
+        default=None,
+        help=(
+            "seed the expert cache from a frozen COLIEMAP heat map, read-only. "
+            "Without it the run does no expert-map I/O at all, so a trial can "
+            "neither seed from nor contaminate another trial."
+        ),
+    )
+    parser.add_argument(
         "--q3-route-atlas",
         type=int,
         choices=(0, 1),
@@ -293,6 +374,11 @@ def main() -> int:
     )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cuda-events", action="store_true")
+    return parser
+
+
+def main() -> int:
+    parser = _argument_parser()
     args = parser.parse_args()
 
     if args.warmup_passes < 0 or args.measured_passes < 1:
@@ -306,6 +392,10 @@ def main() -> int:
         or args.cuda_headroom_gb <= 0
     ):
         parser.error("RAM/headroom must be positive and CUDA cache non-negative")
+    if not 1 <= args.prefill_expert_batch <= 32:
+        parser.error("prefill-expert-batch must be between 1 and 32")
+    if args.prefill_load_pipeline and not args.prefill_cache_bypass:
+        parser.error("prefill-load-pipeline requires prefill-cache-bypass")
     if not math.isfinite(args.minimum_tps) or args.minimum_tps <= 0:
         parser.error("minimum-tps must be positive and finite")
 
@@ -350,8 +440,6 @@ def main() -> int:
         parser.error("--q3-route-atlas requires --expert-q3 1")
     if args.q3_route_atlas and not args.decode_protect:
         parser.error("--q3-route-atlas requires --decode-protect 1")
-    if args.q3_route_atlas and not args.q3_native:
-        parser.error("--q3-route-atlas requires --q3-native 1")
     if args.q3_native and not args.expert_q3:
         parser.error("--q3-native requires --expert-q3 1")
     selected_bits = 2 if args.expert_q2 else 3 if args.expert_q3 else None
@@ -389,11 +477,36 @@ def main() -> int:
             "EXPERT_Q3": str(args.expert_q3),
             "Q3_ROUTE_ATLAS": str(args.q3_route_atlas),
             "Q3_NATIVE": str(args.q3_native),
-            "AUTOPIN": "1",
+            # A qualification run must be reproducible, so the learned expert
+            # map is never written here. Without --expert-map the engine does
+            # no map I/O at all (AUTOPIN off, no path), which reproduces the
+            # historical baseline behavior exactly; with one it seeds read-only.
+            "AUTOPIN": "1" if args.expert_map else "0",
+            "EMAP_FREEZE": "1",
+            "EMAP_SAVE_EVERY": "0",
+            "PREFILL_COLD_DEVICE": str(args.prefill_cold_device),
+            "CUDA_ATTN": str(args.cuda_attn),
+            "CUDA_SPEC_GDN": str(args.cuda_spec_gdn),
+            "PREFILL_EXPERT_BATCH": str(args.prefill_expert_batch),
+            "PREFILL_CACHE_BYPASS": str(args.prefill_cache_bypass),
+            "PREFILL_LOAD_PIPELINE": str(args.prefill_load_pipeline),
             "PREFETCH_LOAD": "0",
-            "PREFETCH_THREADS": "0",
+            "PREFETCH_THREADS": str(args.prefetch_threads),
         }
     )
+    expert_map_manifest = None
+    if args.expert_map:
+        expert_map_path = args.expert_map.resolve()
+        if not expert_map_path.is_file():
+            raise SystemExit(f"expert map is not a file: {expert_map_path}")
+        env["EMAP_PATH"] = str(expert_map_path)
+        expert_map_manifest = {
+            "path": str(expert_map_path),
+            "bytes": expert_map_path.stat().st_size,
+            "sha256": sha256_file(expert_map_path),
+        }
+    else:
+        env.pop("EMAP_PATH", None)
     if args.cuda_events:
         env["CUDA_PROFILE_STAGES"] = "1"
     else:
@@ -441,6 +554,9 @@ def main() -> int:
         rate = sustained_tps(measured)
         per_turn_rates = [
             float(turn["stats"]["tokens_per_second"]) for turn in measured
+        ]
+        per_turn_ttft = [
+            float(turn["ttft_s"]) for turn in measured
         ]
         outputs_nonempty = all(turn["text"].strip() for turn in measured)
         telemetry_summary = None
@@ -494,6 +610,13 @@ def main() -> int:
                 and q3_atlas.get("active") is True
                 and q3_atlas.get("refreshes", 0) > 0
                 and q3_atlas.get("device_entries", 0) > 0
+                and (
+                    args.q3_native
+                    or (
+                        q3_atlas.get("prefill_batches", 0) > 0
+                        and q3_atlas.get("prefill_tokens", 0) > 0
+                    )
+                )
             )
         )
         failures = []
@@ -527,6 +650,7 @@ def main() -> int:
             "engine": str(engine_path),
             "model_manifest": model_manifest,
             "expert_lowbit_manifest": expert_lowbit_manifest,
+            "expert_map_manifest": expert_map_manifest,
             "configuration": {
                 "warmup_passes": args.warmup_passes,
                 "measured_passes": args.measured_passes,
@@ -542,8 +666,16 @@ def main() -> int:
                 "pinned_upload": bool(args.pinned_upload),
                 "decode_protect": bool(args.decode_protect),
                 "decode_protect_prewarm": bool(args.decode_protect_prewarm),
+                "prefill_expert_batch": args.prefill_expert_batch,
+                "prefill_cache_bypass": bool(args.prefill_cache_bypass),
+                "prefill_load_pipeline": bool(args.prefill_load_pipeline),
                 "expert_q2": bool(args.expert_q2),
                 "expert_q3": bool(args.expert_q3),
+                "expert_map": str(args.expert_map) if args.expert_map else None,
+                "cuda_attn": bool(args.cuda_attn),
+                "prefill_cold_device": args.prefill_cold_device,
+                "prefetch_threads": args.prefetch_threads,
+                "cuda_spec_gdn": bool(args.cuda_spec_gdn),
                 "q3_route_atlas": bool(args.q3_route_atlas),
                 "q3_native": bool(args.q3_native),
                 "predictive_prefetch": False,
@@ -557,6 +689,8 @@ def main() -> int:
                 "minimum_turn_tps": min(per_turn_rates),
                 "outputs_nonempty": outputs_nonempty,
                 "telemetry_complete": telemetry_complete,
+                "median_ttft_s": statistics.median(per_turn_ttft),
+                "mean_ttft_s": statistics.fmean(per_turn_ttft),
                 "cuda_active": cuda_active,
                 "resident_cuda_graph": resident_graph,
                 "native_q3_active": native_q3_active,

@@ -24,6 +24,9 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             "MTP": "1",
             "TF": "1",
             "EXPERT_Q3_MAX_LAYER": "4",
+            "PREFILL_CACHE_BYPASS": "1",
+            "PREFILL_EXPERT_BATCH": "4",
+            "PREFILL_LOAD_PIPELINE": "1",
             "Q3_NATIVE": "1",
             "CUDA_SPEC_FULL": "1",
             "COLI_MMAP": "1",
@@ -32,6 +35,8 @@ class RuntimeEnvironmentTests(unittest.TestCase):
         self.assertEqual(result["PATH"], source["PATH"])
         self.assertEqual(result["HOME"], source["HOME"])
         self.assertEqual(result["TEMP"], source["TEMP"])
+        self.assertNotIn("PREFILL_CACHE_BYPASS", result)
+        self.assertNotIn("PREFILL_LOAD_PIPELINE", result)
         self.assertFalse(ENGINE_ENV_KEYS.intersection(result))
 
     def test_explicitly_preserved_controls_survive(self) -> None:
@@ -64,6 +69,10 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             changed = root / ENGINE_SOURCE_FILES[1]
             changed.write_bytes(changed.read_bytes() + b"changed\n")
             self.assertNotEqual(first, engine_source_sha256(root))
+            empty = root / ENGINE_SOURCE_FILES[2]
+            empty.write_bytes(b"")
+            with self.assertRaisesRegex(ValueError, "input is empty"):
+                engine_source_sha256(root)
 
 
 if __name__ == "__main__":

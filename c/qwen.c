@@ -39,6 +39,9 @@
 #define QW_MAX_LAYERS 128
 #define QW_MAX_TOPK 64
 #define QW_NAME 512
+#define QW_PREFILL_PIPE_MAX_BATCH 32
+#define QW_PREFILL_PIPE_SLOTS 2
+#define QW_PREFILL_PIPE_SCRATCH_MAX ((size_t)512 << 20)
 
 enum { LT_LINEAR = 0, LT_FULL = 1 };
 
@@ -123,6 +126,33 @@ typedef struct {
     double verify_detail[4],replay_detail[4],fallback_detail[4];
     double draft_s,verify_s,replay_s,fallback_s;
 } MtpW;
+enum {
+    PREFILL_PIPE_EMPTY=0,
+    PREFILL_PIPE_LOADING=1,
+    PREFILL_PIPE_READY=2,
+    PREFILL_PIPE_COMPUTING=3,
+    PREFILL_PIPE_RELEASING=4
+};
+typedef struct {
+    int state,rc,layer,n,nmiss;
+    uint64_t generation;
+    int eid[QW_PREFILL_PIPE_MAX_BATCH],mid[QW_PREFILL_PIPE_MAX_BATCH];
+    Expert temporary[QW_PREFILL_PIPE_MAX_BATCH];
+    Expert *loaded[QW_PREFILL_PIPE_MAX_BATCH];
+    Expert *miss[QW_PREFILL_PIPE_MAX_BATCH];
+    unsigned char owned[QW_PREFILL_PIPE_MAX_BATCH];
+    double load_s;
+    uint64_t read_bytes;
+} PrefillPipeSlot;
+typedef struct {
+    void *model;
+    pthread_t thread;
+    pthread_mutex_t lock;
+    pthread_cond_t work,ready;
+    PrefillPipeSlot slot[QW_PREFILL_PIPE_SLOTS];
+    int started,stop,job_slot,busy;
+    uint64_t generation;
+} PrefillPipe;
 typedef struct {
     Cfg c;
     shards S;
@@ -138,22 +168,41 @@ typedef struct {
     int decode_prewarmer;
     int prof_detail;
     double prof_gdn,prof_attn,prof_moe,prof_lm,prof_expert_load;uint64_t prof_expert_misses;
+    uint64_t pfpipe_batches,pfpipe_experts,pfpipe_bytes;
+    double pfpipe_producer_s,pfpipe_wait_s,pfpipe_compute_s,pfpipe_wall_s;
     double dense_load_s;
     pthread_t pf_thread[4];pthread_mutex_t pf_lock;pthread_cond_t pf_cond;
     struct{int layer,n,load,eid[QW_MAX_TOPK];}pf_job[128];
     int pf_head,pf_tail,pf_nthread;
     uint64_t pf_predictions,pf_loads,pf_useful,pf_wasted,pf_gpu_skips,pf_dropped;
-    uint32_t *emap_seed;char emap_path[2048];int emap_loaded,emap_saved;
+    uint32_t *emap_seed;char emap_path[2048];int emap_loaded,emap_saved,emap_frozen,emap_save_every,emap_turns;
     uint64_t tier_hits,tier_misses,tier_gpu_hits;
     uint64_t decode_pin_refreshes,decode_pin_fallbacks;
     uint64_t decode_prewarm_loads,decode_prewarm_bytes;
     int q3_route_atlas;
     uint64_t q3_atlas_host_entries,q3_atlas_uncovered;
     unsigned char *turn_hits;
+    PrefillPipe prefill_pipe;
 #ifdef COLI_CUDA
     float *d_final_norm;
 #endif
 } Model;
+static void prefill_pipe_stop(Model*m);
+
+typedef struct {
+    uint64_t batches,experts,bytes;
+    double timer[4];
+} PrefillPipeSnapshot;
+static PrefillPipeSnapshot prefill_pipe_snapshot(const Model*m){
+    PrefillPipeSnapshot s={
+        .batches=m->pfpipe_batches,
+        .experts=m->pfpipe_experts,
+        .bytes=m->pfpipe_bytes,
+        .timer={m->pfpipe_producer_s,m->pfpipe_wait_s,
+                m->pfpipe_compute_s,m->pfpipe_wall_s}
+    };
+    return s;
+}
 
 typedef struct {
     int pos,hidden,layers,kv16;
@@ -217,6 +266,9 @@ static void expert_map_configure(Model*m,const char*snap){
     if(p&&*p)snprintf(m->emap_path,sizeof(m->emap_path),"%s",p);
     else if(st_env_enabled("AUTOPIN"))
         snprintf(m->emap_path,sizeof(m->emap_path),"%s/expert_map.bin",snap);
+    m->emap_frozen=st_env_enabled("EMAP_FREEZE");
+    m->emap_save_every=getenv("EMAP_SAVE_EVERY")?atoi(getenv("EMAP_SAVE_EVERY")):0;
+    if(m->emap_save_every<0)m->emap_save_every=0;
     if(!m->emap_path[0])return;
     size_t n=(size_t)m->c.n_layers*m->c.n_experts;
     m->emap_seed=xcalloc(n,sizeof(uint32_t));
@@ -230,7 +282,7 @@ static void expert_map_configure(Model*m,const char*snap){
     fclose(f);
 }
 static void expert_map_save(Model*m){
-    if(!m||!m->emap_path[0]||!m->layer)return;
+    if(!m||!m->emap_path[0]||!m->layer||m->emap_frozen)return;
     size_t n=(size_t)m->c.n_layers*m->c.n_experts;
     uint32_t*heat=xcalloc(n,sizeof(uint32_t));
     for(int l=0;l<m->c.n_layers;l++)
@@ -247,8 +299,23 @@ static void expert_map_save(Model*m){
     }
     free(heat);
 }
+/* Saving only from atexit loses the learned map whenever the process is
+ * signalled rather than exited: SIGTERM runs no atexit handler, and a graceful
+ * shutdown that overruns its wait is escalated to one. The map is ~123 KiB and
+ * expert_map_save is already atomic, so checkpoint it on turn boundaries and
+ * treat the exit-time save as a final flush instead of the only opportunity.
+ * Checkpointing is opt-in (EMAP_SAVE_EVERY=N, N>0) so that simply rebuilding
+ * the engine cannot change measured behavior: a benchmark whose trials each
+ * wrote and then reloaded a heat map would get faster every trial and silently
+ * invalidate its own baseline. EMAP_FREEZE=1 pins the map as a read-only input
+ * for the same reason. */
+static void expert_map_checkpoint(Model*m){
+    if(!m||!m->emap_path[0]||m->emap_frozen||m->emap_save_every<=0)return;
+    if(++m->emap_turns<m->emap_save_every)return;
+    m->emap_turns=0;expert_map_save(m);
+}
 static void tier_report_and_save(void){
-    Model*m=tier_atexit_model;if(!m)return;expert_map_save(m);
+    Model*m=tier_atexit_model;if(!m)return;prefill_pipe_stop(m);expert_map_save(m);
     uint64_t h=m->tier_hits,g=m->tier_gpu_hits,miss=m->tier_misses,total=h+g+miss;
     fprintf(stderr,"[TIERS] cap/layer=%d cpu-hits=%llu gpu-hits=%llu misses=%llu hit-rate=%.2f%% read=%.3fGiB direct=%.3fGiB direct-fallbacks=%llu uring-batches=%llu uring-reads=%llu uring-setups=%llu uring-reuses=%llu uring-fallbacks=%llu\n",
             m->expert_cap,(unsigned long long)h,(unsigned long long)g,
@@ -275,8 +342,9 @@ static void tier_report_and_save(void){
                 (unsigned long long)m->decode_pin_fallbacks,
                 (unsigned long long)m->decode_prewarm_loads,
                 (double)m->decode_prewarm_bytes/(1024.*1024.*1024.));
-    if(m->emap_path[0])fprintf(stderr,"[EMAP] path=%s loaded=%d saved=%d routes=%llu\n",
+    if(m->emap_path[0])fprintf(stderr,"[EMAP] path=%s loaded=%d saved=%d frozen=%d save-every=%d routes=%llu\n",
                               m->emap_path,m->emap_loaded,m->emap_saved,
+                              m->emap_frozen,m->emap_save_every,
                               (unsigned long long)total);
 }
 static void tier_counters_reset(Model*m){
@@ -342,11 +410,19 @@ typedef struct {
     float *x,*y,*gate,*up,*tmp,*proj[4];
     unsigned short *x16,*gate16;
     size_t xcap,ycap,gatecap,upcap,tmpcap,projcap[4],x16cap,gate16cap;
+    /* Weight scratch for cold prefill experts. Deliberately outside the weight
+     * cache: registering a prompt-wide expert would evict decode residents,
+     * which is the churn that made an earlier attempt 2.2x slower. Reused for
+     * every cold expert in a layer, so the device allocation is paid once. */
+    void *coldq[3],*colds[3];
+    size_t coldqcap[3],coldscap[3];
+    uint64_t cold_prefill_experts,cold_prefill_tokens,cold_prefill_bytes;
     pthread_mutex_t lock;
     int active,failed,use_f16;
     uint64_t calls,uploads,mlp_calls,grouped_calls,grouped_kernel_calls,projection_groups,gdn_calls,attn_calls;
     uint64_t q3_uploads,q3_upload_bytes,q3_gemv_calls,q3_grouped_calls;
     uint64_t q3_atlas_refreshes,q3_atlas_loads,q3_atlas_bytes;
+    uint64_t q3_atlas_prefill_batches,q3_atlas_prefill_tokens;
     int q3_atlas_entries,q3_atlas_capacity,q3_atlas_routes;
     uint64_t batch_transactions,batch_routes,batch_unique_experts;
     uint64_t resident_h2d,resident_d2h,resident_logits_d2h,resident_router_d2h;
@@ -364,15 +440,21 @@ static int cuda_suppress;
 
 static void cuda_backend_stop(void){
     if(!cuda_rt.ctx)return;
+    fprintf(stderr,"[COLD_PREFILL] experts=%llu tokens=%llu staged=%.2fGiB\n",
+            (unsigned long long)cuda_rt.cold_prefill_experts,
+            (unsigned long long)cuda_rt.cold_prefill_tokens,
+            (double)cuda_rt.cold_prefill_bytes/(1024.*1024.*1024.));
     fprintf(stderr,"[CUDA] qmat calls=%llu fused-mlp calls=%llu grouped-expert calls=%llu grouped-kernel calls=%llu projection-groups=%llu GDN-calls=%llu GQA-calls=%llu uploads=%llu cache-hits=%llu evictions=%llu expert-VRAM=%.2fGiB mtp-expert-VRAM=%.2fGiB\n",(unsigned long long)cuda_rt.calls,(unsigned long long)cuda_rt.mlp_calls,(unsigned long long)cuda_rt.grouped_calls,(unsigned long long)cuda_rt.grouped_kernel_calls,(unsigned long long)cuda_rt.projection_groups,(unsigned long long)cuda_rt.gdn_calls,(unsigned long long)cuda_rt.attn_calls,(unsigned long long)cuda_rt.uploads,(unsigned long long)cuda_rt.cache_hits,(unsigned long long)cuda_rt.evictions,(double)cuda_rt.expert_bytes/(1024.*1024.*1024.),(double)cuda_rt.mtp_expert_bytes/(1024.*1024.*1024.));
     if(cuda_rt.q3_uploads)fprintf(stderr,"[CUDA_Q3] native-uploads=%llu upload=%.3fGiB gemv-calls=%llu grouped-calls=%llu\n",(unsigned long long)cuda_rt.q3_uploads,(double)cuda_rt.q3_upload_bytes/(1024.*1024.*1024.),(unsigned long long)cuda_rt.q3_gemv_calls,(unsigned long long)cuda_rt.q3_grouped_calls);
     if(cuda_rt.q3_atlas_refreshes)fprintf(stderr,
-        "[CUDA_Q3_ATLAS] refreshes=%llu routes=%d entries=%d capacity=%d loads=%llu payload=%.3fGiB\n",
+        "[CUDA_Q3_ATLAS] refreshes=%llu routes=%d entries=%d capacity=%d loads=%llu payload=%.3fGiB prefill-batches=%llu prefill-tokens=%llu\n",
         (unsigned long long)cuda_rt.q3_atlas_refreshes,
         cuda_rt.q3_atlas_routes,cuda_rt.q3_atlas_entries,
         cuda_rt.q3_atlas_capacity,
         (unsigned long long)cuda_rt.q3_atlas_loads,
-        (double)cuda_rt.q3_atlas_bytes/(1024.*1024.*1024.));
+        (double)cuda_rt.q3_atlas_bytes/(1024.*1024.*1024.),
+        (unsigned long long)cuda_rt.q3_atlas_prefill_batches,
+        (unsigned long long)cuda_rt.q3_atlas_prefill_tokens);
     if(cuda_rt.pinned_upload_batches)fprintf(stderr,
         "[CUDA_UPLOAD] pinned-batches=%llu staged=%.3fGiB capacity=%.3fGiB\n",
         (unsigned long long)cuda_rt.pinned_upload_batches,
@@ -583,6 +665,128 @@ static int cuda_mlp_try(float*y,const float*x,const QMat*gc,const QMat*uc,const 
     }
     if(cuda_qmat_launch_locked(cuda_rt.y,din,d,input_f16)||coli_cuda_download(cuda_rt.ctx,y,cuda_rt.y,(size_t)d->O*sizeof(float))||coli_cuda_sync(cuda_rt.ctx)){cuda_backend_fail("MLP down projection");goto out;}
     cuda_rt.calls+=3;cuda_rt.mlp_calls++;used=1;
+out:pthread_mutex_unlock(&cuda_rt.lock);return used;
+}
+/* Use an expert that is already resident in the CUDA cache for grouped prompt
+ * work. This path never uploads weights: a cache miss falls back to the
+ * existing once-per-expert CPU panel GEMM. In particular, it lets the q3 route
+ * atlas serve prefill from its expanded-q4 device copies instead of rereading
+ * the same experts from NVMe/RAM. */
+static int cuda_cached_qmat_batch_locked(float*y,const float*x,QMat*w,int B){
+    if(B<1||!w->cuda_ready||!w->cuda_cache||!w->d_q||!w->d_s)return -1;
+    if(w->fmt==1)return coli_cuda_q8_gemm(
+        cuda_rt.ctx,y,x,B,(const signed char*)w->d_q,
+        (const float*)w->d_s,w->O,w->I,w->rb);
+    if((w->fmt!=2&&w->fmt!=3&&w->fmt!=4)||
+       (w->fmt==3&&cuda_q3_native_enabled()))return -1;
+    return coli_cuda_q4_gemm(
+        cuda_rt.ctx,y,x,B,(const unsigned char*)w->d_q,
+        (const float*)w->d_s,w->O,w->I,w->gs,w->drb,w->ng);
+}
+/* Execute one cold prefill expert on the device without entering the weight
+ * cache. The three projections are staged into reusable scratch, so a
+ * prompt-wide expert never evicts a decode resident: that eviction churn is
+ * why `moe_prefill_grouped` keeps cold experts on the host, measured 2.2x
+ * slower at short prompts where an upload serves only a couple of tokens. At
+ * long context each expert serves hundreds of rows and the upload amortizes,
+ * which is the case this path exists for. Callers must gate on batch size.
+ *
+ * q2/q3 weights are expanded to q4 exactly as `cuda_qmat_upload_locked` does,
+ * so the arithmetic matches the cached path rather than introducing a second
+ * numerical route. */
+static int cuda_cold_stage_locked(QMat*w,int slot){
+    size_t qbytes=cuda_qmat_device_qbytes(w);
+    size_t sbytes=(size_t)w->O*(w->fmt==1?1:w->ng)*sizeof(float);
+    if(cuda_scratch(&cuda_rt.coldq[slot],&cuda_rt.coldqcap[slot],qbytes)||
+       cuda_scratch(&cuda_rt.colds[slot],&cuda_rt.coldscap[slot],sbytes))return -1;
+    const void*qsrc=w->fmt==1?(const void*)w->q8:(const void*)w->q4;
+    uint8_t*temporary=NULL;
+    if(w->fmt==2||(w->fmt==3&&!cuda_q3_native_enabled())){
+        temporary=xcalloc(qbytes,1);
+        if(w->fmt==2)q2_expand_q4(w,temporary);else q3_expand_q4(w,temporary);
+        qsrc=temporary;
+    }
+    int rc=coli_cuda_upload(cuda_rt.ctx,cuda_rt.coldq[slot],qsrc,qbytes)||
+           coli_cuda_upload(cuda_rt.ctx,cuda_rt.colds[slot],w->s,sbytes);
+    if(temporary){if(!rc)rc=coli_cuda_sync(cuda_rt.ctx);free(temporary);}
+    if(!rc)cuda_rt.cold_prefill_bytes+=qbytes+sbytes;
+    return rc?-1:0;
+}
+static int cuda_cold_gemm_locked(float*y,const float*x,QMat*w,int slot,int B){
+    if(w->fmt==1)return coli_cuda_q8_gemm(
+        cuda_rt.ctx,y,x,B,(const signed char*)cuda_rt.coldq[slot],
+        (const float*)cuda_rt.colds[slot],w->O,w->I,w->rb);
+    if((w->fmt!=2&&w->fmt!=3&&w->fmt!=4)||
+       (w->fmt==3&&cuda_q3_native_enabled()))return -1;
+    return coli_cuda_q4_gemm(
+        cuda_rt.ctx,y,x,B,(const unsigned char*)cuda_rt.coldq[slot],
+        (const float*)cuda_rt.colds[slot],w->O,w->I,w->gs,w->drb,w->ng);
+}
+static int cuda_mlp_batch_cold_try(float*y,const float*x,int B,int ldx,
+                                   QMat*g,QMat*u,QMat*d){
+    if(cuda_suppress||!cuda_rt.active||B<1||!g||!u||!d)return 0;
+    int H=g->I,I=g->O,fmt=g->fmt;
+    if(ldx!=H||u->I!=H||u->O!=I||d->I!=I||d->O!=H||
+       u->fmt!=fmt||d->fmt!=fmt||(fmt==3&&cuda_q3_native_enabled()))return 0;
+    int used=0;pthread_mutex_lock(&cuda_rt.lock);
+    if(!cuda_rt.active)goto out;
+    if(cuda_scratch((void**)&cuda_rt.x,&cuda_rt.xcap,(size_t)B*H*sizeof(float))||
+       cuda_scratch((void**)&cuda_rt.gate,&cuda_rt.gatecap,(size_t)B*I*sizeof(float))||
+       cuda_scratch((void**)&cuda_rt.up,&cuda_rt.upcap,(size_t)B*I*sizeof(float))||
+       cuda_scratch((void**)&cuda_rt.y,&cuda_rt.ycap,(size_t)B*H*sizeof(float))){
+        cuda_backend_fail("cold prefill expert allocation");goto out;
+    }
+    if(cuda_cold_stage_locked(g,0)||cuda_cold_stage_locked(u,1)||
+       cuda_cold_stage_locked(d,2)){cuda_backend_fail("cold prefill expert upload");goto out;}
+    if(coli_cuda_upload(cuda_rt.ctx,cuda_rt.x,x,(size_t)B*H*sizeof(float))||
+       cuda_cold_gemm_locked(cuda_rt.gate,cuda_rt.x,g,0,B)||
+       cuda_cold_gemm_locked(cuda_rt.up,cuda_rt.x,u,1,B)||
+       coli_cuda_silu_mul(cuda_rt.ctx,cuda_rt.gate,cuda_rt.gate,cuda_rt.up,
+                          (size_t)B*I)||
+       cuda_cold_gemm_locked(cuda_rt.y,cuda_rt.gate,d,2,B)||
+       coli_cuda_download(cuda_rt.ctx,y,cuda_rt.y,(size_t)B*H*sizeof(float))||
+       coli_cuda_sync(cuda_rt.ctx)){
+        cuda_backend_fail("cold prefill expert execution");goto out;
+    }
+    cuda_rt.mlp_calls++;cuda_rt.cold_prefill_experts++;
+    cuda_rt.cold_prefill_tokens+=(uint64_t)B;used=1;
+out:
+    pthread_mutex_unlock(&cuda_rt.lock);return used;
+}
+static int cuda_mlp_batch_cached_try(float*y,const float*x,int B,int ldx,
+                                     const QMat*gc,const QMat*uc,
+                                     const QMat*dc){
+    if(cuda_suppress||!cuda_rt.active||B<1||!gc||!uc||!dc)return 0;
+    QMat*g=(QMat*)gc,*u=(QMat*)uc,*d=(QMat*)dc;
+    int H=g->I,I=g->O,fmt=g->fmt;
+    if(ldx!=H||u->I!=H||u->O!=I||d->I!=I||d->O!=H||
+       u->fmt!=fmt||d->fmt!=fmt||!g->cuda_cache||!u->cuda_cache||
+       !d->cuda_cache||(fmt==3&&cuda_q3_native_enabled()))return 0;
+    int used=0;pthread_mutex_lock(&cuda_rt.lock);
+    if(!cuda_rt.active)goto out;
+    if(cuda_scratch((void**)&cuda_rt.x,&cuda_rt.xcap,
+                    (size_t)B*H*sizeof(float))||
+       cuda_scratch((void**)&cuda_rt.gate,&cuda_rt.gatecap,
+                    (size_t)B*I*sizeof(float))||
+       cuda_scratch((void**)&cuda_rt.up,&cuda_rt.upcap,
+                    (size_t)B*I*sizeof(float))||
+       cuda_scratch((void**)&cuda_rt.y,&cuda_rt.ycap,
+                    (size_t)B*H*sizeof(float))){
+        cuda_backend_fail("cached prefill expert allocation");goto out;
+    }
+    if(coli_cuda_upload(cuda_rt.ctx,cuda_rt.x,x,(size_t)B*H*sizeof(float))||
+       cuda_cached_qmat_batch_locked(cuda_rt.gate,cuda_rt.x,g,B)||
+       cuda_cached_qmat_batch_locked(cuda_rt.up,cuda_rt.x,u,B)||
+       coli_cuda_silu_mul(cuda_rt.ctx,cuda_rt.gate,cuda_rt.gate,
+                          cuda_rt.up,B*I)||
+       cuda_cached_qmat_batch_locked(cuda_rt.y,cuda_rt.gate,d,B)||
+       coli_cuda_download(cuda_rt.ctx,y,cuda_rt.y,(size_t)B*H*sizeof(float))||
+       coli_cuda_sync(cuda_rt.ctx)){
+        cuda_backend_fail("cached prefill expert batch");goto out;
+    }
+    cuda_rt.calls+=(uint64_t)3*B;cuda_rt.mlp_calls+=(uint64_t)B;
+    cuda_rt.q3_atlas_prefill_batches++;
+    cuda_rt.q3_atlas_prefill_tokens+=(uint64_t)B;used=1;
 out:pthread_mutex_unlock(&cuda_rt.lock);return used;
 }
 static int cuda_projection_group_try(float*const*y,const float*x,const QMat*const*matrix,int n){
@@ -1241,7 +1445,7 @@ static void telemetry_tiers_emit(Model*m){
         (unsigned long long)cuda_rt.q3_upload_bytes,
         (unsigned long long)cuda_rt.q3_gemv_calls,
         (unsigned long long)cuda_rt.q3_grouped_calls);
-    if(m->q3_route_atlas)printf("Q3ATLAS %d %llu %d %llu %d %d %llu %llu %llu\n",
+    if(m->q3_route_atlas)printf("Q3ATLAS %d %llu %d %llu %d %d %llu %llu %llu %llu %llu\n",
         cuda_rt.q3_atlas_refreshes>0,
         (unsigned long long)cuda_rt.q3_atlas_refreshes,
         cuda_rt.q3_atlas_routes,
@@ -1249,7 +1453,9 @@ static void telemetry_tiers_emit(Model*m){
         cuda_rt.q3_atlas_entries,cuda_rt.q3_atlas_capacity,
         (unsigned long long)cuda_rt.q3_atlas_loads,
         (unsigned long long)cuda_rt.q3_atlas_bytes,
-        (unsigned long long)m->q3_atlas_uncovered);
+        (unsigned long long)m->q3_atlas_uncovered,
+        (unsigned long long)cuda_rt.q3_atlas_prefill_batches,
+        (unsigned long long)cuda_rt.q3_atlas_prefill_tokens);
 #endif
 }
 static void telemetry_emap_emit(Model*m){
@@ -1274,17 +1480,33 @@ static void telemetry_turn_emit(Model*m,uint64_t id,double started,const double*
                                 const double*decode_base,
                                 uint64_t cpu_hit_base,uint64_t gpu_hit_base,
                                 uint64_t miss_base,uint64_t read_base,
-                                uint64_t direct_base,uint64_t decode_cpu_hit_base,
+                                uint64_t direct_base,uint64_t uring_batch_base,
+                                uint64_t uring_read_base,
+                                uint64_t decode_cpu_hit_base,
                                 uint64_t decode_gpu_hit_base,
                                 uint64_t decode_miss_base,
                                 uint64_t decode_read_base,
                                 uint64_t decode_direct_base,
+                                uint64_t decode_uring_batch_base,
+                                uint64_t decode_uring_read_base,
+                                const PrefillPipeSnapshot*pfpipe_start,
+                                const PrefillPipeSnapshot*pfpipe_end,
                                 uint64_t cuda_tx_base,
                                 const double*cuda_base,
                                 uint64_t decode_cuda_tx_base,
                                 const double*decode_cuda_base){
-    double dt=now_s()-started,edisk=m->prof_expert_load-base[0],moe=m->prof_moe-base[1],sequence=(m->prof_gdn-base[2])+(m->prof_attn-base[3]),head=m->prof_lm-base[4];
-    double emm=moe-edisk;if(emm<0.)emm=0.;
+    double dt=now_s()-started,edisk=m->prof_expert_load-base[0],moe=m->prof_moe-base[1];
+    /* The sequence stage mixes two subsystems with unrelated costs: the
+     * linear-attention (GDN) layers and the full-attention layers. Reporting
+     * only their sum made a 953s prefill stage unattributable, so emit both
+     * parts as a trailing optional suffix and keep the sum in place. */
+    double gdn=m->prof_gdn-base[2],attn=m->prof_attn-base[3],sequence=gdn+attn;
+    double head=m->prof_lm-base[4];
+    uint64_t pfpipe_batches=pfpipe_end->batches-pfpipe_start->batches;
+    double pfpipe_wait=pfpipe_end->timer[1]-pfpipe_start->timer[1];
+    double decode_load=m->prof_expert_load-decode_base[0];
+    double emm=pfpipe_batches?moe-pfpipe_wait-decode_load:moe-edisk;
+    if(emm<0.)emm=0.;
     printf("PERF %llu %.6f %.6f %.6f %.6f %.6f %.6f %.6f",(unsigned long long)id,dt,edisk,0.,emm,sequence,0.,head);
 #ifdef COLI_CUDA
     unsigned long long cuda_tx=0;double cuda_ms[8]={0};
@@ -1292,6 +1514,7 @@ static void telemetry_turn_emit(Model*m,uint64_t id,double started,const double*
         printf(" %llu",(unsigned long long)(cuda_tx-(unsigned long long)cuda_tx_base));
         for(int i=0;i<8;i++)printf(" %.6f",(cuda_ms[i]-cuda_base[i])/1000.);
     }
+    printf(" %.6f %.6f",gdn,attn);
     printf("\nRESIDENT %llu %llu %llu %llu %llu %llu %llu %llu",
         (unsigned long long)id,
         (unsigned long long)cuda_rt.resident_layers,
@@ -1303,13 +1526,15 @@ static void telemetry_turn_emit(Model*m,uint64_t id,double started,const double*
         (unsigned long long)cuda_rt.resident_router_d2h);
 #else
     (void)cuda_tx_base;(void)cuda_base;
+    printf(" %.6f %.6f",gdn,attn);
 #endif
     putchar('\n');
     double ddt=now_s()-decode_started;
     double dedisk=m->prof_expert_load-decode_base[0];
     double dmoe=m->prof_moe-decode_base[1];
-    double dsequence=(m->prof_gdn-decode_base[2])+
-                     (m->prof_attn-decode_base[3]);
+    double dgdn=m->prof_gdn-decode_base[2];
+    double dattn=m->prof_attn-decode_base[3];
+    double dsequence=dgdn+dattn;
     double dhead=m->prof_lm-decode_base[4],demm=dmoe-dedisk;
     if(demm<0.)demm=0.;
     printf("DPERF %llu %.6f %.6f %.6f %.6f %.6f %.6f %.6f",
@@ -1326,26 +1551,41 @@ static void telemetry_turn_emit(Model*m,uint64_t id,double started,const double*
 #else
     (void)decode_cuda_tx_base;(void)decode_cuda_base;
 #endif
+    printf(" %.6f %.6f",dgdn,dattn);
     putchar('\n');
     uint64_t cpu_hits=m->tier_hits-cpu_hit_base;
     uint64_t gpu_hits=m->tier_gpu_hits-gpu_hit_base;
     uint64_t misses=m->tier_misses-miss_base;
     uint64_t read_bytes=m->S.read_bytes-read_base;
     uint64_t direct_bytes=m->S.direct_bytes-direct_base;
-    printf("CACHE %llu %llu %llu %llu %llu %llu\n",
+    printf("CACHE %llu %llu %llu %llu %llu %llu %llu %llu\n",
            (unsigned long long)id,
            (unsigned long long)cpu_hits,
            (unsigned long long)gpu_hits,
            (unsigned long long)misses,
            (unsigned long long)read_bytes,
-           (unsigned long long)direct_bytes);
-    printf("DCACHE %llu %llu %llu %llu %llu %llu\n",
+           (unsigned long long)direct_bytes,
+           (unsigned long long)(m->S.uring_batches-uring_batch_base),
+           (unsigned long long)(m->S.uring_reads-uring_read_base));
+    printf("DCACHE %llu %llu %llu %llu %llu %llu %llu %llu\n",
            (unsigned long long)id,
            (unsigned long long)(m->tier_hits-decode_cpu_hit_base),
            (unsigned long long)(m->tier_gpu_hits-decode_gpu_hit_base),
            (unsigned long long)(m->tier_misses-decode_miss_base),
            (unsigned long long)(m->S.read_bytes-decode_read_base),
-           (unsigned long long)(m->S.direct_bytes-decode_direct_base));
+           (unsigned long long)(m->S.direct_bytes-decode_direct_base),
+           (unsigned long long)(m->S.uring_batches-decode_uring_batch_base),
+           (unsigned long long)(m->S.uring_reads-decode_uring_read_base));
+    printf("PFPIPE %llu %d %llu %llu %llu %.6f %.6f %.6f %.6f\n",
+           (unsigned long long)id,
+           st_env_enabled("PREFILL_LOAD_PIPELINE"),
+           (unsigned long long)pfpipe_batches,
+           (unsigned long long)(pfpipe_end->experts-pfpipe_start->experts),
+           (unsigned long long)(pfpipe_end->bytes-pfpipe_start->bytes),
+           pfpipe_end->timer[0]-pfpipe_start->timer[0],
+           pfpipe_wait,
+           pfpipe_end->timer[2]-pfpipe_start->timer[2],
+           pfpipe_end->timer[3]-pfpipe_start->timer[3]);
     telemetry_tiers_emit(m);telemetry_emap_emit(m);telemetry_hits_emit(m);fflush(stdout);
 }
 
@@ -1719,6 +1959,66 @@ static void load_expert_set(Model*m,Expert**expert,int li,const int*eid,int n){
     st_read_raw_batch(&m->S,read_name,read_out,nr,1);
     free(resolved);free(read_name);free(read_out);
 }
+#ifdef QWEN_PREFILL_PIPE_TEST_HOOKS
+static void prefill_pipe_test_delay(const char*name){
+    const char*e=getenv(name);long us=e?strtol(e,NULL,10):0;if(us<=0)return;
+#ifdef _WIN32
+    Sleep((DWORD)((us+999)/1000));
+#else
+    struct timespec delay={us/1000000,(us%1000000)*1000};
+    while(nanosleep(&delay,&delay)&&errno==EINTR){}
+#endif
+}
+#else
+static void prefill_pipe_test_delay(const char*name){(void)name;}
+#endif
+/* The ordinary prefetch pool only issues WILLNEED advice.  This worker owns
+ * the one true asynchronous load stream used by encode prefill: it fills a
+ * caller-owned slot and never touches the host or CUDA expert caches.  Keeping
+ * one persistent owner also keeps io_uring's thread-local ring/bounces alive
+ * across layers. */
+static void*prefill_pipe_worker(void*arg){
+    PrefillPipe*p=arg;Model*m=p->model;pthread_mutex_lock(&p->lock);
+    for(;;){
+        while(!p->stop&&p->job_slot<0)pthread_cond_wait(&p->work,&p->lock);
+        /* A stop arriving after submit must not strand a LOADING slot. Drain
+         * the one bounded queued/active load, publish it, then exit. Normal
+         * shutdown still reaches this path with no job because callers drain
+         * both slots before model teardown. */
+        if(p->stop&&p->job_slot<0){pthread_mutex_unlock(&p->lock);return NULL;}
+        int si=p->job_slot;p->job_slot=-1;PrefillPipeSlot*s=&p->slot[si];
+        uint64_t generation=s->generation;
+        pthread_mutex_unlock(&p->lock);
+        double t0=now_s();
+        uint64_t read0=__atomic_load_n(&m->S.read_bytes,__ATOMIC_RELAXED);
+        prefill_pipe_test_delay("PREFILL_PIPE_TEST_LOAD_US");
+        load_expert_set(m,s->miss,s->layer,s->mid,s->nmiss);
+        uint64_t read1=__atomic_load_n(&m->S.read_bytes,__ATOMIC_RELAXED);
+        double load_s=now_s()-t0;
+        pthread_mutex_lock(&p->lock);
+        if(s->state==PREFILL_PIPE_LOADING&&s->generation==generation){
+            s->load_s=load_s;s->read_bytes=read1-read0;s->rc=0;
+            s->state=PREFILL_PIPE_READY;pthread_cond_broadcast(&p->ready);
+        }
+    }
+}
+static void prefill_pipe_start(Model*m){
+    PrefillPipe*p=&m->prefill_pipe;memset(p,0,sizeof(*p));p->model=m;
+    p->job_slot=-1;pthread_mutex_init(&p->lock,NULL);
+    pthread_cond_init(&p->work,NULL);pthread_cond_init(&p->ready,NULL);
+    int rc=pthread_create(&p->thread,NULL,prefill_pipe_worker,p);
+    if(rc){fprintf(stderr,"prefill pipeline thread: %s\n",strerror(rc));
+        die("cannot start prefill load pipeline");}
+    p->started=1;
+}
+static void prefill_pipe_stop(Model*m){
+    if(!m)return;PrefillPipe*p=&m->prefill_pipe;if(!p->started)return;
+    pthread_mutex_lock(&p->lock);p->stop=1;
+    pthread_cond_broadcast(&p->work);pthread_cond_broadcast(&p->ready);
+    pthread_mutex_unlock(&p->lock);
+    if(!pthread_equal(pthread_self(),p->thread))pthread_join(p->thread,NULL);
+    p->started=0;
+}
 static void load_moe(Model *m,Layer *l,int li){
     Cfg *c=&m->c; char n[QW_NAME]; MoeW *w=&l->moe;
     lname(m,n,sizeof(n),li,"mlp.gate.weight"); w->router=load_qmat(m,n,c->n_experts,c->hidden);
@@ -1764,17 +2064,83 @@ static void load_layer_into(Model *m,Layer*l,int li,int type){
     load_moe(m,l,li);
 }
 static void load_layer(Model*m,int li){load_layer_into(m,&m->layer[li],li,m->c.layer_type[li]);}
-static size_t expert_packed_bytes(Model*m){
+static size_t expert_packed_bytes_at(Model*m,int li,int eid){
     const char*suf[]={"gate_proj","up_proj","down_proj"};size_t total=0;
     for(int j=0;j<3;j++){char base[QW_NAME],name[QW_NAME],tail[160],qs[QW_NAME+8];
-        snprintf(tail,sizeof(tail),"mlp.experts.0.%s.weight",suf[j]);lname(m,base,sizeof(base),0,tail);
+        snprintf(tail,sizeof(tail),"mlp.experts.%d.%s.weight",eid,suf[j]);
+        lname(m,base,sizeof(base),li,tail);
         if(find_qmat_named(m,base,name,sizeof(name))<0)die("cannot size expert cache");
         st_tensor*t=st_find(&m->S,name);if(!t)die("cannot find expert payload");
-        total+=(size_t)t->nbytes;snprintf(qs,sizeof(qs),"%s.qs",name);t=st_find(&m->S,qs);
-        if(t)total+=(size_t)t->nbytes;
+        size_t bytes=(size_t)t->nbytes;if(total>SIZE_MAX-bytes)
+            die("expert size calculation overflow");
+        total+=bytes;snprintf(qs,sizeof(qs),"%s.qs",name);t=st_find(&m->S,qs);
+        if(t){bytes=(size_t)t->nbytes;if(total>SIZE_MAX-bytes)
+                die("expert size calculation overflow");total+=bytes;}
     }
     return total;
 }
+static size_t expert_packed_bytes(Model*m){return expert_packed_bytes_at(m,0,0);}
+static size_t prefill_pipe_max_expert_bytes(Model*m){
+    size_t maximum=0;
+    for(int li=0;li<m->c.n_layers;li++)for(int eid=0;eid<m->c.n_experts;eid++){
+        size_t bytes=expert_packed_bytes_at(m,li,eid);
+        if(bytes>maximum)maximum=bytes;
+    }
+    return maximum;
+}
+static int prefill_expert_batch_limit(int cap){
+    const char*e=getenv("PREFILL_EXPERT_BATCH");int n=e?atoi(e):1;
+    if(n<1)n=1;if(n>QW_PREFILL_PIPE_MAX_BATCH)n=QW_PREFILL_PIPE_MAX_BATCH;
+    if(n>cap)n=cap;return n>0?n:1;
+}
+static void prefill_pipe_configure(Model*m){
+    int bypass=st_env_enabled("PREFILL_CACHE_BYPASS");
+    int pipeline=st_env_enabled("PREFILL_LOAD_PIPELINE");
+    if(pipeline&&!bypass)
+        die("PREFILL_LOAD_PIPELINE requires PREFILL_CACHE_BYPASS=1");
+    if(!pipeline)return;
+    if(!st_env_enabled("PIPE"))
+        die("PREFILL_LOAD_PIPELINE requires PIPE=1 materialized reads");
+    if(st_env_enabled("PREFETCH_LOAD"))
+        die("PREFILL_LOAD_PIPELINE is incompatible with PREFETCH_LOAD=1");
+    int batch=prefill_expert_batch_limit(m->expert_cap);
+    /* Two weight slots + the producer's retained direct-I/O buffers account
+     * for 3*batch experts. Keep one startup/main-thread buffer and one whole
+     * expert of headroom for the largest transient q2/q3-to-q4 CUDA expansion.
+     * Each of the six payload/scale reads can also round up by a page. */
+    size_t one=prefill_pipe_max_expert_bytes(m),factor=(size_t)3*batch+2;
+    if(one&&factor>SIZE_MAX/one)
+        die("prefill pipeline scratch calculation overflow");
+    size_t bound=factor*one;
+    size_t aligned_reads=(size_t)6*(batch+1);
+    if(aligned_reads>SIZE_MAX/(ST_DIRECT_ALIGN-1)||
+       bound>SIZE_MAX-aligned_reads*(ST_DIRECT_ALIGN-1))
+        die("prefill pipeline scratch calculation overflow");
+    bound+=aligned_reads*(ST_DIRECT_ALIGN-1);
+    if(bound>QW_PREFILL_PIPE_SCRATCH_MAX)
+        die("prefill pipeline scratch bound exceeds 512 MiB");
+    fprintf(stderr,
+        "[PFPIPE] actual-load pipeline enabled batch=%d expert-bytes=%zu "
+        "scratch-bound=%.2fMiB\n",batch,one,(double)bound/(1024.*1024.));
+    prefill_pipe_start(m);
+}
+#ifdef COLI_CUDA
+/* The host tier always keeps selected int2/int3 sidecars packed, but the CUDA
+ * cache can either keep native int3 or expand it to int4 for the faster grouped
+ * kernels. Atlas capacity must therefore use the actual device representation
+ * rather than the on-disk/host size. */
+static size_t expert_device_bytes(Model*m){
+    if(!m->layer||m->c.n_layers<=0||m->layer[0].moe.cap<=0)
+        die("cannot size CUDA expert cache before model load");
+    Expert*e=&m->layer[0].moe.expert[0];
+    QMat*q[3]={&e->gate,&e->up,&e->down};size_t total=0;
+    for(int j=0;j<3;j++)
+        total+=cuda_qmat_device_qbytes(q[j])+
+               (size_t)q[j]->O*(q[j]->fmt==1?1:q[j]->ng)*sizeof(float);
+    return total;
+}
+#endif
+
 static size_t dense_container_bytes(Model*m,int use_mtp){
     size_t total=0;for(int i=0;i<m->S.n;i++){const char*n=m->S.t[i].name;
         if(strstr(n,".mlp.experts."))continue;
@@ -1859,18 +2225,17 @@ static void model_init(Model *m,const char *snap){
 #else
         if(!st_env_enabled("EXPERT_Q3")||m->matrix_i3<=0)
             die("Q3_ROUTE_ATLAS requires complete grouped-int3 experts");
-        if(!cuda_q3_native_enabled())
-            die("Q3_ROUTE_ATLAS requires Q3_NATIVE=1");
         if(!st_env_enabled("DECODE_PROTECT"))
             die("Q3_ROUTE_ATLAS requires DECODE_PROTECT=1");
         if(!st_env_enabled("CUDA_EXPERTS"))
             die("Q3_ROUTE_ATLAS requires CUDA_EXPERTS=1");
         fprintf(stderr,
-            "[Q3_ATLAS] adaptive disjoint hot-route cache enabled; "
-            "validation pending\n");
+            "[Q3_ATLAS] adaptive disjoint hot-route cache enabled; device=%s; "
+            "validation pending\n",
+            cuda_q3_native_enabled()?"native-q3":"expanded-q4");
 #endif
     }
-    expert_prefetch_start(m);
+    prefill_pipe_configure(m);expert_prefetch_start(m);
     m->dense_load_s=now_s()-t0; m->dump_acts=getenv("DUMP_ACTS")&&strcmp(getenv("DUMP_ACTS"),"0");
     m->debug_logits=getenv("DEBUG_LOGITS")&&strcmp(getenv("DEBUG_LOGITS"),"0");
     m->prof_detail=getenv("PROF_DETAIL")&&atoi(getenv("PROF_DETAIL"))!=0;
@@ -1880,6 +2245,15 @@ static void model_init(Model *m,const char *snap){
 /* ---------- hybrid forward ---------- */
 static void model_reset(Model *m){
     m->pos=0;m->mtp.pos=0;memset(m->last_hidden,0,(size_t)m->c.hidden*sizeof(float)); Cfg *c=&m->c;
+    if(m->prefill_pipe.started){PrefillPipe*p=&m->prefill_pipe;
+        pthread_mutex_lock(&p->lock);
+        if(p->busy||p->job_slot>=0||p->slot[0].state!=PREFILL_PIPE_EMPTY||
+           p->slot[1].state!=PREFILL_PIPE_EMPTY){
+            pthread_mutex_unlock(&p->lock);
+            die("model reset while prefill pipeline is active");
+        }
+        pthread_mutex_unlock(&p->lock);
+    }
     if(m->pf_nthread){pthread_mutex_lock(&m->pf_lock);m->pf_head=m->pf_tail;pthread_mutex_unlock(&m->pf_lock);}
     for(int i=0;i<c->n_layers;i++){MoeW*w=&m->layer[i].moe;pthread_mutex_lock(&w->lock);w->prev_n=w->pf_pending=0;memset(w->prefetched,0,(size_t)c->n_experts);pthread_cond_broadcast(&w->pf_done);pthread_mutex_unlock(&w->lock);}
     if(m->mtp.enabled){MoeW*w=&m->mtp.layer.moe;pthread_mutex_lock(&w->lock);w->prev_n=w->pf_pending=0;memset(w->prefetched,0,(size_t)c->n_experts);pthread_cond_broadcast(&w->pf_done);pthread_mutex_unlock(&w->lock);}
@@ -2408,7 +2782,7 @@ static void expert_decode_pins_refresh(Model*m){
     }
 #ifdef COLI_CUDA
     if(atlas&&cuda_rt.active){
-        size_t one=expert_packed_bytes(m);
+        size_t one=expert_device_bytes(m);
         size_t reserve=(size_t)m->c.topk*one;
         size_t usable=cuda_rt.expert_budget>reserve?
             cuda_rt.expert_budget-reserve:0;
@@ -2515,6 +2889,45 @@ static void expert_load_many(Model*m,MoeW*w,const int*eid,int n,Expert**out){
     if(m->prof_detail){m->prof_expert_load+=now_s()-t0;m->prof_expert_misses+=(uint64_t)nm;}
     if(getenv("TIER_TRACE"))for(int i=0;i<nm;i++)fprintf(stderr,"[TIER] layer=%d expert=%d batch=%d\n",w->layer,mid[i],nm);
     pthread_mutex_unlock(&w->lock);free(miss);free(mid);
+}
+/* Resolve resident hits without admitting misses.  Every miss receives a
+ * caller-owned Expert whose three QMats are released after the grouped batch;
+ * cache entries, decode pins, and CUDA residency are therefore unchanged. */
+static void prefill_transient_prepare(Model*m,MoeW*w,const int*eid,int n,
+                                      PrefillPipeSlot*s){
+    if(n<1||n>QW_PREFILL_PIPE_MAX_BATCH)die("invalid transient expert batch");
+    s->layer=w->layer;s->n=n;s->nmiss=0;
+    pthread_mutex_lock(&w->lock);
+    for(int i=0;i<n;i++){
+        int id=eid[i],hit=-1;s->eid[i]=id;
+        w->clock++;if(w->heat[id]!=UINT32_MAX)w->heat[id]++;
+        w->last[id]=w->clock;
+        if((w->clock&4095u)==0)tier_decay(w->heat,m->c.n_experts);
+        for(int slot=0;slot<w->cap;slot++)if(w->expert[slot].eid==id){
+            hit=slot;break;
+        }
+        if(hit>=0){
+            s->loaded[i]=&w->expert[hit];
+            __atomic_fetch_add(&m->tier_hits,1,__ATOMIC_RELAXED);
+        }else{
+            Expert*temporary=&s->temporary[i];memset(temporary,0,sizeof(*temporary));
+            temporary->eid=id;s->loaded[i]=temporary;s->owned[i]=1;
+            s->miss[s->nmiss]=temporary;s->mid[s->nmiss++]=id;
+            __atomic_fetch_add(&m->tier_misses,1,__ATOMIC_RELAXED);
+        }
+    }
+    pthread_mutex_unlock(&w->lock);
+    if(getenv("TIER_TRACE"))for(int i=0;i<s->nmiss;i++)
+        fprintf(stderr,"[TIER_BYPASS] layer=%d expert=%d batch=%d\n",
+                w->layer,s->mid[i],s->nmiss);
+}
+static void prefill_transient_release(PrefillPipeSlot*s){
+    for(int i=0;i<s->n;i++)if(s->owned[i]){
+        free_qmat(&s->temporary[i].gate);free_qmat(&s->temporary[i].up);
+        free_qmat(&s->temporary[i].down);memset(&s->temporary[i],0,sizeof(Expert));
+    }
+    memset(s->loaded,0,sizeof(s->loaded));memset(s->miss,0,sizeof(s->miss));
+    memset(s->owned,0,sizeof(s->owned));s->n=s->nmiss=0;
 }
 static void expert_prefetch_load_set(Model*m,MoeW*w,const int*eid,int n){
     if(n<=0)return;Expert**miss=xcalloc(n,sizeof(*miss));int*mid=xcalloc(n,sizeof(*mid));int nm=0;
@@ -2809,7 +3222,193 @@ done:
     return used;
 }
 #endif
-static void moe_prefill_grouped(Model*m,Layer*l,const float*x,int T,float*out){
+static int moe_prefill_route_gather(int eid,const int*idx,const float*weight,
+                                    const float*x,int T,int K,int H,int*tok,
+                                    float*wt,float*xb){
+    int B=0;
+    for(int t=0;t<T;t++)for(int j=0;j<K;j++)
+        if(idx[(int64_t)t*K+j]==eid){
+            tok[B]=t;wt[B]=weight[(int64_t)t*K+j];B++;break;
+        }
+    for(int b=0;b<B;b++)
+        memcpy(xb+(int64_t)b*H,x+(int64_t)tok[b]*H,
+               (size_t)H*sizeof(float));
+    return B;
+}
+static void moe_prefill_route_scatter(int eid,const int*idx,int K,int H,
+                                      int B,const int*tok,const float*wt,
+                                      const float*tmp,float*routed){
+    for(int b=0;b<B;b++){int t=tok[b],route=0;
+        while(route<K&&idx[(int64_t)t*K+route]!=eid)route++;
+        if(route==K)die("grouped route scatter mismatch");
+        float*ot=routed+((int64_t)t*K+route)*H;
+        const float*tt=tmp+(int64_t)b*H;float g=wt[b];
+        for(int h=0;h<H;h++)ot[h]=tt[h]*g;
+    }
+}
+/* Rows a cold expert must serve before its weights are worth uploading.
+ * PREFILL_COLD_DEVICE=0 disables the device path entirely and restores the
+ * host-only behavior. */
+static int cold_prefill_device_min(void){
+    static int rows=-1;
+    if(rows<0){const char*e=getenv("PREFILL_COLD_DEVICE");
+        rows=e?atoi(e):0;if(rows<0)rows=0;}
+    /* 0 means disabled: return a threshold no batch can reach. */
+    return rows>0?rows:(1<<30);
+}
+static int prefill_expert_batch_size(MoeW*w){
+    return prefill_expert_batch_limit(w->cap);
+}
+static void moe_prefill_compute_expert_batch(
+    Model*m,MoeW*w,Cfg*c,const float*x,int T,const int*idx,
+    const float*weight,int K,int H,const int*eid,int n,int*tok,float*wt,
+    float*xb,float*tmp,float*routed,Expert*const*loaded){
+    for(int i=0;i<n;i++){int B=moe_prefill_route_gather(
+            eid[i],idx,weight,x,T,K,H,tok,wt,xb);
+        if(!B)die("grouped prefill cold expert has no routed token");
+        int device=0;
+#ifdef COLI_CUDA
+        /* Only worth the upload when the expert serves enough rows to amortize
+         * it. At short prompts an expert serves a couple of tokens and the
+         * host path wins, which is what the original measurement found. */
+        if(B>=cold_prefill_device_min())
+            device=cuda_mlp_batch_cold_try(tmp,xb,B,H,&loaded[i]->gate,
+                                           &loaded[i]->up,&loaded[i]->down);
+#endif
+        if(!device)
+            mlp_batch(tmp,xb,B,H,&loaded[i]->gate,&loaded[i]->up,
+                      &loaded[i]->down,c->moe_inter);
+        moe_prefill_route_scatter(eid[i],idx,K,H,B,tok,wt,tmp,routed);
+    }
+}
+static void moe_prefill_cpu_expert_batch(
+    Model*m,MoeW*w,Cfg*c,const float*x,int T,const int*idx,
+    const float*weight,int K,int H,const int*eid,int n,int*tok,float*wt,
+    float*xb,float*tmp,float*routed){
+    Expert**loaded=xcalloc(n,sizeof(*loaded));
+    expert_load_many(m,w,eid,n,loaded);
+    moe_prefill_compute_expert_batch(m,w,c,x,T,idx,weight,K,H,eid,n,tok,
+        wt,xb,tmp,routed,loaded);
+    free(loaded);
+}
+static void moe_prefill_transient_sync(
+    Model*m,MoeW*w,Cfg*c,const float*x,int T,const int*idx,
+    const float*weight,int K,int H,const int*eid,int n,int*tok,float*wt,
+    float*xb,float*tmp,float*routed){
+    int batch=prefill_expert_batch_size(w);
+    for(int off=0;off<n;off+=batch){
+        int take=n-off;if(take>batch)take=batch;PrefillPipeSlot s={0};
+        prefill_transient_prepare(m,w,eid+off,take,&s);
+        double t0=m->prof_detail?now_s():0.;
+        load_expert_set(m,s.miss,s.layer,s.mid,s.nmiss);
+        if(m->prof_detail){m->prof_expert_load+=now_s()-t0;
+            m->prof_expert_misses+=(uint64_t)s.nmiss;}
+        moe_prefill_compute_expert_batch(m,w,c,x,T,idx,weight,K,H,s.eid,
+            s.n,tok,wt,xb,tmp,routed,s.loaded);
+        prefill_transient_release(&s);
+    }
+}
+static uint64_t prefill_pipe_submit(Model*m,MoeW*w,int si,const int*eid,int n){
+    PrefillPipe*p=&m->prefill_pipe;if(!p->started)die("prefill pipeline inactive");
+    pthread_mutex_lock(&p->lock);PrefillPipeSlot*s=&p->slot[si];
+    if(s->state!=PREFILL_PIPE_EMPTY||p->job_slot>=0){
+        pthread_mutex_unlock(&p->lock);
+        die("prefill pipeline slot ownership violation");
+    }
+    memset(s,0,sizeof(*s));s->generation=++p->generation;
+    prefill_transient_prepare(m,w,eid,n,s);
+    if(s->nmiss){s->state=PREFILL_PIPE_LOADING;p->job_slot=si;
+        pthread_cond_signal(&p->work);
+    }else{s->state=PREFILL_PIPE_READY;pthread_cond_broadcast(&p->ready);}
+    uint64_t generation=s->generation;pthread_mutex_unlock(&p->lock);
+    return generation;
+}
+static PrefillPipeSlot*prefill_pipe_wait(Model*m,int si,uint64_t generation){
+    PrefillPipe*p=&m->prefill_pipe;double t0=now_s();pthread_mutex_lock(&p->lock);
+    PrefillPipeSlot*s=&p->slot[si];
+    while(s->generation==generation&&s->state==PREFILL_PIPE_LOADING)
+        pthread_cond_wait(&p->ready,&p->lock);
+    double waited=now_s()-t0;
+    if(s->generation!=generation||s->state!=PREFILL_PIPE_READY||s->rc){
+        pthread_mutex_unlock(&p->lock);
+        die("prefill pipeline producer failed");
+    }
+    s->state=PREFILL_PIPE_COMPUTING;
+    m->pfpipe_batches++;m->pfpipe_experts+=(uint64_t)s->n;
+    m->pfpipe_bytes+=s->read_bytes;m->pfpipe_producer_s+=s->load_s;
+    m->pfpipe_wait_s+=waited;
+    if(m->prof_detail){m->prof_expert_load+=s->load_s;
+        m->prof_expert_misses+=(uint64_t)s->nmiss;}
+    pthread_mutex_unlock(&p->lock);return s;
+}
+static void prefill_pipe_release(Model*m,int si,uint64_t generation){
+    PrefillPipe*p=&m->prefill_pipe;PrefillPipeSlot*s=&p->slot[si];
+    pthread_mutex_lock(&p->lock);
+    if(s->generation!=generation||s->state!=PREFILL_PIPE_COMPUTING){
+        pthread_mutex_unlock(&p->lock);
+        die("prefill pipeline release ownership violation");
+    }
+    s->state=PREFILL_PIPE_RELEASING;pthread_mutex_unlock(&p->lock);
+    prefill_transient_release(s);pthread_mutex_lock(&p->lock);
+    if(s->generation!=generation||s->state!=PREFILL_PIPE_RELEASING){
+        pthread_mutex_unlock(&p->lock);
+        die("prefill pipeline release generation changed");
+    }
+    s->state=PREFILL_PIPE_EMPTY;pthread_cond_broadcast(&p->ready);
+    pthread_mutex_unlock(&p->lock);
+}
+static void moe_prefill_transient_pipeline(
+    Model*m,MoeW*w,Cfg*c,const float*x,int T,const int*idx,
+    const float*weight,int K,int H,const int*eid,int n,int*tok,float*wt,
+    float*xb,float*tmp,float*routed){
+    PrefillPipe*p=&m->prefill_pipe;double wall0=now_s();
+    pthread_mutex_lock(&p->lock);
+    if(p->busy||p->job_slot>=0||p->slot[0].state!=PREFILL_PIPE_EMPTY||
+       p->slot[1].state!=PREFILL_PIPE_EMPTY){
+        pthread_mutex_unlock(&p->lock);
+        die("concurrent prefill pipeline use");
+    }
+    p->busy=1;pthread_mutex_unlock(&p->lock);
+    int batch=prefill_expert_batch_size(w),submitted=0,completed=0,si=0;
+    uint64_t generation[QW_PREFILL_PIPE_SLOTS]={0};
+    int take=n;if(take>batch)take=batch;
+    generation[0]=prefill_pipe_submit(m,w,0,eid,take);submitted=take;
+    while(completed<n){
+        PrefillPipeSlot*s=prefill_pipe_wait(m,si,generation[si]);int done=s->n;
+        int next=si^1;
+        if(submitted<n){take=n-submitted;if(take>batch)take=batch;
+            generation[next]=prefill_pipe_submit(m,w,next,eid+submitted,take);
+            submitted+=take;
+        }
+        double compute0=now_s();
+        prefill_pipe_test_delay("PREFILL_PIPE_TEST_COMPUTE_US");
+        moe_prefill_compute_expert_batch(m,w,c,x,T,idx,weight,K,H,s->eid,
+            s->n,tok,wt,xb,tmp,routed,s->loaded);
+        m->pfpipe_compute_s+=now_s()-compute0;
+        prefill_pipe_release(m,si,generation[si]);completed+=done;si=next;
+    }
+    pthread_mutex_lock(&p->lock);
+    if(p->job_slot>=0||p->slot[0].state!=PREFILL_PIPE_EMPTY||
+       p->slot[1].state!=PREFILL_PIPE_EMPTY){
+        pthread_mutex_unlock(&p->lock);
+        die("prefill pipeline failed to drain");
+    }
+    p->busy=0;pthread_mutex_unlock(&p->lock);
+    m->pfpipe_wall_s+=now_s()-wall0;
+}
+static void moe_prefill_transient_run(
+    Model*m,MoeW*w,Cfg*c,const float*x,int T,const int*idx,
+    const float*weight,int K,int H,const int*eid,int n,int*tok,float*wt,
+    float*xb,float*tmp,float*routed){
+    if(n<=0)return;
+    if(st_env_enabled("PREFILL_LOAD_PIPELINE"))
+        moe_prefill_transient_pipeline(m,w,c,x,T,idx,weight,K,H,eid,n,tok,
+            wt,xb,tmp,routed);
+    else moe_prefill_transient_sync(m,w,c,x,T,idx,weight,K,H,eid,n,tok,wt,
+        xb,tmp,routed);
+}
+static void moe_prefill_grouped(Model*m,Layer*l,const float*x,int T,float*out,
+                                int encode_stream){
     Cfg*c=&m->c;MoeW*w=&l->moe;expert_predict_wait(w);int E=c->n_experts,K=c->topk,H=c->hidden;int*idx=xcalloc((int64_t)T*K,sizeof(int));float*weight=falloc((int64_t)T*K),*tmp=falloc((int64_t)T*H),*routed=falloc((int64_t)T*K*H),*shared=falloc((int64_t)T*H);unsigned char*used=xcalloc(E,1);
     #pragma omp parallel for schedule(static) if(T>1)
     for(int t=0;t<T;t++){float*logit=falloc(E);qmat_mul_ex(logit,x+(int64_t)t*H,&w->router,0);router_topk(logit,E,K,idx+(int64_t)t*K,weight+(int64_t)t*K);free(logit);}
@@ -2820,31 +3419,99 @@ static void moe_prefill_grouped(Model*m,Layer*l,const float*x,int T,float*out){
     mlp_batch(shared,x,T,H,&w->shared_gate,&w->shared_up,&w->shared_down,c->shared_inter);
     #pragma omp parallel for schedule(static) if(T>1)
     for(int t=0;t<T;t++){float*ot=shared+(int64_t)t*H,sg;qmat_mul_ex(&sg,x+(int64_t)t*H,&w->shared_scale,0);sg=sigmoidf_stable(sg);for(int h=0;h<H;h++)ot[h]*=sg;}
-    if(!expert_predict_enabled())for(int eid=0;eid<E;eid++)if(used[eid])expert_prefetch_submit(m,w->layer,eid);
+    int bypass=encode_stream&&st_env_enabled("PREFILL_CACHE_BYPASS");
+    int pipeline=bypass&&st_env_enabled("PREFILL_LOAD_PIPELINE");
+    if(!expert_predict_enabled()&&!pipeline)
+        for(int eid=0;eid<E;eid++)if(used[eid])
+            expert_prefetch_submit(m,w->layer,eid);
     /* Gather the tokens routed to each expert, run one batched SwiGLU, then
-     * scatter the weighted results back. The expert's weights are streamed once
-     * per layer instead of once per routed token. */
+     * scatter the weighted results back. Cold experts retain the once-per-layer
+     * CPU path: uploading prompt-wide routes churned the bounded device LRU and
+     * was measured 2.2x slower. With an expanded-q4 route atlas, however, an
+     * already-resident expert can execute directly on CUDA with no weight upload
+     * or host duplicate. Cold experts can be submitted to persistent io_uring
+     * in small ordered groups; PREFILL_EXPERT_BATCH=1 is the legacy control. */
     int *tok=xcalloc(T,sizeof(int));float *wt=falloc(T),*xb=falloc((int64_t)T*H);
-    /* No cuda_expert_preload here.  This function has no CUDA matmul: mlp_batch
-     * goes through qmat_mul_batch, whose cuda_qmat_batch_try rejects B>8, so the
-     * work always lands on the CPU panel GEMM and an uploaded copy is never read.
-     * With a prompt-sized batch essentially every expert is routed, so preloading
-     * pushed all 40x256 of them through a 6GiB LRU that holds ~3.8k: measured
-     * 38,927 uploads, 27,111 evictions, 0 cache hits, and MoE prefill 2.2x slower
-     * than the same build with the GPU idle (272.3s vs 124.7s).  The heat-map
-     * prewarm at startup is what populates the device cache for decode. */
-    for(int eid=0;eid<E;eid++)if(used[eid]){Expert*e=expert_load_impl(m,w,eid,NULL,0);
-        int B=0;
-        for(int t=0;t<T;t++)for(int j=0;j<K;j++)if(idx[(int64_t)t*K+j]==eid){tok[B]=t;wt[B]=weight[(int64_t)t*K+j];B++;break;}
-        if(!B)continue;
-        for(int b=0;b<B;b++)memcpy(xb+(int64_t)b*H,x+(int64_t)tok[b]*H,(size_t)H*sizeof(float));
-        mlp_batch(tmp,xb,B,H,&e->gate,&e->up,&e->down,c->moe_inter);
-        for(int b=0;b<B;b++){int t=tok[b],route=0;while(route<K&&idx[(int64_t)t*K+route]!=eid)route++;if(route==K)die("grouped route scatter mismatch");float*ot=routed+((int64_t)t*K+route)*H,*tt=tmp+(int64_t)b*H,g=wt[b];for(int h=0;h<H;h++)ot[h]=tt[h]*g;}
+    int load_batch=prefill_expert_batch_size(w);
+    int*pending=xcalloc(bypass?E:load_batch,sizeof(int)),np=0;
+    for(int eid=0;eid<E;eid++)if(used[eid]){
+        int device=0;
+#ifdef COLI_CUDA
+        if(m->q3_route_atlas&&!cuda_q3_native_enabled()&&
+           cuda_has_expert(m,w->layer,eid)){
+            if(np){
+                if(bypass)moe_prefill_transient_run(m,w,c,x,T,idx,weight,K,H,
+                    pending,np,tok,wt,xb,tmp,routed);
+                else moe_prefill_cpu_expert_batch(m,w,c,x,T,idx,weight,K,H,
+                    pending,np,tok,wt,xb,tmp,routed);
+                np=0;
+            }
+            Expert cached={0};int B=moe_prefill_route_gather(
+                eid,idx,weight,x,T,K,H,tok,wt,xb);
+            if(B&&cuda_cached_expert(m,w->layer,eid,&cached)&&
+               cuda_mlp_batch_cached_try(tmp,xb,B,H,&cached.gate,&cached.up,
+                                         &cached.down)){
+                expert_heat_touch(m,w,eid);
+                __atomic_fetch_add(&m->tier_gpu_hits,1,__ATOMIC_RELAXED);
+                moe_prefill_route_scatter(
+                    eid,idx,K,H,B,tok,wt,tmp,routed);
+                device=1;
+            }
+        }
+#endif
+        if(!device){pending[np++]=eid;if(!bypass&&np==load_batch){
+            moe_prefill_cpu_expert_batch(m,w,c,x,T,idx,weight,K,H,
+                pending,np,tok,wt,xb,tmp,routed);np=0;}}
+    }
+    if(np){
+        if(bypass)moe_prefill_transient_run(m,w,c,x,T,idx,weight,K,H,
+            pending,np,tok,wt,xb,tmp,routed);
+        else moe_prefill_cpu_expert_batch(m,w,c,x,T,idx,weight,K,H,
+            pending,np,tok,wt,xb,tmp,routed);
     }
     for(int t=0;t<T;t++){float*ot=out+(int64_t)t*H;memset(ot,0,(size_t)H*sizeof(float));for(int j=0;j<K;j++){float*rt=routed+((int64_t)t*K+j)*H;for(int h=0;h<H;h++)ot[h]+=rt[h];}for(int h=0;h<H;h++)ot[h]+=shared[(int64_t)t*H+h];}
-    free(tok);free(wt);free(xb);
+    free(tok);free(wt);free(xb);free(pending);
     free(idx);free(weight);free(tmp);free(routed);free(shared);free(used);
 }
+#ifdef COLI_CUDA
+/* Diagnostic for the representation seam used by atlas-assisted prefill. It
+ * compares the ordinary CPU grouped-int3 result with the cached expanded-q4
+ * CUDA batch without involving serving, session state, or cold uploads. */
+static int cuda_cached_prefill_selftest(Model*m){
+    if(!cuda_rt.active||m->c.n_layers<1||m->c.n_experts<1){
+        fprintf(stderr,"[Q3_PREFILL_CACHE_TEST] CUDA/model unavailable\n");
+        return 2;
+    }
+    MoeW*w=&m->layer[0].moe;Expert*e=expert_load_impl(m,w,0,NULL,0);
+    if(!e||e->gate.fmt!=3||cuda_q3_native_enabled()){
+        fprintf(stderr,"[Q3_PREFILL_CACHE_TEST] expanded-q4 q3 expert unavailable\n");
+        return 2;
+    }
+    int B=3,H=m->c.hidden,I=m->c.moe_inter;
+    float*x=falloc((int64_t)B*H),*cpu=falloc((int64_t)B*H);
+    float*gpu=falloc((int64_t)B*H);
+    for(int64_t i=0;i<(int64_t)B*H;i++)x[i]=sinf((float)(i+1)*0.03125f);
+    mlp_batch(cpu,x,B,H,&e->gate,&e->up,&e->down,I);
+    cuda_expert_preload(e);Expert cached={0};
+    uint64_t batch0=cuda_rt.q3_atlas_prefill_batches;
+    uint64_t token0=cuda_rt.q3_atlas_prefill_tokens;
+    int used=cuda_cached_expert(m,0,0,&cached)&&
+        cuda_mlp_batch_cached_try(gpu,x,B,H,&cached.gate,&cached.up,
+                                  &cached.down);
+    float md=0.f,mx=0.f;
+    if(used)for(int64_t i=0;i<(int64_t)B*H;i++){
+        float d=fabsf(cpu[i]-gpu[i]),a=fabsf(cpu[i]);
+        if(d>md)md=d;if(a>mx)mx=a;
+    }
+    float tol=0.002f*(1.f+mx);
+    int counted=cuda_rt.q3_atlas_prefill_batches==batch0+1&&
+        cuda_rt.q3_atlas_prefill_tokens==token0+(uint64_t)B;
+    fprintf(stderr,
+        "[Q3_PREFILL_CACHE_TEST] used=%d batch=%d maxdiff=%.8g tol=%.8g counters=%d\n",
+        used,B,md,tol,counted);
+    free(x);free(cpu);free(gpu);return used&&counted&&md<=tol?0:2;
+}
+#endif
 static void layer_forward_slot_batch(Model*m,Layer*l,float*x,int B,const int*slot,const int*pos,
                                      ResidentLayerState*resident,int resident_slots,float*conv_state,float*gdn_state,float*k_cache,float*v_cache,
                                      uint16_t*k_cache16,uint16_t*v_cache16,int max_seq){
@@ -2858,7 +3525,7 @@ static void layer_forward_slot_batch(Model*m,Layer*l,float*x,int B,const int*slo
     if(m->prof_detail){if(l->type==LT_LINEAR)m->prof_gdn+=now_s()-core_t0;else m->prof_attn+=now_s()-core_t0;}
     #pragma omp parallel for schedule(static) if(B>1)
     for(int row=0;row<B;row++){float*xr=x+(int64_t)row*H,*mr=mix+(int64_t)row*H,*nr=n+(int64_t)row*H;for(int h=0;h<H;h++)xr[h]+=mr[h];rmsnorm_zero(nr,xr,l->post_norm,H,c->eps);}
-    double moe_t0=m->prof_detail?now_s():0.;moe_prefill_grouped(m,l,n,B,moe);
+    double moe_t0=m->prof_detail?now_s():0.;moe_prefill_grouped(m,l,n,B,moe,0);
     if(m->prof_detail)m->prof_moe+=now_s()-moe_t0;
     #pragma omp parallel for schedule(static) if(B>1)
     for(int row=0;row<B;row++){float*xr=x+(int64_t)row*H,*er=moe+(int64_t)row*H;for(int h=0;h<H;h++)xr[h]+=er[h];}
@@ -3037,7 +3704,7 @@ static int resident_forward_tokens_ex(Model*m,ResidentBatchState*s,const int*slo
                         "resident MoE fallback boundary");ok=0;break;}
                     cuda_rt.resident_d2h+=(uint64_t)B*c->hidden*sizeof(float);
                 }
-                moe_prefill_grouped(m,l,n,B,moe);
+                moe_prefill_grouped(m,l,n,B,moe,0);
                 if(!cuda_resident_moe_commit(m,s,moe,B)){ok=0;break;}
                 cuda_rt.resident_h2d+=(uint64_t)B*c->hidden*sizeof(float);
                 cuda_rt.resident_host_moe++;
@@ -3189,12 +3856,17 @@ static void gdn_decode_block(Model*m,Layer*l,const float*x,int T,int base,float*
 
 /* Target-model block verification.  The returned row t is the distribution
  * after consuming token[t], and hidden[t] is its post-final-norm state. */
-static void forward_decode_block(Model*m,const int*token,int T,float*logits,float*hidden){
+static void forward_decode_block(Model*m,const int*token,int T,float*logits,
+                                 float*hidden,int encode_stream){
     Cfg*c=&m->c;if(T<1||m->pos+T>m->max_seq)die("invalid speculative target block");int base=m->pos;
     float*x=falloc((int64_t)T*c->hidden),*n=falloc((int64_t)T*c->hidden),*mix=falloc((int64_t)T*c->hidden);
     for(int t=0;t<T;t++){if(token[t]<0||token[t]>=c->vocab)die("speculative token outside vocab");qmat_row(x+(int64_t)t*c->hidden,&m->embed,token[t]);}
     for(int li=0;li<c->n_layers;li++){
-        Layer*l=&m->layer[li];expert_predict_submit(m,&l->moe);for(int t=0;t<T;t++)rmsnorm_zero(n+(int64_t)t*c->hidden,x+(int64_t)t*c->hidden,l->input_norm,c->hidden,c->eps);
+        Layer*l=&m->layer[li];
+        if(!(encode_stream&&st_env_enabled("PREFILL_CACHE_BYPASS")))
+            expert_predict_submit(m,&l->moe);
+        for(int t=0;t<T;t++)rmsnorm_zero(n+(int64_t)t*c->hidden,
+            x+(int64_t)t*c->hidden,l->input_norm,c->hidden,c->eps);
         double core_t0=m->prof_detail?now_s():0.;if(l->type==LT_LINEAR)gdn_decode_block(m,l,n,T,base,mix);else{
 #ifdef COLI_CUDA
             int prior=cuda_suppress;if(cuda_spec_full_enabled())cuda_suppress=0;
@@ -3207,7 +3879,8 @@ static void forward_decode_block(Model*m,const int*token,int T,float*logits,floa
         for(int t=0;t<T;t++){float*xt=x+(int64_t)t*c->hidden;for(int i=0;i<c->hidden;i++)xt[i]+=mix[(int64_t)t*c->hidden+i];rmsnorm_zero(n+(int64_t)t*c->hidden,xt,l->post_norm,c->hidden,c->eps);}
         double moe_t0=m->prof_detail?now_s():0.;
 #ifdef COLI_CUDA
-        if(cuda_spec_full_enabled()){
+        if(cuda_spec_full_enabled()&&
+           !(encode_stream&&st_env_enabled("PREFILL_CACHE_BYPASS"))){
             int prior=cuda_suppress;cuda_suppress=0;int batch_used=moe_cuda_block(m,l,n,T,mix);
             if(!batch_used)for(int t=0;t<T;t++)moe_forward(m,l,n+(int64_t)t*c->hidden,mix+(int64_t)t*c->hidden);
             const char*check_env=getenv("CUDA_SPEC_MOE_CHECK"),*exact_env=getenv("CUDA_SPEC_MOE_EXACT");
@@ -3216,7 +3889,7 @@ static void forward_decode_block(Model*m,const int*token,int T,float*logits,floa
             cuda_suppress=prior;
         }else
 #endif
-        moe_prefill_grouped(m,l,n,T,mix);if(m->prof_detail)m->prof_moe+=now_s()-moe_t0;for(int64_t i=0;i<(int64_t)T*c->hidden;i++)x[i]+=mix[i];
+        moe_prefill_grouped(m,l,n,T,mix,encode_stream);if(m->prof_detail)m->prof_moe+=now_s()-moe_t0;for(int64_t i=0;i<(int64_t)T*c->hidden;i++)x[i]+=mix[i];
     }
     for(int t=0;t<T;t++)rmsnorm_zero(n+(int64_t)t*c->hidden,x+(int64_t)t*c->hidden,m->final_norm,c->hidden,c->eps);
     double lm_t0=m->prof_detail?now_s():0.;
@@ -3242,7 +3915,7 @@ static void target_forward_block(Model*m,const int*token,int T,float*logits){
 #ifdef COLI_CUDA
     int prior=cuda_suppress;cuda_suppress=1;
 #endif
-    forward_decode_block(m,token,T,logits,NULL);
+    forward_decode_block(m,token,T,logits,NULL,0);
 #ifdef COLI_CUDA
     cuda_suppress=prior;
 #endif
@@ -3390,12 +4063,13 @@ static int resident_clone_slot(Model*m,ResidentBatchState*r,int dst,int src){
 static int resident_forward_suffix(Model*m,ResidentBatchState*r,int slot,
                                    const int*token,int T){
     if(T<1)return 1;
-    if(T==1)return resident_forward_tokens(m,r,&slot,token,1);
+    if(T==1&&!st_env_enabled("PREFILL_CACHE_BYPASS"))
+        return resident_forward_tokens(m,r,&slot,token,1);
     SessionState state={0};float*logits=NULL;int ok=resident_export_session(m,r,slot,&state);
     if(ok)ok=session_state_restore(m,&state,NULL);
     if(ok){
         logits=falloc((int64_t)T*m->c.vocab);
-        forward_decode_block(m,token,T,logits,NULL);
+        forward_decode_block(m,token,T,logits,NULL,1);
         ok=resident_import_model_slot(m,r,slot,logits+(int64_t)(T-1)*m->c.vocab);
     }
     free(logits);session_state_free(&state);return ok;
@@ -3432,7 +4106,7 @@ static double forward_prefill_core(Model*m,const int*token,int T,float*logits,in
         if(m->prof_detail){if(l->type==LT_LINEAR)m->prof_gdn+=now_s()-core_t0;else m->prof_attn+=now_s()-core_t0;}
         for(int t=0;t<T;t++){float*xt=x+(int64_t)t*c->hidden;for(int i=0;i<c->hidden;i++)xt[i]+=mix[(int64_t)t*c->hidden+i];rmsnorm_zero(n+(int64_t)t*c->hidden,xt,l->post_norm,c->hidden,c->eps);}
         double moe_t0=m->prof_detail?now_s():0.;
-        if(grouped_moe){moe_prefill_grouped(m,l,n,T,mix);for(int t=0;t<T;t++){float*xt=x+(int64_t)t*c->hidden;for(int i=0;i<c->hidden;i++)xt[i]+=mix[(int64_t)t*c->hidden+i];}}
+        if(grouped_moe){moe_prefill_grouped(m,l,n,T,mix,1);for(int t=0;t<T;t++){float*xt=x+(int64_t)t*c->hidden;for(int i=0;i<c->hidden;i++)xt[i]+=mix[(int64_t)t*c->hidden+i];}}
         else for(int t=0;t<T;t++){float*xt=x+(int64_t)t*c->hidden;moe_forward(m,l,n+(int64_t)t*c->hidden,moe);for(int i=0;i<c->hidden;i++)xt[i]+=moe[i];}
         if(m->prof_detail)m->prof_moe+=now_s()-moe_t0;
     }
@@ -3682,7 +4356,8 @@ static int serve_prefill_step(Model*m,ResidentBatchState*resident,
     if(!job||!job->active)return -1;
     int T=job->block_tokens;if(!T)return 1;Cfg*c=&m->c;
     if(job->layer<c->n_layers){int li=job->layer;Layer*l=&m->layer[li];
-        expert_predict_submit(m,&l->moe);
+        if(!st_env_enabled("PREFILL_CACHE_BYPASS"))
+            expert_predict_submit(m,&l->moe);
         #pragma omp parallel for schedule(static) if(T>1)
         for(int t=0;t<T;t++)rmsnorm_zero(job->n+(int64_t)t*c->hidden,
             job->x+(int64_t)t*c->hidden,l->input_norm,c->hidden,c->eps);
@@ -3709,7 +4384,7 @@ static int serve_prefill_step(Model*m,ResidentBatchState*resident,
             rmsnorm_zero(job->n+(int64_t)t*c->hidden,xt,l->post_norm,
                          c->hidden,c->eps);}
         double moe_t0=m->prof_detail?now_s():0.;
-        moe_prefill_grouped(m,l,job->n,T,job->mix);
+        moe_prefill_grouped(m,l,job->n,T,job->mix,1);
         if(m->prof_detail)m->prof_moe+=now_s()-moe_t0;
         #pragma omp parallel for schedule(static) if(T>1)
         for(int64_t i=0;i<(int64_t)T*c->hidden;i++)job->x[i]+=job->mix[i];
@@ -3744,10 +4419,13 @@ typedef struct {
     float*logits;
     double started,request_started,prof_start[5],decode_prof_start[5];
     double cuda_prof_start[8],decode_cuda_prof_start[8];
+    PrefillPipeSnapshot pfpipe_start,pfpipe_end;
     uint64_t tier_hit_start,tier_gpu_hit_start,tier_miss_start;
-    uint64_t read_start,direct_start,cuda_tx_start,decode_cuda_tx_start;
+    uint64_t read_start,direct_start,uring_batch_start,uring_read_start;
+    uint64_t cuda_tx_start,decode_cuda_tx_start;
     uint64_t decode_tier_hit_start,decode_tier_gpu_hit_start;
     uint64_t decode_tier_miss_start,decode_read_start,decode_direct_start;
+    uint64_t decode_uring_batch_start,decode_uring_read_start;
     ServePrefillJob prefill;
 } MuxRuntimeSlot;
 
@@ -3932,6 +4610,9 @@ static int run_serve_mux(Model*m){
                 r->tier_hit_start=m->tier_hits;r->tier_gpu_hit_start=m->tier_gpu_hits;
                 r->tier_miss_start=m->tier_misses;r->read_start=m->S.read_bytes;
                 r->direct_start=m->S.direct_bytes;
+                r->uring_batch_start=m->S.uring_batches;
+                r->uring_read_start=m->S.uring_reads;
+                r->pfpipe_start=prefill_pipe_snapshot(m);
 #ifdef COLI_CUDA
                 {unsigned long long tx=0;if(cuda_rt.active&&!coli_cuda_profile_snapshot(cuda_rt.ctx,&tx,r->cuda_prof_start))r->cuda_tx_start=(uint64_t)tx;else{r->cuda_tx_start=0;memset(r->cuda_prof_start,0,sizeof(r->cuda_prof_start));}}
 #endif
@@ -3954,18 +4635,36 @@ static int run_serve_mux(Model*m){
                     if(reuse){
                         int suffix=n-r->nhistory;
                         const char*block=getenv("SERVE_SUFFIX_BLOCK");
-                        if(block&&atoi(block)!=0)prepared=resident_forward_suffix(m,&resident,frame.slot,ids+r->nhistory,suffix);
+                        if((block&&atoi(block)!=0)||
+                           st_env_enabled("PREFILL_CACHE_BYPASS"))
+                            prepared=resident_forward_suffix(m,&resident,frame.slot,
+                                ids+r->nhistory,suffix);
                         else for(int i=r->nhistory;i<n;i++){int sid=frame.slot;if(!resident_forward_tokens(m,&resident,&sid,ids+i,1)){prepared=0;break;}}
                     }
                     else{float*prefill_logits=falloc(m->c.vocab);model_reset(m);prefill_dispatch(m,ids,n,prefill_logits);prepared=resident_import_model_slot(m,&resident,frame.slot,prefill_logits);free(prefill_logits);}
                 }else{
                     if(!r->logits)r->logits=falloc(m->c.vocab);float*logits=r->logits;
-                    if(reuse){if(!session_state_restore(m,&r->state,logits))reuse=0;else for(int i=r->nhistory;i<n;i++)forward_token(m,ids[i],logits);}
+                    if(reuse){
+                        if(!session_state_restore(m,&r->state,logits))reuse=0;
+                        else if(st_env_enabled("PREFILL_CACHE_BYPASS")&&
+                                n>r->nhistory){
+                            int suffix=n-r->nhistory;
+                            float*block_logits=falloc((int64_t)suffix*m->c.vocab);
+                            forward_decode_block(m,ids+r->nhistory,suffix,
+                                                 block_logits,NULL,1);
+                            memcpy(logits,block_logits+
+                                (int64_t)(suffix-1)*m->c.vocab,
+                                (size_t)m->c.vocab*sizeof(float));
+                            free(block_logits);
+                        }else for(int i=r->nhistory;i<n;i++)
+                            forward_token(m,ids[i],logits);
+                    }
                     if(!reuse){model_reset(m);prefill_dispatch(m,ids,n,logits);}
                     prepared=session_state_save(m,&r->state);
                 }
                 if(!prepared||!mux_history_set(r,ids,n)){r->state_valid=0;r->nhistory=0;mux_write_error(stdout,frame.id,"INTERNAL");mux_scheduler_release(&sched,frame.slot,NULL);free(ids);mux_frame_clear(&frame);continue;}
                 r->state_valid=1;
+                r->pfpipe_end=prefill_pipe_snapshot(m);
                 r->decode_tier_hit_start=m->tier_hits;
                 r->decode_tier_gpu_hit_start=m->tier_gpu_hits;
                 r->decode_tier_miss_start=m->tier_misses;
@@ -3973,6 +4672,8 @@ static int run_serve_mux(Model*m){
                 r->decode_direct_start=m->S.direct_bytes;
                 r->decode_prof_start[0]=m->prof_expert_load;
                 r->decode_prof_start[1]=m->prof_moe;
+                r->decode_uring_batch_start=m->S.uring_batches;
+                r->decode_uring_read_start=m->S.uring_reads;
                 r->decode_prof_start[2]=m->prof_gdn;
                 r->decode_prof_start[3]=m->prof_attn;
                 r->decode_prof_start[4]=m->prof_lm;
@@ -4009,6 +4710,7 @@ static int run_serve_mux(Model*m){
                 mux_scheduler_release(&sched,prefill_slot,NULL);continue;
             }
             int n=job->total;uint64_t id=job->id;
+            r->pfpipe_end=prefill_pipe_snapshot(m);
             if(!mux_prompt_checkpoint_set(r,job->ids,n))r->prompt_checkpoint_valid=0;
             free(r->history);r->history=job->ids;r->nhistory=n;
             r->history_cap=n;job->ids=NULL;r->state_valid=1;
@@ -4020,6 +4722,8 @@ static int run_serve_mux(Model*m){
             r->decode_direct_start=m->S.direct_bytes;
             r->decode_prof_start[0]=m->prof_expert_load;
             r->decode_prof_start[1]=m->prof_moe;
+            r->decode_uring_batch_start=m->S.uring_batches;
+            r->decode_uring_read_start=m->S.uring_reads;
             r->decode_prof_start[2]=m->prof_gdn;
             r->decode_prof_start[3]=m->prof_attn;
             r->decode_prof_start[4]=m->prof_lm;
@@ -4050,7 +4754,7 @@ static int run_serve_mux(Model*m){
             m->decode_phase=0;
             for(int ri=0;ri<active;ri++){int sid=rows[ri];mux_slot*q=&sched.slot[sid];MuxRuntimeSlot*r=&runtime[sid];
                 if(!advanced||(did_advance[ri]&&!mux_history_append(r,token[ri]))){r->state_valid=0;r->nhistory=0;mux_write_error(stdout,q->id,"INTERNAL");mux_scheduler_release(&sched,sid,NULL);continue;}
-                if(stop[ri]||limited[ri]){if(!limited[ri])mux_scheduler_done(&sched,sid);if(!mux_checkpoint_slot(m,&resident,resident_mode,r,sid,session_dir)){mux_write_error(stdout,q->id,"INTERNAL");mux_scheduler_release(&sched,sid,NULL);continue;}telemetry_turn_emit(m,q->id,r->request_started,r->prof_start,r->started,r->decode_prof_start,r->tier_hit_start,r->tier_gpu_hit_start,r->tier_miss_start,r->read_start,r->direct_start,r->decode_tier_hit_start,r->decode_tier_gpu_hit_start,r->decode_tier_miss_start,r->decode_read_start,r->decode_direct_start,r->cuda_tx_start,r->cuda_prof_start,r->decode_cuda_tx_start,r->decode_cuda_prof_start);double dt=now_s()-r->started;mux_write_done(stdout,q->id,q->emitted,dt>0?q->emitted/dt:0.,mux_cache_hit_percent(m,r),0.,q->prompt_tokens,limited[ri]);expert_decode_pins_refresh(m);mux_scheduler_release(&sched,sid,NULL);}
+                if(stop[ri]||limited[ri]){if(!limited[ri])mux_scheduler_done(&sched,sid);if(!mux_checkpoint_slot(m,&resident,resident_mode,r,sid,session_dir)){mux_write_error(stdout,q->id,"INTERNAL");mux_scheduler_release(&sched,sid,NULL);continue;}telemetry_turn_emit(m,q->id,r->request_started,r->prof_start,r->started,r->decode_prof_start,r->tier_hit_start,r->tier_gpu_hit_start,r->tier_miss_start,r->read_start,r->direct_start,r->uring_batch_start,r->uring_read_start,r->decode_tier_hit_start,r->decode_tier_gpu_hit_start,r->decode_tier_miss_start,r->decode_read_start,r->decode_direct_start,r->decode_uring_batch_start,r->decode_uring_read_start,&r->pfpipe_start,&r->pfpipe_end,r->cuda_tx_start,r->cuda_prof_start,r->decode_cuda_tx_start,r->decode_cuda_prof_start);double dt=now_s()-r->started;mux_write_done(stdout,q->id,q->emitted,dt>0?q->emitted/dt:0.,mux_cache_hit_percent(m,r),0.,q->prompt_tokens,limited[ri]);expert_decode_pins_refresh(m);expert_map_checkpoint(m);mux_scheduler_release(&sched,sid,NULL);}
             }
             continue;
         }
@@ -4074,10 +4778,10 @@ static int run_serve_mux(Model*m){
             if(stop||limited){
                 if(!limited)mux_scheduler_done(&sched,slot);
                 if(!mux_checkpoint_slot(m,&resident,resident_mode,r,slot,session_dir)){mux_write_error(stdout,q->id,"INTERNAL");mux_scheduler_release(&sched,slot,NULL);continue;}
-                telemetry_turn_emit(m,q->id,r->request_started,r->prof_start,r->started,r->decode_prof_start,r->tier_hit_start,r->tier_gpu_hit_start,r->tier_miss_start,r->read_start,r->direct_start,r->decode_tier_hit_start,r->decode_tier_gpu_hit_start,r->decode_tier_miss_start,r->decode_read_start,r->decode_direct_start,r->cuda_tx_start,r->cuda_prof_start,r->decode_cuda_tx_start,r->decode_cuda_prof_start);
+                telemetry_turn_emit(m,q->id,r->request_started,r->prof_start,r->started,r->decode_prof_start,r->tier_hit_start,r->tier_gpu_hit_start,r->tier_miss_start,r->read_start,r->direct_start,r->uring_batch_start,r->uring_read_start,r->decode_tier_hit_start,r->decode_tier_gpu_hit_start,r->decode_tier_miss_start,r->decode_read_start,r->decode_direct_start,r->decode_uring_batch_start,r->decode_uring_read_start,&r->pfpipe_start,&r->pfpipe_end,r->cuda_tx_start,r->cuda_prof_start,r->decode_cuda_tx_start,r->decode_cuda_prof_start);
                 double dt=now_s()-r->started;
                 mux_write_done(stdout,q->id,q->emitted,dt>0?q->emitted/dt:0.,mux_cache_hit_percent(m,r),0.,q->prompt_tokens,limited);
-                expert_decode_pins_refresh(m);
+                expert_decode_pins_refresh(m);expert_map_checkpoint(m);
                 mux_scheduler_release(&sched,slot,NULL);
             }
         }
@@ -4097,6 +4801,15 @@ int main(void){
 #else
     if(getenv("COLI_CUDA")&&atoi(getenv("COLI_CUDA"))!=0)fprintf(stderr,"[CUDA] binary was built without CUDA=1; using CPU\n");
 #endif
+    if(getenv("Q3_PREFILL_CACHE_TEST")&&
+       atoi(getenv("Q3_PREFILL_CACHE_TEST"))!=0){
+#ifdef COLI_CUDA
+        return cuda_cached_prefill_selftest(&m);
+#else
+        fprintf(stderr,"[Q3_PREFILL_CACHE_TEST] CUDA build required\n");
+        return 2;
+#endif
+    }
     if(getenv("SERVE_BATCH")&&atoi(getenv("SERVE_BATCH"))!=0)return run_serve_mux(&m);
     Cfg*c=&m.c;int nf=0;for(int i=0;i<c->n_layers;i++)nf+=c->layer_type[i]==LT_FULL;
     const char*format=m.matrix_i3?(m.matrix_i8||m.matrix_i4?"mixed-with-int3-g128":"int3-g128"):(m.matrix_i2?(m.matrix_i8||m.matrix_i4?"mixed-with-int2-g128":"int2-g128"):(m.matrix_i8&&m.matrix_i4?"mixed-int8/int4-g128":(m.matrix_i8?"int8":(m.matrix_i4?"int4-g128":"bf16/fp32"))));

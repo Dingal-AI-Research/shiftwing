@@ -104,6 +104,10 @@ ENGINE_ENV_KEYS = frozenset(
         "OMP_NUM_THREADS",
         "OMP_PLACES",
         "OMP_PROC_BIND",
+        "PREFILL_CACHE_BYPASS",
+        "PREFILL_COLD_DEVICE",
+        "PREFILL_EXPERT_BATCH",
+        "PREFILL_LOAD_PIPELINE",
         "PIN",
         "PIN_GB",
         "PIPE",
@@ -157,17 +161,23 @@ def isolated_engine_env(
     return env
 
 
-def engine_source_sha256(root: Path) -> str:
-    """Hash the complete repository-local source of the qualification engine."""
-
+def _source_sha256(root: Path, files: tuple[str, ...]) -> str:
     root = root.resolve()
     digest = hashlib.sha256()
-    for relative in ENGINE_SOURCE_FILES:
+    for relative in files:
         path = root / relative
         data = path.read_bytes()
+        if not data:
+            raise ValueError(f"source fingerprint input is empty: {relative}")
         encoded = relative.encode("utf-8")
         digest.update(len(encoded).to_bytes(4, "little"))
         digest.update(encoded)
         digest.update(len(data).to_bytes(8, "little"))
         digest.update(data)
     return digest.hexdigest()
+
+
+def engine_source_sha256(root: Path) -> str:
+    """Hash the unchanged Qwen/Ornith rollback engine source contract."""
+
+    return _source_sha256(root, ENGINE_SOURCE_FILES)

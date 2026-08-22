@@ -1088,6 +1088,21 @@ def apply_engine_defaults(env):
     return env
 
 
+def _sequence_split(fields, offset):
+    """Read the optional trailing GDN/full-attention pair from a PERF row.
+
+    `attention_s` reports the two summed. The pair is appended after the
+    optional CUDA-event suffix, so its offset depends on whether that suffix is
+    present, and an engine emitting neither is still valid.
+    """
+    if len(fields) < offset + 2:
+        return None
+    try:
+        return float(fields[offset]), float(fields[offset + 1])
+    except (TypeError, ValueError):
+        return None
+
+
 class Engine:
     def __init__(self, executable, model, cap=8, max_tokens=1024, env=None, kv_slots=1):
         child_env = dict(env or os.environ, SNAP=str(model), SERVE="1", SERVE_BATCH="1",
@@ -1251,6 +1266,7 @@ class Engine:
                             turn["prompt_tokens"] = stats["prompt_tokens"]
                             turn["completion_tokens"] = stats["completion_tokens"]
                             turn["forwards"] = stats["completion_tokens"]
+                            stats["profile"] = dict(turn)
                             break
                     with self.pending_lock:
                         events = self.pending.pop(request_id, None)
@@ -1294,6 +1310,13 @@ class Engine:
                             "cuda_shared_down_s": float(fields[16]),
                             "cuda_download_s": float(fields[17]),
                         })
+                    # attention_s sums the GDN and full-attention layers. The
+                    # trailing pair splits it. It follows the optional CUDA
+                    # suffix, so an engine that emits neither, or only CUDA,
+                    # still parses: the split is read only when present.
+                    split = _sequence_split(fields, 18 if len(fields) >= 18 else 9)
+                    if split:
+                        turn["gdn_s"], turn["attn_s"] = split
                     self.profile.append(turn)
                     self.profile_seq += 1
                 elif kind == "DPERF" and len(fields) >= 9:
@@ -1321,8 +1344,12 @@ class Engine:
                                     "decode_cuda_shared_down_s": float(fields[16]),
                                     "decode_cuda_download_s": float(fields[17]),
                                 })
+                            split = _sequence_split(
+                                fields, 18 if len(fields) >= 18 else 9)
+                            if split:
+                                turn["decode_gdn_s"], turn["decode_attn_s"] = split
                             break
-                elif kind == "CACHE" and len(fields) == 7:
+                elif kind == "CACHE" and len(fields) in (7, 9):
                     request_id = fields[1]
                     for turn in reversed(self.profile):
                         if turn.get("request_id") == request_id:
@@ -1332,9 +1359,11 @@ class Engine:
                                 "expert_misses": int(fields[4]),
                                 "expert_read_bytes": int(fields[5]),
                                 "expert_direct_bytes": int(fields[6]),
+                                "expert_uring_batches": int(fields[7]) if len(fields) == 9 else 0,
+                                "expert_uring_reads": int(fields[8]) if len(fields) == 9 else 0,
                             })
                             break
-                elif kind == "DCACHE" and len(fields) == 7:
+                elif kind == "DCACHE" and len(fields) in (7, 9):
                     request_id = fields[1]
                     for turn in reversed(self.profile):
                         if turn.get("request_id") == request_id:
@@ -1344,6 +1373,23 @@ class Engine:
                                 "decode_expert_misses": int(fields[4]),
                                 "decode_expert_read_bytes": int(fields[5]),
                                 "decode_expert_direct_bytes": int(fields[6]),
+                                "decode_expert_uring_batches": int(fields[7]) if len(fields) == 9 else 0,
+                                "decode_expert_uring_reads": int(fields[8]) if len(fields) == 9 else 0,
+                            })
+                            break
+                elif kind == "PFPIPE" and len(fields) == 10:
+                    request_id = fields[1]
+                    for turn in reversed(self.profile):
+                        if turn.get("request_id") == request_id:
+                            turn.update({
+                                "prefill_load_pipeline_active": bool(int(fields[2])),
+                                "prefill_pipeline_batches": int(fields[3]),
+                                "prefill_pipeline_experts": int(fields[4]),
+                                "prefill_pipeline_bytes": int(fields[5]),
+                                "prefill_pipeline_producer_load_s": float(fields[6]),
+                                "prefill_pipeline_consumer_wait_s": float(fields[7]),
+                                "prefill_pipeline_consumer_compute_s": float(fields[8]),
+                                "prefill_pipeline_wall_s": float(fields[9]),
                             })
                             break
                 elif kind == "PROF" and len(fields) >= 10:
@@ -1371,7 +1417,7 @@ class Engine:
                         "gemv_calls": int(fields[3]),
                         "grouped_calls": int(fields[4]),
                     }
-                elif kind == "Q3ATLAS" and len(fields) == 10:
+                elif kind == "Q3ATLAS" and len(fields) in (10, 12):
                     self.q3_atlas = {
                         "active": bool(int(fields[1])),
                         "refreshes": int(fields[2]),
@@ -1382,6 +1428,8 @@ class Engine:
                         "loads": int(fields[7]),
                         "device_bytes": int(fields[8]),
                         "uncovered": int(fields[9]),
+                        "prefill_batches": int(fields[10]) if len(fields) == 12 else 0,
+                        "prefill_tokens": int(fields[11]) if len(fields) == 12 else 0,
                     }
                 elif kind == "RESIDENT" and len(fields) == 9:
                     self.resident = {
@@ -1442,6 +1490,9 @@ class Engine:
         header = (f"SUBMIT {request_id} {cache_slot} {len(payload)} {max_tokens} "
                   f"{temperature:.8g} {top_p:.8g}"
                   + (f" {len(gpayload)}" if gpayload else "") + "\n").encode()
+        request_started = time.monotonic()
+        first_token_at = None
+        prefill_elapsed_ms = None
         try:
             with self.write_lock:
                 if self.process.poll() is not None:
@@ -1501,6 +1552,8 @@ class Engine:
                      if stalled else
                      f"no model output within {self.first_model_output_timeout_ms} ms"))
             if kind == "progress":
+                if value.get("event") == "end":
+                    prefill_elapsed_ms = value.get("elapsed_ms")
                 if not cancel_sent:
                     marker = (value.get("prompt_tokens_cached"),
                               value.get("prompt_tokens_prefilled"))
@@ -1520,14 +1573,33 @@ class Engine:
                 if not cancel_sent:
                     if value:
                         first_output_deadline = float("inf")
+                        if first_token_at is None:
+                            first_token_at = time.monotonic()
                         progress_stall_deadline = float("inf")
                     decode(value)
                     if cancelled and cancelled():
                         request_cancel()
             elif kind == "done":
+                finished = time.monotonic()
                 tail = decoder.decode(b"", final=True)
                 if tail:
+                    if first_token_at is None:
+                        first_token_at = finished
                     on_text(tail)
+                first = first_token_at if first_token_at is not None else finished
+                value["ttft_ms"] = (first - request_started) * 1000.0
+                value["prefill_time_ms"] = (
+                    float(prefill_elapsed_ms)
+                    if prefill_elapsed_ms is not None
+                    else value["ttft_ms"]
+                )
+                rate = value.get("tokens_per_second", 0.0)
+                value["decode_time_ms"] = (
+                    1000.0 * value["completion_tokens"] / rate
+                    if rate and rate > 0
+                    else max(0.0, (finished - first) * 1000.0)
+                )
+                value["wall_time_ms"] = (finished - request_started) * 1000.0
                 return value
             elif cancel_sent and isinstance(value, RuntimeError) and str(value) == "CANCELLED":
                 raise ClientCancelled()
@@ -1896,7 +1968,8 @@ class APIHandler(BaseHTTPRequestHandler):
                     choice = {"index": 0, "text": text, "logprobs": None,
                               "finish_reason": length_finish}
                 self.send_json(200, {"id": completion_id, "object": object_name, "created": created,
-                    "model": self.server.model_id, "choices": [choice], "usage": self.usage(stats)},
+                    "model": self.server.model_id, "choices": [choice], "usage": self.usage(stats),
+                    "colib_metrics": self.colib_metrics(stats, queue_wait)},
                     request_id, queue_headers)
                 return
 
@@ -2096,6 +2169,15 @@ class APIHandler(BaseHTTPRequestHandler):
             event([final_choice])
             if include_usage:
                 event([], self.usage(stats))
+            metrics = self.colib_metrics(stats, queue_wait)
+            if connected:
+                with ka_lock:
+                    try:
+                        data = json.dumps(metrics, ensure_ascii=False, separators=(",", ":"))
+                        self.wfile.write(f"data: {data}\n\n".encode())
+                        self.wfile.flush()
+                    except OSError:
+                        connected = False
             if connected:
                 with ka_lock:                          # (#B9) share the pump's lock so [DONE] can't interleave a keepalive write
                     try:
@@ -2121,6 +2203,30 @@ class APIHandler(BaseHTTPRequestHandler):
         completion = stats["completion_tokens"]
         return {"prompt_tokens": prompt, "completion_tokens": completion,
                 "total_tokens": prompt + completion}
+
+    @staticmethod
+    def colib_metrics(stats, queue_wait=0.0):
+        profile = stats.get("profile") or {}
+        cpu_hits = int(profile.get("expert_cpu_hits", 0))
+        gpu_hits = int(profile.get("expert_gpu_hits", 0))
+        misses = int(profile.get("expert_misses", 0))
+        return {
+            "object": "colib.metrics",
+            "schema_version": 1,
+            "ttft_ms": float(stats.get("ttft_ms", 0.0)) + queue_wait * 1000.0,
+            "queue_wait_ms": queue_wait * 1000.0,
+            "prefill_time_ms": float(stats.get("prefill_time_ms", 0.0)),
+            "decode_time_ms": float(stats.get("decode_time_ms", 0.0)),
+            "total_time_ms": float(stats.get("wall_time_ms", 0.0)) + queue_wait * 1000.0,
+            "decode_tokens_per_second": float(stats.get("tokens_per_second", 0.0)),
+            "prompt_tokens": int(stats.get("prompt_tokens", 0)),
+            "completion_tokens": int(stats.get("completion_tokens", 0)),
+            "cache_hits": cpu_hits + gpu_hits,
+            "cache_misses": misses,
+            "cache_hit_percent": float(stats.get("cache_hit_percent", 0.0)),
+            "disk_bytes": int(profile.get("expert_read_bytes", 0)),
+            "direct_io_bytes": int(profile.get("expert_direct_bytes", 0)),
+        }
 
     def chat_completion(self, body, request_id):
         reasoning_effort = body.get("reasoning_effort")

@@ -90,7 +90,7 @@ TEST_BINS = tests/test_json$(EXE) tests/test_st$(EXE) tests/test_st_pread$(EXE) 
             tests/test_deltanet$(EXE) tests/test_gqa_rope$(EXE) tests/test_router$(EXE) \
             tests/test_quant_matmul$(EXE) tests/test_gdn_chunk$(EXE) tests/test_gdn_slots$(EXE) \
             tests/test_attn_slots$(EXE) tests/test_hybrid_slots$(EXE)
-TEST_BINS += tests/test_resident_model$(EXE)
+TEST_BINS += tests/test_resident_model$(EXE) tests/test_prefill_pipeline$(EXE)
 
 all: qwen$(EXE)
 
@@ -188,6 +188,9 @@ tests/test_hybrid_slots$(EXE): tests/test_hybrid_slots.c qwen.c
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
 tests/test_resident_model$(EXE): tests/test_resident_model.c qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_prefill_pipeline$(EXE): tests/test_prefill_pipeline.c qwen.c
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
 tests/bench_qmat$(EXE): tests/bench_qmat.c qwen.c

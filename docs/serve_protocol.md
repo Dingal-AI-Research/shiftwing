@@ -87,9 +87,10 @@ DATA <id> <n>\n<n bytes of UTF-8>\n        # a decoded token's text; repeated
 TOPK <id> 5 <logprob> <hextext> ... ×5     # candidates for the sampled token (SERVE_TOPK=1)
 HITS <rows> <cols> <hex>                   # ~every 6 tokens: routed-expert bitmap since last HITS
 RESIDENT <id> <layers> <device_moe> <host_moe> <activation_h2d> <activation_d2h> <logits_d2h> <router_d2h>
-DPERF <id> <dt> <t_edisk> <t_ewait> <t_emm> <t_attn> <t_kvb> <t_head> [...]
+DPERF <id> <dt> <t_edisk> <t_ewait> <t_emm> <t_attn> <t_kvb> <t_head> [<cuda...>] <t_gdn> <t_full_attn>
 CACHE <id> <cpu_hits> <gpu_hits> <misses> <read_bytes> <direct_bytes>
 DCACHE <id> <cpu_hits> <gpu_hits> <misses> <read_bytes> <direct_bytes>
+PFPIPE <id> <active> <batches> <experts> <bytes> <producer_load_s> <consumer_wait_s> <consumer_compute_s> <wall_s>
 REPIN <layer> <eid> <old_tier> <gpu>       # live re-pin swap events, as they happen
 ...
 DONE <id> STAT <emitted> <tok_s> <hit_pct> <rss_gb> <prompt_tokens> <length_limited>
@@ -112,7 +113,7 @@ established safely.
 
 The CUDA implementation also emits cumulative `RESIDENT` transfer and
 execution-path counters. The implementation emits `PERF`, `DPERF`, `RESIDENT`
-(CUDA), `CACHE`, `DCACHE`, `TIERS`, `EMAP`, and `HITS` immediately before
+(CUDA), `CACHE`, `DCACHE`, `PFPIPE`, `TIERS`, `EMAP`, and `HITS` immediately before
 each `DONE`. `ENTROPY`, `GPUS`, and `.coli_usage` persistence remain
 future extensions.
 
@@ -126,11 +127,12 @@ future extensions.
 | `Q3ATLAS` | `Q3ATLAS <active> <refreshes> <routes> <host_entries> <device_entries> <device_capacity> <loads> <device_bytes> <uncovered>` | unvalidated adaptive q3 hot-route partition state; emitted only when explicitly enabled |
 | `EMAP` | `EMAP <rows> <cols> <hex>` | one byte per expert, row-major over `rows×cols` (sparse layers +MTP × experts): `byte = (tier<<6) \| heat` — 2-bit tier (0 disk / 1 RAM / 2 VRAM), 6-bit log₂-bucketed usage heat |
 | `HITS` | `HITS <rows> <cols> <hex>` | 1 bit per expert, experts routed since the previous `HITS` |
-| `PERF` | `PERF <id> <dt> <t_edisk> <t_ewait> <t_emm> <t_attn> <t_kvb> <t_head> [<cuda_tx> <cuda_setup> <cuda_routed_hidden> <cuda_routed_down> <cuda_reduce> <cuda_shared_hidden> <cuda_shared_scale> <cuda_shared_down> <cuda_download>]` | inclusive request-interval deltas, seconds; the optional suffix is CUDA-event time for fused MoE transactions; concurrent rows can share batched work, so phase values are diagnostic rather than additive |
+| `PERF` | `PERF <id> <dt> <t_edisk> <t_ewait> <t_emm> <t_attn> <t_kvb> <t_head> [<cuda_tx> <cuda_setup> <cuda_routed_hidden> <cuda_routed_down> <cuda_reduce> <cuda_shared_hidden> <cuda_shared_scale> <cuda_shared_down> <cuda_download>] <t_gdn> <t_full_attn>` | inclusive request-interval deltas, seconds; the first optional suffix is CUDA-event time for fused MoE transactions; the trailing pair splits `t_attn` into its linear-attention (GDN) and full-attention parts, which have unrelated costs and were previously indistinguishable; it follows the CUDA suffix, so readers must locate it from the row length rather than a fixed offset; concurrent rows can share batched work, so phase values are diagnostic rather than additive |
 | `DPERF` | same fields and optional CUDA suffix as `PERF` | decode-only interval measured after prefill; use this record to explain `DONE` decode tok/s and retain `PERF` for inclusive request/TTFT diagnosis |
 | `RESIDENT` | `RESIDENT <id> <layers> <device_moe> <host_moe> <activation_h2d> <activation_d2h> <logits_d2h> <router_d2h>` | cumulative CUDA resident-layer/MoE transactions and transfer bytes; a qualified graph requires positive device counts and zero host-MoE fallback |
-| `CACHE` | `CACHE <id> <cpu_hits> <gpu_hits> <misses> <read_bytes> <direct_bytes>` | inclusive request-interval routed-expert cache counts and physical expert-I/O bytes; overlapping requests may share work, so per-request deltas are diagnostic under concurrency |
-| `DCACHE` | `DCACHE <id> <cpu_hits> <gpu_hits> <misses> <read_bytes> <direct_bytes>` | decode-only counterpart measured after prefill; `DONE` cache-hit percentage uses this interval so it aligns with decode tok/s |
+| `CACHE` | `CACHE <id> <cpu_hits> <gpu_hits> <misses> <read_bytes> <direct_bytes> [uring_batches uring_reads]` | inclusive request-interval routed-expert cache counts and physical expert-I/O bytes; new producers append persistent-ring submission/read deltas; overlapping requests may share work, so per-request deltas are diagnostic under concurrency |
+| `DCACHE` | `DCACHE <id> <cpu_hits> <gpu_hits> <misses> <read_bytes> <direct_bytes> [uring_batches uring_reads]` | decode-only counterpart measured after prefill; `DONE` cache-hit percentage uses this interval so it aligns with decode tok/s; consumers accept legacy six-counter frames |
+| `PFPIPE` | `PFPIPE <id> <active> <batches> <experts> <bytes> <producer_load_s> <consumer_wait_s> <consumer_compute_s> <wall_s>` | request deltas for the encode-only transient expert pipeline. Producer load and consumer compute overlap, so their sum is intentionally allowed to exceed wall time; `consumer_wait_s` is the exposed load time. Decode never increments these counters. |
 | `ENTROPY` | `ENTROPY <h0> <h1> …` | per-sparse-layer routing entropy of the turn, bits |
 | `GPUS` | `GPUS <n> (<used_gb> <total_gb> <experts>)×n` | per-device VRAM + resident expert count (CUDA builds) |
 | `TOPK` | `TOPK <id> 5 (<logprob> <hextext>)×5` | token text hex-encoded so the line stays line-shaped |

@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import subprocess
@@ -189,6 +190,38 @@ class QwenChatProtocolTests(unittest.TestCase):
             generation_options({"response_format": {"type": "json_object"}}, 8)
 
 
+class QwenEngineTelemetryParserTests(unittest.TestCase):
+    def test_pfpipe_updates_the_profile_turn_with_matching_request_id(self) -> None:
+        payload = (
+            b"PERF request-a 9 1 2 3 4 5 6\n"
+            b"PERF request-b 8 7 6 5 4 3 2\n"
+            b"PFPIPE request-a 1 7 23 4096 1.25 0.5 6.75 8.5\n"
+        )
+        engine = Engine.__new__(Engine)
+        engine.process = type(
+            "StubProcess", (), {"stdout": io.BytesIO(payload)}
+        )()
+        engine.trace = False
+        engine.profile = []
+        engine.profile_seq = 0
+        engine.closed = True
+
+        engine._dispatch_stdout()
+
+        self.assertEqual(engine.profile_seq, 2)
+        turn = engine.profile[0]
+        self.assertEqual(turn["request_id"], "request-a")
+        self.assertIs(turn["prefill_load_pipeline_active"], True)
+        self.assertEqual(turn["prefill_pipeline_batches"], 7)
+        self.assertEqual(turn["prefill_pipeline_experts"], 23)
+        self.assertEqual(turn["prefill_pipeline_bytes"], 4096)
+        self.assertEqual(turn["prefill_pipeline_producer_load_s"], 1.25)
+        self.assertEqual(turn["prefill_pipeline_consumer_wait_s"], 0.5)
+        self.assertEqual(turn["prefill_pipeline_consumer_compute_s"], 6.75)
+        self.assertEqual(turn["prefill_pipeline_wall_s"], 8.5)
+        self.assertNotIn("prefill_pipeline_batches", engine.profile[1])
+
+
 class QwenEngineMuxTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -237,6 +270,8 @@ class QwenEngineMuxTests(unittest.TestCase):
         self.assertGreaterEqual(engine.profile[-1]["expert_read_bytes"], 0)
 
         self.assertGreaterEqual(engine.profile[-1]["expert_direct_bytes"], 0)
+        self.assertGreaterEqual(engine.profile[-1]["expert_uring_batches"], 0)
+        self.assertGreaterEqual(engine.profile[-1]["expert_uring_reads"], 0)
         self.assertGreater(
             engine.profile[-1]["decode_expert_cpu_hits"]
             + engine.profile[-1]["decode_expert_gpu_hits"]
@@ -246,6 +281,10 @@ class QwenEngineMuxTests(unittest.TestCase):
         self.assertGreaterEqual(engine.profile[-1]["decode_expert_read_bytes"], 0)
         self.assertGreaterEqual(engine.profile[-1]["decode_expert_direct_bytes"], 0)
         self.assertGreaterEqual(engine.profile[-1]["decode_wall_s"], 0.0)
+        self.assertGreaterEqual(
+            engine.profile[-1]["decode_expert_uring_batches"], 0
+        )
+        self.assertGreaterEqual(engine.profile[-1]["decode_expert_uring_reads"], 0)
         self.assertGreaterEqual(engine.profile[-1]["decode_expert_disk_s"], 0.0)
         self.assertGreaterEqual(engine.profile[-1]["decode_expert_matmul_s"], 0.0)
         self.assertGreaterEqual(engine.profile[-1]["decode_attention_s"], 0.0)
@@ -528,6 +567,17 @@ class FakeEngine:
             "rss_gb": 0.1,
             "prompt_tokens": 3,
             "length_limited": False,
+            "ttft_ms": 25.0,
+            "prefill_time_ms": 20.0,
+            "decode_time_ms": 200.0,
+            "wall_time_ms": 225.0,
+            "profile": {
+                "expert_cpu_hits": 2,
+                "expert_gpu_hits": 3,
+                "expert_misses": 1,
+                "expert_read_bytes": 4096,
+                "expert_direct_bytes": 4096,
+            },
         }
 
 
@@ -571,6 +621,12 @@ class QwenHTTPGatewayTests(unittest.TestCase):
             payload = json.load(response)
         self.assertEqual(payload["choices"][0]["message"]["content"], "Hello")
         self.assertEqual(payload["usage"]["total_tokens"], 5)
+        metrics = payload["colib_metrics"]
+        self.assertEqual(metrics["object"], "colib.metrics")
+        self.assertEqual(metrics["decode_tokens_per_second"], 10.0)
+        self.assertEqual(metrics["completion_tokens"], 2)
+        self.assertEqual(metrics["cache_hits"], 5)
+        self.assertEqual(metrics["disk_bytes"], 4096)
         self.assertIn("<|im_start|>user\nHi<|im_end|>", self.engine.prompts[0])
 
     def test_streaming_openai_chat_finishes_with_done(self) -> None:
@@ -587,6 +643,8 @@ class QwenHTTPGatewayTests(unittest.TestCase):
         self.assertIn(b'"content":"Hel"', wire)
         self.assertIn(b'"content":"lo"', wire)
         self.assertIn(b'"object":"colib.progress"', wire)
+        self.assertIn(b'"object":"colib.metrics"', wire)
+        self.assertIn(b'"decode_tokens_per_second":10.0', wire)
         self.assertIn(b'"prompt_tokens_prefilled":2', wire)
         self.assertIn(b'"schema_version":1', wire)
         self.assertTrue(wire.endswith(b"data: [DONE]\n\n"))
@@ -642,9 +700,12 @@ class QwenHTTPGatewayTests(unittest.TestCase):
             if line.startswith("data: {")
         ]
         progress = [event for event in events if event["object"] == "colib.progress"]
+        metrics = [event for event in events if event["object"] == "colib.metrics"]
         self.assertTrue(progress)
+        self.assertEqual(len(metrics), 1)
         deltas = [event["choices"][0]["delta"] for event in events
-                  if event["object"] != "colib.progress"]
+                  if event["object"] not in ("colib.progress", "colib.metrics")
+                  and event.get("choices")]
         reasoning = "".join(delta.get("reasoning_content", "") for delta in deltas)
         content = "".join(delta.get("content", "") for delta in deltas)
         self.assertEqual(reasoning, "private chain")
