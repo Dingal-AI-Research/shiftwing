@@ -113,7 +113,7 @@ def main() -> int:
     prompt_group = parser.add_mutually_exclusive_group()
     prompt_group.add_argument(
         "--prompt",
-        default="Reply with exactly: colib q3 ready",
+        default="Reply with exactly: shiftwing q3 ready",
     )
     prompt_group.add_argument("--prompt-file", type=Path)
     prompt_group.add_argument(
@@ -161,8 +161,6 @@ def main() -> int:
         parser.error("--q3-route-atlas requires --expert-q3")
     if args.q3_native and not args.expert_q3:
         parser.error("--q3-native requires --expert-q3")
-    if args.q3_route_atlas and not args.q3_native:
-        parser.error("--q3-route-atlas requires --q3-native")
 
     continuation_prefix = ""
     if args.prompt_file:

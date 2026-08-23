@@ -17,8 +17,8 @@ describe("browser settings persistence", () => {
     const storage = memoryStorage({ "colibri.apiKey": "legacy-secret" })
     persistPublicSettings(storage, "https://localhost/v1", "test-model")
     expect(Object.fromEntries(storage.values)).toEqual({
-      "colibri.baseUrl": "https://localhost/v1",
-      "colibri.model": "test-model",
+      "shiftwing.baseUrl": "https://localhost/v1",
+      "shiftwing.model": "test-model",
     })
   })
 
@@ -26,10 +26,14 @@ describe("browser settings persistence", () => {
     const storage = memoryStorage()
     const setItem = vi.spyOn(storage, "setItem")
     persistPublicSettings(storage, "http://localhost/v1", "test-model")
-    expect(setItem).not.toHaveBeenCalledWith("colibri.apiKey", expect.anything())
+    expect(setItem).not.toHaveBeenCalledWith("shiftwing.apiKey", expect.anything())
   })
 
   it("uses a fallback when storage access is unavailable", () => {
     expect(stored({ getItem: () => { throw new Error("denied") } }, "key", "fallback")).toBe("fallback")
+  })
+  it("reads settings from a legacy Colibri key during migration", () => {
+    const storage = memoryStorage({ "colibri.model": "legacy-model" })
+    expect(stored(storage, "shiftwing.model", "fallback", "colibri.model")).toBe("legacy-model")
   })
 })

@@ -1,4 +1,4 @@
-/* colib — from-scratch C inference engine for Qwen3.5 MoE + Ornith-1.0.
+/* Shiftwing — from-scratch C inference engine for Qwen3.5 MoE + Ornith-1.0.
  *
  * Phase 5 hybrid engine: the complete Phase-4 CPU path plus opt-in CUDA
  * quantized projections and grouped experts. Formulas mirror
@@ -4817,7 +4817,7 @@ int main(void){
 #ifdef COLI_CUDA
     if(cuda_rt.active&&!m.mtp.enabled)phase="PHASE 5 CUDA target decoding";
 #endif
-    printf("colib qwen engine — %s\n",phase);printf("model: hidden=%d layers=%d (%d full / %d GDN) vocab=%d ctx=%d\n",c->hidden,c->n_layers,nf,c->n_layers-nf,c->vocab,m.max_seq);
+    printf("shiftwing qwen engine — %s\n",phase);printf("model: hidden=%d layers=%d (%d full / %d GDN) vocab=%d ctx=%d\n",c->hidden,c->n_layers,nf,c->n_layers-nf,c->vocab,m.max_seq);
     printf("weights loaded in %.2fs, tokenizer=%s, format=%s, matrices=%d/%d/%d/%d/%d f32/i8/i2/i3/i4, experts/layer=%d, KV=%s, MTP=%s\n",m.dense_load_s,m.has_tok?"yes":"no",format,m.matrix_f32,m.matrix_i8,m.matrix_i2,m.matrix_i3,m.matrix_i4,m.expert_cap,m.kv16?"bf16":"fp32",m.mtp.enabled?"active":"off");if(getenv("LOAD_ONLY")&&atoi(getenv("LOAD_ONLY"))!=0)return 0;if(getenv("TF")&&strcmp(getenv("TF"),"0"))return run_oracle(&m,snap);if(getenv("EVAL_IDS"))return run_eval_ids(&m,getenv("EVAL_IDS"));if(getenv("PREFIX_IDS"))return run_prefix_ids(&m,getenv("PREFIX_IDS"),getenv("NGEN")?atoi(getenv("NGEN")):64);if(getenv("TFPREFIX_IDS"))return run_tfprefix_ids(&m,getenv("TFPREFIX_IDS"));
     int ids[4096],nids=0;const char *prompt=getenv("PROMPT");if(!prompt)prompt=c->vocab<1000?"!":"Hello";char*chatbuf=NULL;if(getenv("CHAT")&&atoi(getenv("CHAT"))!=0){size_t z=strlen(prompt)+128;chatbuf=xcalloc(z,1);snprintf(chatbuf,z,"<|im_start|>user\n%s<|im_end|>\n<|im_start|>assistant\n<think>\n",prompt);prompt=chatbuf;}
     if(m.has_tok)nids=tok_encode(&m.T,prompt,(int)strlen(prompt),ids,4096);else ids[nids++]=1;if(nids<=0)die("empty prompt");

@@ -49,17 +49,17 @@ const it: Record<string, string> = {
   "topbar.slot": "slot {{n}}",
   "topbar.clear": "Pulisci",
 
-  "hero.title": "MOTORE COLIBRÌ",
+  "hero.title": "MOTORE SHIFTWING",
   "hero.subtitle": "Interroga il gigante.",
   "hero.tagline": "La macchina resta tua.",
-  "hero.description": "Connettiti a un server colib locale e ricevi le risposte in streaming direttamente dal tuo hardware. Nulla lascia l'endpoint che scegli.",
+  "hero.description": "Connettiti a un server Shiftwing locale e ricevi le risposte in streaming direttamente dal tuo hardware. Nulla lascia l'endpoint che scegli.",
   "prompts.routing": "Spiega come funziona il routing degli expert",
   "prompts.benchmark": "Scrivi un piccolo benchmark in C",
   "prompts.caching": "Confronta il caching RAM e VRAM",
 
   "chat.you": "Tu",
-  "chat.colibri": "colib",
-  "chat.placeholder": "Scrivi a colib…",
+  "chat.shiftwing": "Shiftwing",
+  "chat.placeholder": "Scrivi a Shiftwing…",
   "chat.inputHint": "Invio per inviare · Shift+Invio per andare a capo",
   "chat.stop": "Ferma la generazione",
   "chat.send": "Invia messaggio",
@@ -105,7 +105,7 @@ const it: Record<string, string> = {
   "profile.oneTurn": "1 turno",
   "profile.diskNote": "Il servizio disco è il tempo speso a leggere gli expert sui thread I/O; si sovrappone al calcolo, quindi solo l'attesa I/O effettivamente percepita dal thread di calcolo conta nella ripartizione del tempo totale. Con più sessioni KV, le quote descrivono l'intero motore nella finestra del turno.",
 
-  "error.title": "L'interfaccia colib ha riscontrato un errore",
+  "error.title": "L'interfaccia Shiftwing ha riscontrato un errore",
   "error.hint": "Il motore non è stato coinvolto. Prova a ricaricare la pagina.",
   "error.retry": "Riprova",
 }

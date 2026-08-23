@@ -163,7 +163,7 @@ def gate8_steps(root: Path) -> tuple[Step, ...]:
         Step(
             "doctor",
             (
-                str(root / "c" / "colib"),
+                str(root / "c" / "shiftwing"),
                 "doctor",
                 "--model",
                 str(model),

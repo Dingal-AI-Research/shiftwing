@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add resumable grouped-int2/int3 routed-expert sidecars to a colib snapshot.
+"""Add resumable grouped-int2/int3 routed-expert sidecars to a Shiftwing snapshot.
 
 The source snapshot remains immutable.  Each output tensor appends ``.q2`` or
 ``.q3`` to the canonical q4 payload name, followed by matching scale and type

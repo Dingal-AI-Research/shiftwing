@@ -16,7 +16,7 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CLI = ROOT / "c" / "colib"
+CLI = ROOT / "c" / "shiftwing"
 sys.path.insert(0, str(ROOT / "c"))
 from tools.expert_lowbit import load_complete_expert_sidecar  # noqa: E402
 from tools.runtime_env import isolated_engine_env  # noqa: E402
@@ -41,7 +41,7 @@ def acceptance_failures(
     """Return every production web/lifecycle acceptance failure."""
     failures = []
     if not page_ok:
-        failures.append("web bundle did not contain the colib title")
+        failures.append("web bundle did not contain the Shiftwing title")
     for run in runs:
         if run["content"].strip() != expected_content:
             failures.append(
@@ -85,8 +85,8 @@ def acceptance_failures(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, required=True)
-    parser.add_argument("--prompt", default="Reply with exactly: colib ready")
-    parser.add_argument("--expect-exact", default="colib ready")
+    parser.add_argument("--prompt", default="Reply with exactly: shiftwing ready")
+    parser.add_argument("--expect-exact", default="shiftwing ready")
     parser.add_argument("--max-tokens", type=int, default=16)
     parser.add_argument("--context", type=int, default=4096)
     parser.add_argument("--threads", type=int, default=8)
@@ -133,7 +133,7 @@ def main() -> int:
         raise SystemExit("model metadata roots must be objects")
     if manifest.get("complete") is not True:
         raise SystemExit("model quantization manifest is absent or incomplete")
-    model_family = config.get("colib_model_family", "qwen3.5")
+    model_family = config.get("shiftwing_model_family", config.get("colib_model_family", "qwen3.5"))
     model_manifest = {
         name: manifest.get(name)
         for name in (
@@ -248,7 +248,7 @@ def main() -> int:
             raise TimeoutError("server startup timed out")
         ready = time.monotonic()
         with urlopen(f"http://127.0.0.1:{port}/", timeout=5) as response:
-            page_ok = b"<title>colib</title>" in response.read()
+            page_ok = b"<title>shiftwing</title>" in response.read()
 
         runs = []
         history = []
@@ -256,7 +256,7 @@ def main() -> int:
             messages = [*history, {"role": "user", "content": args.prompt}]
             body = json.dumps(
                 {
-                    "model": "qwen3.5-colib",
+                    "model": "qwen3.5-shiftwing",
                     "messages": messages,
                     "temperature": 0,
                     "top_p": 1,

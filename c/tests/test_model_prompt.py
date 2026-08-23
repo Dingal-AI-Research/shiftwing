@@ -24,7 +24,7 @@ class ModelPromptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             model = Path(directory)
             (model / "config.json").write_text(
-                json.dumps({"colib_model_family": "ornith-1.0"}),
+                json.dumps({"shiftwing_model_family": "ornith-1.0"}),
                 encoding="utf-8",
             )
             (model / "chat_template.jinja").write_text(

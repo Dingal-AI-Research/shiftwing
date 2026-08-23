@@ -49,7 +49,7 @@ def load_model_profile(snapshot: Path) -> ModelProfile:
         "pad_token_id",
         config.get("pad_token_id", text.get("pad_token_id")),
     )
-    family = config.get("colib_model_family", "qwen3.5")
+    family = config.get("shiftwing_model_family", config.get("colib_model_family", "qwen3.5"))
     template_path = snapshot / "chat_template.jinja"
     digest = (
         hashlib.sha256(template_path.read_bytes()).hexdigest()
@@ -62,8 +62,8 @@ def load_model_profile(snapshot: Path) -> ModelProfile:
         )
     return ModelProfile(
         family=family,
-        source_repo=config.get("colib_source_repo"),
-        source_revision=config.get("colib_source_revision"),
+        source_repo=config.get("shiftwing_source_repo", config.get("colib_source_repo")),
+        source_revision=config.get("shiftwing_source_revision", config.get("colib_source_revision")),
         stop_token_ids=stop_ids,
         pad_token_id=pad if isinstance(pad, int) else None,
         chat_template_sha256=digest,

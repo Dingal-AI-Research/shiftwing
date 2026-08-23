@@ -120,6 +120,8 @@ class QuantizationTests(unittest.TestCase):
             )
             got = json.loads((out / "config.json").read_text())
             self.assertEqual(family, "ornith-1.0")
+            self.assertEqual(got["shiftwing_model_family"], "ornith-1.0")
+            self.assertEqual(got["shiftwing_source_revision"], "abc123")
             self.assertEqual(got["colib_model_family"], "ornith-1.0")
             self.assertEqual(got["colib_source_revision"], "abc123")
 

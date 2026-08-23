@@ -1,5 +1,5 @@
-colib — C inference engine for Qwen3.5 MoE + Ornith-1.0
-Copyright 2026 colib contributors
+Shiftwing — C inference engine for Qwen3.5 MoE + Ornith-1.0
+Copyright 2026 Shiftwing contributors
 
 This product includes software developed as part of the colibri project
 (https://github.com/JustVugg/colibri), Copyright JustVugg and colibri
@@ -16,5 +16,5 @@ designs in c/qwen.c (quantized-weight container convention, expert
 tiering/streaming, sampling and speculative-decode driver, serve protocol)
 follow colibri's glm.c.
 
-colib is not a fork of colibri and supports only the Qwen3.5 / Ornith-1.0
+Shiftwing is not a fork of colibri and supports only the Qwen3.5 / Ornith-1.0
 model families.

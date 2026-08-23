@@ -78,7 +78,26 @@ describe("chat request extensions", () => {
     expect(await requestBody()).not.toHaveProperty("cache_slot")
   })
 
-  it("sends cache_slot zero when colib advertises KV slots", async () => {
+  it("sends cache_slot zero when Shiftwing advertises KV slots", async () => {
     expect(await requestBody(0)).toMatchObject({ cache_slot: 0 })
+  })
+  it("returns the authoritative final shiftwing.metrics event", async () => {
+    const metric = {
+      object: "shiftwing.metrics", schema_version: 1, ttft_ms: 123, queue_wait_ms: 4,
+      prefill_time_ms: 100, decode_time_ms: 50, total_time_ms: 177,
+      decode_tokens_per_second: 20, prompt_tokens: 7, completion_tokens: 1,
+      cache_hits: 5, cache_misses: 1, cache_hit_percent: 83.3,
+      disk_bytes: 4096, direct_io_bytes: 4096,
+    }
+    const wire = `data: ${JSON.stringify(metric)}\n\ndata: [DONE]\n\n`
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(wire, {
+      headers: { "content-type": "text/event-stream" },
+    })))
+    const result = await streamChat({
+      baseUrl: "http://localhost:8000/v1", apiKey: "", model: "test-model",
+      messages: [], temperature: 0, maxTokens: 8, enableThinking: false,
+      signal: new AbortController().signal, onDelta: () => undefined,
+    })
+    expect(result.metrics).toEqual(metric)
   })
 })

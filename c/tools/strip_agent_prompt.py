@@ -22,7 +22,8 @@ sys.path.insert(0, str(HERE.parent))
 
 from tokenizers import Tokenizer  # noqa: E402
 
-MODEL = Path("/home/dinga/Projects/colib/c/ornith35")
+ROOT = HERE.parent.parent
+MODEL = HERE.parent / "ornith35"
 TOK = Tokenizer.from_file(str(MODEL / "tokenizer.json"))
 SPEC = json.load(open("/tmp/lf_prompt.json"))
 
@@ -88,7 +89,7 @@ def ntok(s: str) -> int:
 full_tools = SPEC["tools"]
 mini_all = [minify(t) for t in full_tools]
 mini_core = [minify(t) for t in full_tools if t["function"]["name"] in CORE]
-compact_sys = COMPACT_SYSTEM.format(cwd="/home/dinga/Projects/colib")
+compact_sys = COMPACT_SYSTEM.format(cwd=str(ROOT))
 
 variants = [
     ("current (full system + 36 tools)", SPEC["system"], full_tools),

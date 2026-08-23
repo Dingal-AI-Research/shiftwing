@@ -20,12 +20,12 @@ class ProductionWebAcceptanceTests(unittest.TestCase):
             [
                 {
                     "index": 0,
-                    "content": "colib ready",
+                    "content": "shiftwing ready",
                     "usage": {"completion_tokens": 3},
                 },
                 {
                     "index": 1,
-                    "content": "colib ready",
+                    "content": "shiftwing ready",
                     "usage": {"completion_tokens": 3},
                 },
             ],
@@ -48,7 +48,7 @@ class ProductionWebAcceptanceTests(unittest.TestCase):
                 }
             },
             page_ok=True,
-            expected_content="colib ready",
+            expected_content="shiftwing ready",
             cuda=True,
             expected_requests=2,
         )
@@ -72,7 +72,7 @@ class ProductionWebAcceptanceTests(unittest.TestCase):
             },
             {},
             page_ok=False,
-            expected_content="colib ready",
+            expected_content="shiftwing ready",
             cuda=True,
             expected_requests=1,
         )

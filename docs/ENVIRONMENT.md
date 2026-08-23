@@ -1,6 +1,6 @@
 # Reproducible Environment
 
-This document records the environment used for the current colib research
+This document records the environment used for the current Shiftwing research
 results. It distinguishes required version constraints from the specific
 reference machine; a benchmark is not assumed portable merely because the
 code compiles elsewhere.
@@ -107,7 +107,7 @@ COLI_CUDA=1 CUDA_DENSE=1 CUDA_EXPERTS=1 CUDA_F16=1 \
 CUDA_EXPERT_GB=6 SNAP=c/ornith35 ./c/qwen
 ```
 
-The `colib ... --cuda` commands set the first four switches. They do not enable
+The `shiftwing ... --cuda` commands set the first four switches. They do not enable
 `CUDA_PROFILE_STAGES`; device-event profiling is deliberately opt-in because
 it perturbs short multi-process tests substantially.
 
@@ -186,7 +186,7 @@ audit before the final composite rerun above.
 Qwen35 container audit:
 
 ```sh
-./c/colib doctor --model c/qwen35 --kv-slots 2 --context 4096 --json
+./c/shiftwing doctor --model c/qwen35 --kv-slots 2 --context 4096 --json
 ```
 
 Expected current inventory:
@@ -200,7 +200,7 @@ Ornith397's final audit additionally rehashes every committed output and
 turns its preregistered identity into executable checks:
 
 ```sh
-./c/colib doctor --model c/ornith397 \
+./c/shiftwing doctor --model c/ornith397 \
   --kv-slots 1 --context 4096 \
   --cuda-expert-gb 6 --ram-cache-gb 18 \
   --runtime-headroom-gb 1 --verify-hashes \

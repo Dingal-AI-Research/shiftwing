@@ -1,0 +1,317 @@
+#!/usr/bin/env python3
+"""Shiftwing command line for Qwen3.5/Ornith conversion, diagnostics, and serving."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+HERE = Path(__file__).resolve().parent
+VERSION = "0.1.0"
+SOURCE_MODE = (HERE / "qwen.c").is_file()
+SUPPORT = HERE if SOURCE_MODE else HERE.parent / "libexec" / "shiftwing"
+ROOT = SUPPORT.parent if SOURCE_MODE else HERE.parent
+WEB_ROOT = (ROOT / "web") if SOURCE_MODE else (SUPPORT / "web")
+sys.path.insert(0, str(SUPPORT))
+ENGINE = Path(os.environ.get("SHIFTWING_ENGINE", os.environ.get("COLI_ENGINE", SUPPORT / ("qwen.exe" if os.name == "nt" else "qwen"))))
+DEFAULT_MODEL = Path(os.environ.get("SHIFTWING_MODEL", os.environ.get("COLI_MODEL", SUPPORT / "ornith35")))
+WORKSPACE_PYTHON = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+PYTHON = Path(os.environ.get("SHIFTWING_PYTHON", os.environ.get("COLI_PYTHON", WORKSPACE_PYTHON if WORKSPACE_PYTHON.is_file() else sys.executable)))
+
+
+def _runtime_env(args: argparse.Namespace) -> dict[str, str]:
+    from openai_server import apply_engine_defaults
+
+    env = os.environ.copy()
+    env.setdefault("SERVE_RESIDENT", "1")
+    apply_engine_defaults(env)
+    # The launcher defaults to the immutable int4 container.  Low-bit
+    # sidecars are opt-in CLI modes; do not let ambient research variables
+    # silently change the model selected by chat/serve/web.
+    env.update(
+        {
+            "EXPERT_Q2": "0",
+            "EXPERT_Q3": "0",
+            "Q3_NATIVE": "0",
+            "Q3_ROUTE_ATLAS": "0",
+        }
+    )
+    env["CTX"] = str(args.context)
+    if getattr(args, "session_dir", None):
+        env["SESSION_DIR"] = str(Path(args.session_dir).expanduser().resolve())
+    if getattr(args, "cuda", False):
+        env.update(
+            {
+                "COLI_CUDA": "1",
+                "CUDA_DENSE": "1",
+                "CUDA_F16": "1",
+                "CUDA_EXPERTS": "1",
+            }
+        )
+    if getattr(args, "expert_q3", False):
+        env["EXPERT_Q3"] = "1"
+    if getattr(args, "q3_native", False):
+        if not getattr(args, "cuda", False) or not getattr(args, "expert_q3", False):
+            raise SystemExit("--q3-native requires --cuda and --expert-q3")
+        env["Q3_NATIVE"] = "1"
+    if getattr(args, "ram_gb", None) is not None:
+        env["RAM_GB"] = str(args.ram_gb)
+    if getattr(args, "cuda_expert_gb", None) is not None:
+        env["CUDA_EXPERT_GB"] = str(args.cuda_expert_gb)
+    if getattr(args, "q3_route_atlas", False):
+        if not getattr(args, "cuda", False) or not getattr(args, "expert_q3", False):
+            raise SystemExit("--q3-route-atlas requires --cuda and --expert-q3")
+        env.update(
+            {
+                "Q3_ROUTE_ATLAS": "1",
+                "DECODE_PROTECT": "1",
+                "DECODE_PROTECT_PREWARM": "1",
+                "RAM_GB": str(args.ram_gb if args.ram_gb is not None else 20),
+                "CUDA_EXPERT_GB": str(
+                    args.cuda_expert_gb
+                    if args.cuda_expert_gb is not None
+                    else 6
+                ),
+                "PIPE": "1",
+                "URING": "1",
+                "DIRECT": "1",
+                "URING_PERSIST": "1",
+                "CUDA_PINNED_UPLOAD": "1",
+            }
+        )
+    return env
+
+
+def _require_model(model: Path) -> None:
+    if not model.is_dir():
+        raise SystemExit(f"model directory not found: {model}")
+    if not (model / "tokenizer.json").is_file():
+        raise SystemExit(f"tokenizer.json is missing from {model}")
+    if not ENGINE.is_file():
+        raise SystemExit(f"engine is not built: {ENGINE}\nrun: make -C {HERE} qwen")
+
+
+def _server_argv(args: argparse.Namespace) -> list[str]:
+    return [
+        str(PYTHON),
+        str(SUPPORT / "openai_server.py"),
+        "--model",
+        str(Path(args.model).expanduser().resolve()),
+        "--engine",
+        str(ENGINE),
+        "--host",
+        args.host,
+        "--port",
+        str(args.port),
+        "--model-id",
+        args.model_id,
+        "--max-tokens",
+        str(args.max_tokens),
+        "--kv-slots",
+        str(args.kv_slots),
+        "--max-queue",
+        str(args.max_queue),
+    ] + (["--api-key", args.api_key] if args.api_key else [])
+
+
+def command_serve(args: argparse.Namespace) -> int:
+    model = Path(args.model).expanduser().resolve()
+    _require_model(model)
+    os.execve(str(PYTHON), _server_argv(args), _runtime_env(args))
+    return 0
+
+
+def command_web(args: argparse.Namespace) -> int:
+    dist = WEB_ROOT / "dist"
+    if not (dist / "index.html").is_file():
+        if args.no_build:
+            raise SystemExit(f"web bundle is missing: {dist}\nrun: npm --prefix {WEB_ROOT} run build")
+        subprocess.run(["npm", "ci"], cwd=WEB_ROOT, check=True)
+        subprocess.run(["npm", "run", "build"], cwd=WEB_ROOT, check=True)
+    print(f"shiftwing web · http://{args.host}:{args.port}", file=sys.stderr)
+    return command_serve(args)
+
+
+def command_chat(args: argparse.Namespace) -> int:
+    from openai_server import Engine, render_model_chat, snapshot_model_family
+
+    model = Path(args.model).expanduser().resolve()
+    _require_model(model)
+    family = snapshot_model_family(model)
+    runtime = Engine(
+        ENGINE,
+        model,
+        max_tokens=args.max_tokens,
+        env=_runtime_env(args),
+        kv_slots=1,
+    )
+    history: list[dict[str, str]] = []
+    print("shiftwing chat · /clear resets history · /quit exits")
+    try:
+        while True:
+            try:
+                text = input("\nyou> ").strip()
+            except EOFError:
+                break
+            if not text:
+                continue
+            if text in {"/quit", "/exit"}:
+                break
+            if text == "/clear":
+                history.clear()
+                print("history cleared")
+                continue
+            messages = history + [{"role": "user", "content": text}]
+            prompt = render_model_chat(
+                model,
+                family,
+                messages,
+                args.thinking,
+                "high" if args.thinking else None,
+                cache_prefix_compatible=True,
+            )
+            pieces: list[str] = []
+            print("shiftwing> ", end="", flush=True)
+
+            def emit(piece: str) -> None:
+                pieces.append(piece)
+                print(piece, end="", flush=True)
+
+            stats = runtime.generate(prompt, args.max_tokens, 0.0, 1.0, emit)
+            answer = "".join(pieces)
+            print(f"\n[{stats['completion_tokens']} tokens · {stats['tokens_per_second']:.2f} tok/s]")
+            history.extend(
+                [
+                    {"role": "user", "content": text},
+                    {"role": "assistant", "content": answer},
+                ]
+            )
+    finally:
+        runtime.close()
+    return 0
+
+
+def command_doctor(args: argparse.Namespace) -> int:
+    from doctor import exit_code, format_doctor, run_doctor
+
+    report = run_doctor(
+        args.model,
+        ENGINE,
+        slots=args.kv_slots,
+        context=args.context,
+        cuda_expert_gib=args.cuda_expert_gb,
+        ram_cache_gib=args.ram_cache_gb,
+        runtime_headroom_gib=args.runtime_headroom_gb,
+        verify_hashes=args.verify_hashes,
+        expected_source=args.expect_source,
+        expected_source_fingerprint=args.expect_source_fingerprint,
+        expected_source_shards=args.expect_source_shards,
+        expected_output_shards=args.expect_output_shards,
+        expected_logical_tensors=args.expect_logical_tensors,
+        expected_physical_tensors=args.expect_physical_tensors,
+        expected_data_bytes=args.expect_data_bytes,
+    )
+    print(json.dumps(report, indent=2) if args.json else format_doctor(report))
+    return exit_code(report)
+
+def context_value(value: str) -> int:
+    try:
+        context = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("context must be an integer") from error
+    if not 1 <= context <= 65_536:
+        raise argparse.ArgumentTypeError("context must be between 1 and 65536")
+    return context
+
+
+
+def add_runtime_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--model", default=str(DEFAULT_MODEL))
+    parser.add_argument("--context", type=context_value, default=4096)
+    parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--session-dir")
+    parser.add_argument("--max-tokens", type=int, default=512)
+    parser.add_argument("--expert-q3", action="store_true")
+    parser.add_argument(
+        "--q3-native",
+        action="store_true",
+        help="use experimental packed-q3 CUDA kernels instead of q4 expansion",
+    )
+    parser.add_argument(
+        "--q3-route-atlas",
+        action="store_true",
+        help=("enable the experimental adaptive q3 RAM/VRAM hot cache; "
+              "use --q3-native separately to keep VRAM weights packed"),
+    )
+    parser.add_argument("--ram-gb", type=float)
+    parser.add_argument("--cuda-expert-gb", type=float)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="shiftwing", description=__doc__)
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    chat = sub.add_parser("chat", help="interactive local chat")
+    add_runtime_options(chat)
+    chat.add_argument("--thinking", action="store_true")
+    chat.set_defaults(func=command_chat)
+
+    for name, help_text, function in (
+        ("serve", "OpenAI-compatible HTTP server", command_serve),
+        ("web", "server plus the bundled browser UI", command_web),
+    ):
+        item = sub.add_parser(name, help=help_text)
+        add_runtime_options(item)
+        item.add_argument("--host", default="127.0.0.1")
+        item.add_argument("--port", type=int, default=8000)
+        item.add_argument("--model-id", default="qwen3.5-shiftwing")
+        item.add_argument("--api-key")
+        item.add_argument("--kv-slots", type=int, default=2)
+        item.add_argument("--max-queue", type=int, default=8)
+        if name == "web":
+            item.add_argument("--no-build", action="store_true")
+        item.set_defaults(func=function)
+
+    doctor = sub.add_parser("doctor", help="read-only installation diagnostics")
+    doctor.add_argument("--model", default=str(DEFAULT_MODEL))
+    doctor.add_argument("--kv-slots", type=int, default=2)
+    doctor.add_argument("--context", type=int, default=4096)
+    doctor.add_argument("--cuda-expert-gb", type=float, default=7.0)
+    doctor.add_argument("--ram-cache-gb", type=float, default=18.0)
+    doctor.add_argument("--runtime-headroom-gb", type=float, default=1.5)
+    doctor.add_argument(
+        "--verify-hashes",
+        action="store_true",
+        help="rehash every converter output recorded in the durable ledger",
+    )
+    doctor.add_argument("--expect-source")
+    doctor.add_argument("--expect-source-fingerprint")
+    doctor.add_argument("--expect-source-shards", type=int)
+    doctor.add_argument("--expect-output-shards", type=int)
+    doctor.add_argument("--expect-logical-tensors", type=int)
+    doctor.add_argument("--expect-physical-tensors", type=int)
+    doctor.add_argument("--expect-data-bytes", type=int)
+    doctor.add_argument("--json", action="store_true")
+    doctor.set_defaults(func=command_doctor)
+    sub.add_parser("convert", help="stream and quantize an official checkpoint")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "convert":
+        return subprocess.call(
+            [str(PYTHON), str(SUPPORT / "tools" / "convert_qwen.py"), *argv[1:]]
+        )
+    args = build_parser().parse_args(argv)
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

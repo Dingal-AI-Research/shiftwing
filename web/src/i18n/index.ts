@@ -19,11 +19,12 @@ const DICTS: Record<string, Record<string, string>> = {
   "it": it,
 }
 
-const STORAGE_KEY = "colibri-locale"
+const STORAGE_KEY = "shiftwing-locale"
+const LEGACY_STORAGE_KEY = "colibri-locale"
 
 function detectLocale(): string {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY)
+    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY)
     if (saved && DICTS[saved]) return saved
   } catch {}
   const nav = navigator.language || ""
@@ -59,7 +60,10 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   const setLocale = useCallback((code: string) => {
     if (!DICTS[code]) return
     setLocaleState(code)
-    try { localStorage.setItem(STORAGE_KEY, code) } catch {}
+    try {
+      localStorage.setItem(STORAGE_KEY, code)
+      localStorage.removeItem(LEGACY_STORAGE_KEY)
+    } catch {}
   }, [])
 
   const t = useCallback((key: string, vars?: Record<string, string | number>) => {

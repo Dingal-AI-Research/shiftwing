@@ -1,4 +1,4 @@
-# colib
+# Shiftwing
 
 A from-scratch, pure-C inference engine for the **Qwen3.5 MoE** family and
 **Ornith-1.0** (Qwen3.5-based) on consumer hardware — in the spirit of
@@ -92,8 +92,8 @@ For a system installation:
 
 ```sh
 sudo make -C c CUDA=1 CUDA_ARCH=native install PREFIX=/usr/local
-COLI_MODEL=/models/ornith35 colib doctor
-COLI_MODEL=/models/ornith35 colib web --cuda --kv-slots 2
+COLI_MODEL=/models/ornith35 shiftwing doctor
+COLI_MODEL=/models/ornith35 shiftwing web --cuda --kv-slots 2
 ```
 
 The install target copies the launcher, engine, Python support tools, and
@@ -127,7 +127,7 @@ native/CUDA, numerical-parity, and real-model performance tests pass. See
 The corresponding deferred-test launch surface is:
 
 ```sh
-./c/colib web --model c/ornith397 --cuda --expert-q3 --q3-native --q3-route-atlas
+./c/shiftwing web --model c/ornith397 --cuda --expert-q3 --q3-native --q3-route-atlas
 ```
 
 For an immediately visible, non-release directional benchmark:
@@ -135,7 +135,7 @@ For an immediately visible, non-release directional benchmark:
 ```sh
 .venv/bin/python -u c/tools/stream_qwen_benchmark.py \
   --model c/ornith397 --expert-q3 \
-  --prompt "Reply with exactly: colib q3 ready" \
+  --prompt "Reply with exactly: shiftwing q3 ready" \
   --warmup-turns 1 --measured-turns 1 --max-tokens 8
 ```
 
@@ -155,10 +155,10 @@ the defaults.
 The source-tree launcher keeps Phase 9 on the mux protocol and greedy decoding:
 
 ```sh
-./c/colib doctor --model c/ornith35
-./c/colib chat --model c/ornith35 --cuda
-./c/colib serve --model c/ornith35 --cuda --kv-slots 2
-./c/colib web --model c/ornith35 --cuda --kv-slots 2
+./c/shiftwing doctor --model c/ornith35
+./c/shiftwing chat --model c/ornith35 --cuda
+./c/shiftwing serve --model c/ornith35 --cuda --kv-slots 2
+./c/shiftwing web --model c/ornith35 --cuda --kv-slots 2
 ```
 
 `web` builds the pinned React/Vite client when needed and serves it from the

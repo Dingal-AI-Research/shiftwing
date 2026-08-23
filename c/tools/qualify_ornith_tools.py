@@ -105,9 +105,9 @@ def main() -> int:
     model = args.model.resolve()
     engine = args.engine.resolve()
     config = json.loads((model / "config.json").read_text(encoding="utf-8"))
-    if config.get("colib_model_family") != "ornith-1.0":
+    if config.get("shiftwing_model_family", config.get("colib_model_family")) != "ornith-1.0":
         raise SystemExit(
-            "model config does not declare colib_model_family=ornith-1.0"
+            "model config does not declare shiftwing_model_family=ornith-1.0 (or legacy colib_model_family)"
         )
     try:
         manifest = json.loads(
@@ -144,7 +144,7 @@ def main() -> int:
             raise SystemExit(str(error)) from error
     port = _free_port()
     base = f"http://127.0.0.1:{port}"
-    model_id = "ornith-colib"
+    model_id = "ornith-shiftwing"
     env = isolated_engine_env()
     env.pop("EXPERT_RAM", None)
     env.update(

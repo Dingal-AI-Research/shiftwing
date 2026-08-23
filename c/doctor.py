@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only installation and resource diagnostics for colib."""
+"""Read-only installation and resource diagnostics for Shiftwing."""
 
 from __future__ import annotations
 
@@ -737,7 +737,7 @@ def run_doctor(
 
 
 def format_doctor(report: dict[str, Any]) -> str:
-    lines = [f"colib doctor · {report['model']}"]
+    lines = [f"shiftwing doctor · {report['model']}"]
     for item in report["checks"]:
         lines.append(f"[{item['status']:>4}] {item['id']:<18} {item['summary']}")
     lines.append(f"result {report['status']}")

@@ -12,10 +12,10 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = ROOT / "colib"
+CLI = ROOT / "shiftwing"
 
 
-class ColibCliTests(unittest.TestCase):
+class ShiftwingCliTests(unittest.TestCase):
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [str(CLI), *args],
@@ -36,7 +36,7 @@ class ColibCliTests(unittest.TestCase):
     def test_version_matches_release_package(self) -> None:
         result = self.run_cli("--version")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), "colib 0.1.0")
+        self.assertEqual(result.stdout.strip(), "shiftwing 0.1.0")
 
     def test_doctor_accepts_tiny_container(self) -> None:
         result = self.run_cli(
@@ -61,7 +61,7 @@ class ColibCliTests(unittest.TestCase):
         self.assertIn("--selftest", result.stdout)
 
     def test_server_uses_workspace_environment(self) -> None:
-        namespace = runpy.run_path(str(CLI), run_name="colib_cli_test")
+        namespace = runpy.run_path(str(CLI), run_name="shiftwing_cli_test")
         parser = namespace["build_parser"]()
         args = parser.parse_args(
             ["serve", "--model", str(ROOT / "qwen_tiny_i4")]
@@ -71,7 +71,7 @@ class ColibCliTests(unittest.TestCase):
         self.assertTrue(Path(argv[0]).is_file())
 
     def test_runtime_defaults_to_int4_despite_ambient_sidecars(self) -> None:
-        namespace = runpy.run_path(str(CLI), run_name="colib_cli_test")
+        namespace = runpy.run_path(str(CLI), run_name="shiftwing_cli_test")
         parser = namespace["build_parser"]()
         args = parser.parse_args(
             ["serve", "--model", str(ROOT / "qwen_tiny_i4")]
@@ -88,7 +88,7 @@ class ColibCliTests(unittest.TestCase):
             self.assertEqual(env[name], "0", name)
 
     def test_runtime_enables_q3_only_when_requested(self) -> None:
-        namespace = runpy.run_path(str(CLI), run_name="colib_cli_test")
+        namespace = runpy.run_path(str(CLI), run_name="shiftwing_cli_test")
         parser = namespace["build_parser"]()
         args = parser.parse_args(
             [
@@ -103,6 +103,23 @@ class ColibCliTests(unittest.TestCase):
         self.assertEqual(env["EXPERT_Q3"], "1")
         self.assertEqual(env["Q3_NATIVE"], "0")
         self.assertEqual(env["Q3_ROUTE_ATLAS"], "0")
+
+    def test_route_atlas_uses_fast_expanded_q4_unless_native_is_explicit(self) -> None:
+        namespace = runpy.run_path(str(CLI), run_name="shiftwing_cli_test")
+        parser = namespace["build_parser"]()
+        common = [
+            "serve", "--model", str(ROOT / "qwen_tiny_i4"), "--cuda",
+            "--expert-q3", "--q3-route-atlas",
+        ]
+        expanded = namespace["_runtime_env"](parser.parse_args(common))
+        self.assertEqual(expanded["Q3_ROUTE_ATLAS"], "1")
+        self.assertEqual(expanded["Q3_NATIVE"], "0")
+        native = namespace["_runtime_env"](
+            parser.parse_args([*common, "--q3-native"])
+        )
+        self.assertEqual(native["Q3_ROUTE_ATLAS"], "1")
+        self.assertEqual(native["Q3_NATIVE"], "1")
+
 
     def test_runtime_refuses_missing_selected_q3_tensor(self) -> None:
         env = os.environ.copy()
@@ -169,12 +186,12 @@ class ColibCliTests(unittest.TestCase):
                     time.sleep(0.05)
             with urlopen(f"http://127.0.0.1:{port}/", timeout=5) as response:
                 page = response.read()
-            self.assertIn(b"<title>colib</title>", page)
+            self.assertIn(b"<title>shiftwing</title>", page)
             request = Request(
                 f"http://127.0.0.1:{port}/v1/completions",
                 data=json.dumps(
                     {
-                        "model": "qwen3.5-colib",
+                        "model": "qwen3.5-shiftwing",
                         "prompt": "!",
                         "temperature": 0,
                         "top_p": 1,

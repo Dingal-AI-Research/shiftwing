@@ -132,7 +132,7 @@ c/tests/test_uring
 .venv/
 .toolchains/
 
-# colib engine binary (rebuild with make -C c qwen)
+# Shiftwing engine binary (rebuild with make -C c qwen)
 c/qwen
 c/qwen.exe
 

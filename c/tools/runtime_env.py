@@ -1,4 +1,4 @@
-"""Construct reproducible colib engine environments for qualification tools."""
+"""Construct reproducible Shiftwing engine environments for qualification tools."""
 
 from __future__ import annotations
 

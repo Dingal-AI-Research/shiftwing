@@ -1,4 +1,4 @@
-# colib build — adapted from colibri's c/Makefile (github.com/JustVugg/colibri,
+# Shiftwing build — adapted from colibri's c/Makefile (github.com/JustVugg/colibri,
 # Apache-2.0; see NOTICE). Same structure: target detection via -dumpmachine,
 # .build-config stamp so flag changes force a relink, opt-in CUDA.
 
@@ -46,7 +46,7 @@ endif
 
 PREFIX     ?= /usr/local
 BINDIR     ?= $(PREFIX)/bin
-LIBEXECDIR ?= $(PREFIX)/libexec/colib
+LIBEXECDIR ?= $(PREFIX)/libexec/shiftwing
 INSTALL    ?= install
 
 # CUDA=1: opt-in backend (Phase 5). Linux direct-link only for now.
@@ -224,7 +224,7 @@ test-python: qwen$(EXE)
 
 test-web: qwen$(EXE) web
 	cd ../web && npm test
-	$(PYTHON) -m unittest tests.test_cli_qwen.ColibCliTests.test_web_serves_bundle_and_real_tiny_chat
+	$(PYTHON) -m unittest tests.test_cli_qwen.ShiftwingCliTests.test_web_serves_bundle_and_real_tiny_chat
 
 test-tokenizer: tests/test_tok$(EXE)
 	$(PYTHON) tests/test_tok_qwen.py --binary ./tests/test_tok$(EXE)
@@ -259,6 +259,7 @@ web:
 
 install: qwen$(EXE) web
 	$(INSTALL) -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(LIBEXECDIR) $(DESTDIR)$(LIBEXECDIR)/tools $(DESTDIR)$(LIBEXECDIR)/web/dist
+	$(INSTALL) -m 755 shiftwing $(DESTDIR)$(BINDIR)/shiftwing
 	$(INSTALL) -m 755 colib $(DESTDIR)$(BINDIR)/colib
 	$(INSTALL) -m 755 qwen$(EXE) $(DESTDIR)$(LIBEXECDIR)/qwen$(EXE)
 	$(INSTALL) -m 644 openai_server.py doctor.py $(DESTDIR)$(LIBEXECDIR)/

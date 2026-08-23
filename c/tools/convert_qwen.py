@@ -859,6 +859,9 @@ def annotate_model_family(
         return family
     path = outdir / "config.json"
     config = json.loads(path.read_text())
+    config["shiftwing_model_family"] = family
+    config["shiftwing_source_repo"] = source_repo
+    config["shiftwing_source_revision"] = source_revision
     config["colib_model_family"] = family
     config["colib_source_repo"] = source_repo
     config["colib_source_revision"] = source_revision

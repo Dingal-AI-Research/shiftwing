@@ -1,4 +1,4 @@
-/* colib CUDA backend bootstrap. The public seam is deliberately C-compatible;
+/* Shiftwing CUDA backend bootstrap. The public seam is deliberately C-compatible;
  * Phase 5 can replace individual kernels without leaking CUDA types into
  * qwen.c. */
 #include "backend_cuda.h"

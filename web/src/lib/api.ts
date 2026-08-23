@@ -74,11 +74,30 @@ export interface TokenUsage {
   total_tokens: number
 }
 
+export interface ShiftwingMetrics {
+  object: "shiftwing.metrics" | "colib.metrics"
+  schema_version: 1
+  ttft_ms: number
+  queue_wait_ms: number
+  prefill_time_ms: number
+  decode_time_ms: number
+  total_time_ms: number
+  decode_tokens_per_second: number
+  prompt_tokens: number
+  completion_tokens: number
+  cache_hits: number
+  cache_misses: number
+  cache_hit_percent: number
+  disk_bytes: number
+  direct_io_bytes: number
+}
+
 export interface StreamChatResult {
   finishReason: string | null
   usage: TokenUsage | null
   requestId: string | null
   queueWaitMs: number | null
+  metrics: ShiftwingMetrics | null
 }
 
 export function endpoint(baseUrl: string, path: string) {
@@ -174,12 +193,18 @@ export async function streamChat(options: StreamChatOptions): Promise<StreamChat
   let buffer = ""
   let finishReason: string | null = null
   let usage: TokenUsage | null = null
+  let metrics: ShiftwingMetrics | null = null
 
   const consume = (data: string) => {
     if (data === "[DONE]") return
     const event = JSON.parse(data) as {
+      object?: string
       choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>
       usage?: TokenUsage | null
+    } & Partial<ShiftwingMetrics>
+    if (event.object === "shiftwing.metrics" || event.object === "colib.metrics") {
+      metrics = event as ShiftwingMetrics
+      return
     }
     const choice = event.choices?.[0]
     const text = choice?.delta?.content
@@ -197,12 +222,13 @@ export async function streamChat(options: StreamChatOptions): Promise<StreamChat
     if (done) break
   }
 
-  const queueWaitHeader = response.headers.get("x-colibri-queue-wait-ms")
+  const queueWaitHeader = response.headers.get("x-shiftwing-queue-wait-ms") ?? response.headers.get("x-colibri-queue-wait-ms")
   const parsedQueueWait = queueWaitHeader === null ? null : Number(queueWaitHeader)
   return {
     finishReason,
     usage,
     requestId: response.headers.get("x-request-id"),
     queueWaitMs: parsedQueueWait !== null && Number.isFinite(parsedQueueWait) ? parsedQueueWait : null,
+    metrics,
   }
 }

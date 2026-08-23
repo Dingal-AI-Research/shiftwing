@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dependency-free OpenAI-compatible HTTP gateway for the colib Qwen engine.
+"""Dependency-free OpenAI-compatible HTTP gateway for the Shiftwing Qwen engine.
 
 Adapted from JustVugg/colibri at commit
 81f08a09e5651ce52616dc720f68810f9021c0be (Apache-2.0).
@@ -207,7 +207,7 @@ def content_text(content, param):
     parts = []
     for index, part in enumerate(content):
         if not isinstance(part, dict) or part.get("type") not in ("text", "input_text"):
-            raise APIError(400, "Colibri currently supports text message content only.",
+            raise APIError(400, "Shiftwing currently supports text message content only.",
                            f"{param}.{index}", "unsupported_content_type")
         if not isinstance(part.get("text"), str):
             raise APIError(400, "Text content parts require a string `text` field.",
@@ -711,7 +711,7 @@ def snapshot_model_family(snapshot):
         config = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, json.JSONDecodeError):
         return "qwen3.5"
-    family = config.get("colib_model_family")
+    family = config.get("shiftwing_model_family", config.get("colib_model_family"))
     return family if isinstance(family, str) and family else "qwen3.5"
 
 
@@ -800,7 +800,7 @@ def _anthropic_block_text(blocks, param):
     parts = []
     for index, block in enumerate(blocks):
         if not isinstance(block, dict) or block.get("type") != "text":
-            raise APIError(400, "Colibri currently supports text blocks only here.",
+            raise APIError(400, "Shiftwing currently supports text blocks only here.",
                            f"{param}.{index}", "unsupported_content_type")
         if not isinstance(block.get("text"), str):
             raise APIError(400, "Text blocks require a string `text` field.", f"{param}.{index}.text")
@@ -869,7 +869,7 @@ def anthropic_to_openai(body):
                                 "content": _anthropic_block_text(block.get("content", ""),
                                                                  f"{where}.content")})
             else:
-                raise APIError(400, "Colibri supports `text`, `tool_use` and `tool_result` "
+                raise APIError(400, "Shiftwing supports `text`, `tool_use` and `tool_result` "
                                "content blocks only.", f"{where}.type", "unsupported_content_type")
         # tool results precede the user's own text: they answer the previous assistant turn
         messages.extend(results)
@@ -948,7 +948,7 @@ GENERIC_JSON_GBNF = (
 
 def generation_options(body, limit):
     if body.get("n", 1) != 1:
-        raise APIError(400, "colib currently supports `n=1` only.", "n", "unsupported_value")
+        raise APIError(400, "shiftwing currently supports `n=1` only.", "n", "unsupported_value")
     # `tools`/`functions` are handled by render_chat (declaration) + parse_tool_calls (output).
     # Validate tools/functions structure early so malformed input fails with a clear error.
     tools_raw = body.get("tools") or body.get("functions")
@@ -1046,7 +1046,7 @@ def read_engine_turn(stream, sentinel, on_bytes):
     while True:
         byte = stream.read(1)
         if byte == b"":
-            raise RuntimeError("colibri engine exited unexpectedly")
+            raise RuntimeError("shiftwing engine exited unexpectedly")
         pending += byte
         if pending.endswith(sentinel):
             data = pending[:-len(sentinel)]
@@ -1153,7 +1153,7 @@ class Engine:
         if startup != READY:
             raise RuntimeError(f"invalid engine handshake: {startup!r}")
         self.dispatcher = threading.Thread(target=self._dispatch_stdout,
-                                           name="colibri-stdout", daemon=True)
+                                           name="shiftwing-stdout", daemon=True)
         self.dispatcher.start()
 
     @staticmethod
@@ -1193,7 +1193,7 @@ class Engine:
             while True:
                 line = self.process.stdout.readline()
                 if line == b"":
-                    raise RuntimeError("colibri engine exited unexpectedly")
+                    raise RuntimeError("shiftwing engine exited unexpectedly")
                 fields = line.decode("utf-8", "replace").strip().split()
                 if not fields:
                     continue
@@ -1479,11 +1479,11 @@ class Engine:
         events = queue.Queue()
         with self.pending_lock:
             if self.closed:
-                raise RuntimeError("colibri engine is shutting down")
+                raise RuntimeError("shiftwing engine is shutting down")
             if self.dispatcher_error is not None:
-                raise RuntimeError("colibri engine dispatcher stopped") from self.dispatcher_error
+                raise RuntimeError("shiftwing engine dispatcher stopped") from self.dispatcher_error
             if self.process.poll() is not None:
-                raise RuntimeError("colibri engine is not running")
+                raise RuntimeError("shiftwing engine is not running")
             request_id = str(self.next_request_id)
             self.next_request_id += 1
             self.pending[request_id] = events
@@ -1496,7 +1496,7 @@ class Engine:
         try:
             with self.write_lock:
                 if self.process.poll() is not None:
-                    raise RuntimeError("colibri engine is not running")
+                    raise RuntimeError("shiftwing engine is not running")
                 self.process.stdin.write(header + payload + gpayload + b"\n")
                 self.process.stdin.flush()
                 if self.trace:
@@ -1611,7 +1611,7 @@ class Engine:
             if self.closed:
                 return
             self.closed = True
-        self._fail_pending(RuntimeError("colibri engine is shutting down"))
+        self._fail_pending(RuntimeError("shiftwing engine is shutting down"))
         if self.process.poll() is None:
             # EOF is the mux protocol's graceful-shutdown signal. Let the C
             # process drain, run its atexit handlers, and atomically persist
@@ -1645,7 +1645,7 @@ class Engine:
 
 
 def model_object(model_id, created):
-    return {"id": model_id, "object": "model", "created": created, "owned_by": "colibri"}
+    return {"id": model_id, "object": "model", "created": created, "owned_by": "shiftwing"}
 
 
 class APIServer(ThreadingHTTPServer):
@@ -1671,7 +1671,7 @@ class APIHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     timeout = 30   # per-request socket timeout: a slowloris client that dribbles its
                    # request line/body can't pin a worker thread (and a slot) forever
-    server_version = "colibri"
+    server_version = "shiftwing"
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[api] %s - %s\n" % (self.address_string(), fmt % args))
@@ -1697,7 +1697,7 @@ class APIHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type, x-api-key, anthropic-version")
         self.send_header("Access-Control-Expose-Headers",
-                         "x-request-id, x-colibri-queue-wait-ms, Retry-After")
+                         "x-request-id, x-shiftwing-queue-wait-ms, x-colibri-queue-wait-ms, Retry-After")
         self.send_header("Access-Control-Max-Age", "600")
         if "*" not in self.server.cors_origins:
             self.send_header("Vary", "Origin")
@@ -1896,7 +1896,7 @@ class APIHandler(BaseHTTPRequestHandler):
             pass
         except Exception as error:
             self.log_error("request failed: %s", error)
-            api_error = APIError(500, "The colibri engine failed to process the request.",
+            api_error = APIError(500, "The shiftwing engine failed to process the request.",
                                  None, "engine_error", "server_error")
             try:
                 self.send_json(500, self.error_body(api_error), request_id)
@@ -1945,7 +1945,11 @@ class APIHandler(BaseHTTPRequestHandler):
 
         with self.server.scheduler.admit(self.client_disconnected, cache_slot) as admission:
             queue_wait, cache_slot = admission
-            queue_headers = {"x-colibri-queue-wait-ms": str(round(queue_wait * 1000))}
+            queue_ms = str(round(queue_wait * 1000))
+            queue_headers = {
+                "x-shiftwing-queue-wait-ms": queue_ms,
+                "x-colibri-queue-wait-ms": queue_ms,
+            }
             if not stream:
                 output = []
                 stats = self.server.engine.generate(
@@ -1969,7 +1973,8 @@ class APIHandler(BaseHTTPRequestHandler):
                               "finish_reason": length_finish}
                 self.send_json(200, {"id": completion_id, "object": object_name, "created": created,
                     "model": self.server.model_id, "choices": [choice], "usage": self.usage(stats),
-                    "colib_metrics": self.colib_metrics(stats, queue_wait)},
+                    "shiftwing_metrics": self.shiftwing_metrics(stats, queue_wait),
+                    "colib_metrics": self.shiftwing_metrics(stats, queue_wait)},
                     request_id, queue_headers)
                 return
 
@@ -2020,7 +2025,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 last_progress[0] = dict(progress)
                 if not connected:
                     return
-                payload = {"object": "colib.progress", "schema_version": 1,
+                payload = {"object": "shiftwing.progress", "schema_version": 1,
                            "request_id": request_id, **progress}
                 data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
                 with ka_lock:
@@ -2169,7 +2174,7 @@ class APIHandler(BaseHTTPRequestHandler):
             event([final_choice])
             if include_usage:
                 event([], self.usage(stats))
-            metrics = self.colib_metrics(stats, queue_wait)
+            metrics = self.shiftwing_metrics(stats, queue_wait)
             if connected:
                 with ka_lock:
                     try:
@@ -2205,13 +2210,13 @@ class APIHandler(BaseHTTPRequestHandler):
                 "total_tokens": prompt + completion}
 
     @staticmethod
-    def colib_metrics(stats, queue_wait=0.0):
+    def shiftwing_metrics(stats, queue_wait=0.0):
         profile = stats.get("profile") or {}
         cpu_hits = int(profile.get("expert_cpu_hits", 0))
         gpu_hits = int(profile.get("expert_gpu_hits", 0))
         misses = int(profile.get("expert_misses", 0))
         return {
-            "object": "colib.metrics",
+            "object": "shiftwing.metrics",
             "schema_version": 1,
             "ttft_ms": float(stats.get("ttft_ms", 0.0)) + queue_wait * 1000.0,
             "queue_wait_ms": queue_wait * 1000.0,
@@ -2265,7 +2270,7 @@ class APIHandler(BaseHTTPRequestHandler):
         for unsupported, why in (("stop_sequences", "custom stop sequences"),
                                  ("top_k", "top-k sampling")):
             if body.get(unsupported) not in (None, [], ""):
-                raise APIError(400, f"Colibri does not support `{unsupported}` ({why}) yet.",
+                raise APIError(400, f"Shiftwing does not support `{unsupported}` ({why}) yet.",
                                unsupported, "unsupported_value")
         messages = anthropic_to_openai(body)
         tools, tool_choice = anthropic_tools(body)
@@ -2333,7 +2338,11 @@ class APIHandler(BaseHTTPRequestHandler):
 
         with self.server.scheduler.admit(self.client_disconnected, cache_slot) as admission:
             queue_wait, cache_slot = admission
-            queue_headers = {"x-colibri-queue-wait-ms": str(round(queue_wait * 1000))}
+            queue_ms = str(round(queue_wait * 1000))
+            queue_headers = {
+                "x-shiftwing-queue-wait-ms": queue_ms,
+                "x-colibri-queue-wait-ms": queue_ms,
+            }
             if not stream:
                 output = []
                 stats = self.server.engine.generate(
@@ -2376,9 +2385,9 @@ class APIHandler(BaseHTTPRequestHandler):
                         connected[0] = False
 
             def progress_event(progress):
-                payload = {"object": "colib.progress", "schema_version": 1,
+                payload = {"object": "shiftwing.progress", "schema_version": 1,
                            "request_id": request_id, **progress}
-                send_event("colib.progress", payload)
+                send_event("shiftwing.progress", payload)
 
             # Anthropic has a first-class keepalive event, so the cold prefill (minutes) does
             # not need the OpenAI path's reasoning-delta trick: `ping` is in the protocol.
@@ -2457,13 +2466,13 @@ class APIHandler(BaseHTTPRequestHandler):
     def completion(self, body, request_id):
         prompt = body.get("prompt")
         if not isinstance(prompt, str):
-            raise APIError(400, "Colibri currently requires `prompt` to be a string.", "prompt")
+            raise APIError(400, "Shiftwing currently requires `prompt` to be a string.", "prompt")
         if not prompt:
             raise APIError(400, "`prompt` must not be empty.", "prompt")
         self.generation(body, prompt, request_id, False)
 
 
-def serve(model, host="127.0.0.1", port=8000, model_id="qwen3.5-colib", api_key=None,
+def serve(model, host="127.0.0.1", port=8000, model_id="qwen3.5-shiftwing", api_key=None,
           cap=8, max_tokens=1024, engine=None, env=None, cors_origins=None,
           max_queue=8, queue_timeout=300, kv_slots=1):
     if engine is None:
@@ -2515,7 +2524,7 @@ def main():
     parser.add_argument("--engine", default=str(default_engine()))
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--model-id", default=os.environ.get("COLI_MODEL_ID", "qwen3.5-colib"))
+    parser.add_argument("--model-id", default=os.environ.get("SHIFTWING_MODEL_ID", os.environ.get("COLI_MODEL_ID", "qwen3.5-shiftwing")))
     parser.add_argument("--api-key", default=os.environ.get("COLI_API_KEY"))
     parser.add_argument("--cors-origin", action="append", default=None,
                         help="allowed browser origin; repeat as needed (use '*' for any origin)")

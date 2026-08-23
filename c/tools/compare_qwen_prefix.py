@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare fixed-prompt greedy prefixes between colib and llama.cpp GGUF."""
+"""Compare fixed-prompt greedy prefixes between Shiftwing and llama.cpp GGUF."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--production-cuda",
         action="store_true",
-        help="use the accepted CUDA expert/I/O profile for colib runs",
+        help="use the accepted CUDA expert/I/O profile for Shiftwing runs",
     )
     parser.add_argument("--cuda-expert-gb", type=float, default=6.0)
     parser.add_argument("--cuda-headroom-gb", type=float, default=1.0)
@@ -65,10 +65,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--diagnostic-topk",
         action="store_true",
-        help="record colib raw-logit and llama.cpp log-probability top-5 at the first generated token",
+        help="record Shiftwing raw-logit and llama.cpp log-probability top-5 at the first generated token",
     )
-    parser.add_argument("--c-only", action="store_true", help="run only colib (useful for kernel diagnostics)")
-    parser.add_argument("--c-idot", choices=("0", "1"), help="override colib's activation-int8 path")
+    parser.add_argument("--c-only", action="store_true", help="run only Shiftwing (useful for kernel diagnostics)")
+    parser.add_argument("--c-idot", choices=("0", "1"), help="override Shiftwing.s activation-int8 path")
     parser.add_argument(
         "--reference-json",
         type=Path,
@@ -209,12 +209,12 @@ def c_prefixes(
         ids_path.unlink(missing_ok=True)
     if run.returncode != 0:
         raise RuntimeError(
-            f"colib prefix run exited with status {run.returncode}:\n"
+            f"Shiftwing prefix run exited with status {run.returncode}:\n"
             f"{run.stdout}\n{run.stderr}"
         )
     rows = re.findall(r"^PREFIX\s+\d+:((?:\s+\d+)*)$", run.stdout, re.M)
     if len(rows) != len(rendered):
-        raise RuntimeError(f"could not parse colib prefix output:\n{run.stdout}\n{run.stderr}")
+        raise RuntimeError(f"could not parse Shiftwing prefix output:\n{run.stdout}\n{run.stderr}")
     topk: list[list[dict[str, float | int]] | None] = [None] * len(rendered)
     if diagnostic_topk:
         for row, values in re.findall(r"^\[ROW (\d+)\]\[LOGITS 0\]((?:\s+\d+:[^\s]+)+)$", run.stderr, re.M):
@@ -245,7 +245,7 @@ def c_teacher_forced(
     Free-running greedy comparison measures trajectory divergence: one flipped
     near-tie separates the two token streams permanently, so it reports how long
     two models stay on one path rather than whether they model the same
-    distribution. Here the reference continuation is fed to colib as context and
+    distribution. Here the reference continuation is fed to Shiftwing as context and
     only the argmax at each position is compared -- the same criterion the
     tiny-model oracle uses (`tf_pred`).
     """
@@ -291,12 +291,12 @@ def c_teacher_forced(
         ids_path.unlink(missing_ok=True)
     if run.returncode != 0:
         raise RuntimeError(
-            f"colib teacher-forced run exited with status {run.returncode}:\n"
+            f"Shiftwing teacher-forced run exited with status {run.returncode}:\n"
             f"{run.stdout}\n{run.stderr}"
         )
     rows = re.findall(r"^TFPREFIX\s+\d+:\s+(\d+)/(\d+)$", run.stdout, re.M)
     if len(rows) != len(prompt_ids):
-        raise RuntimeError(f"could not parse colib teacher-forced output:\n{run.stdout}\n{run.stderr}")
+        raise RuntimeError(f"could not parse Shiftwing teacher-forced output:\n{run.stdout}\n{run.stderr}")
     return [(int(a), int(b)) for a, b in rows]
 
 

@@ -621,8 +621,8 @@ class QwenHTTPGatewayTests(unittest.TestCase):
             payload = json.load(response)
         self.assertEqual(payload["choices"][0]["message"]["content"], "Hello")
         self.assertEqual(payload["usage"]["total_tokens"], 5)
-        metrics = payload["colib_metrics"]
-        self.assertEqual(metrics["object"], "colib.metrics")
+        metrics = payload["shiftwing_metrics"]
+        self.assertEqual(metrics["object"], "shiftwing.metrics")
         self.assertEqual(metrics["decode_tokens_per_second"], 10.0)
         self.assertEqual(metrics["completion_tokens"], 2)
         self.assertEqual(metrics["cache_hits"], 5)
@@ -642,8 +642,8 @@ class QwenHTTPGatewayTests(unittest.TestCase):
             wire = response.read()
         self.assertIn(b'"content":"Hel"', wire)
         self.assertIn(b'"content":"lo"', wire)
-        self.assertIn(b'"object":"colib.progress"', wire)
-        self.assertIn(b'"object":"colib.metrics"', wire)
+        self.assertIn(b'"object":"shiftwing.progress"', wire)
+        self.assertIn(b'"object":"shiftwing.metrics"', wire)
         self.assertIn(b'"decode_tokens_per_second":10.0', wire)
         self.assertIn(b'"prompt_tokens_prefilled":2', wire)
         self.assertIn(b'"schema_version":1', wire)
@@ -699,12 +699,12 @@ class QwenHTTPGatewayTests(unittest.TestCase):
             for line in wire.decode().splitlines()
             if line.startswith("data: {")
         ]
-        progress = [event for event in events if event["object"] == "colib.progress"]
-        metrics = [event for event in events if event["object"] == "colib.metrics"]
+        progress = [event for event in events if event["object"] == "shiftwing.progress"]
+        metrics = [event for event in events if event["object"] == "shiftwing.metrics"]
         self.assertTrue(progress)
         self.assertEqual(len(metrics), 1)
         deltas = [event["choices"][0]["delta"] for event in events
-                  if event["object"] not in ("colib.progress", "colib.metrics")
+                  if event["object"] not in ("shiftwing.progress", "shiftwing.metrics")
                   and event.get("choices")]
         reasoning = "".join(delta.get("reasoning_content", "") for delta in deltas)
         content = "".join(delta.get("content", "") for delta in deltas)

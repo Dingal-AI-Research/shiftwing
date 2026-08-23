@@ -1,5 +1,5 @@
-#ifndef COLIB_BACKEND_CUDA_H
-#define COLIB_BACKEND_CUDA_H
+#ifndef SHIFTWING_BACKEND_CUDA_H
+#define SHIFTWING_BACKEND_CUDA_H
 
 #include <stddef.h>
 

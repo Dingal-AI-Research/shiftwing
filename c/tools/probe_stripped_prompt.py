@@ -20,7 +20,7 @@ from model_prompt import snapshot_model_family  # noqa: E402
 from openai_server import Engine, render_model_chat  # noqa: E402
 from runtime_env import isolated_engine_env  # noqa: E402
 
-MODEL = Path("/home/dinga/Projects/colib/c/ornith35")
+MODEL = HERE.parent / "ornith35"
 USER = "Read package.json in the workspace and tell me the value of the \"name\" field."
 
 CASES = [

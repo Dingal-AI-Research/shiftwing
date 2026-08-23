@@ -23,7 +23,7 @@ from model_prompt import snapshot_model_family  # noqa: E402
 from openai_server import Engine, render_model_chat  # noqa: E402
 from runtime_env import isolated_engine_env  # noqa: E402
 
-MODEL = Path(sys.argv[1] if len(sys.argv) > 1 else "/home/dinga/Projects/colib/c/ornith35")
+MODEL = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE.parent / "ornith35"
 SPEC = json.load(open("/tmp/lf_prompt.json"))
 USER = ("Read c/tools/ornith_protocol.py and tell me, with exact line numbers, which "
         "function decides whether a chat request is rendered with the snapshot's own "

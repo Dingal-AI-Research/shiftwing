@@ -49,17 +49,17 @@ const zhCN: Record<string, string> = {
   "topbar.slot": "槽位 {{n}}",
   "topbar.clear": "清空",
 
-  "hero.title": "COLIBRÌ 引擎",
+  "hero.title": "SHIFTWING 引擎",
   "hero.subtitle": "向巨人提问。",
   "hero.tagline": "让机器属于你。",
-  "hero.description": "连接到本地 colib 服务器，直接从你的硬件流式获取响应。所有数据都留在你选择的端点内。",
+  "hero.description": "连接到本地 Shiftwing 服务器，直接从你的硬件流式获取响应。所有数据都留在你选择的端点内。",
   "prompts.routing": "解释专家路由是如何工作的",
   "prompts.benchmark": "写一个简单的 C 基准测试",
   "prompts.caching": "比较 RAM 和 VRAM 缓存",
 
   "chat.you": "你",
-  "chat.colibri": "colib",
-  "chat.placeholder": "给 colib 发消息…",
+  "chat.shiftwing": "Shiftwing",
+  "chat.placeholder": "给 Shiftwing 发消息…",
   "chat.inputHint": "回车发送 · Shift+回车换行",
   "chat.stop": "停止生成",
   "chat.send": "发送消息",
@@ -105,7 +105,7 @@ const zhCN: Record<string, string> = {
   "profile.oneTurn": "1 轮",
   "profile.diskNote": "磁盘服务是在 I/O 线程上读取专家的时间；它与计算重叠，因此只有计算线程实际感受到的 I/O 等待 才计入总耗时分解。多 KV 会话时，份额描述的是整个引擎在该轮窗口内的表现。",
 
-  "error.title": "colib UI 遇到错误",
+  "error.title": "Shiftwing UI 遇到错误",
   "error.hint": "引擎不受影响。请尝试刷新页面。",
   "error.retry": "重试",
 }

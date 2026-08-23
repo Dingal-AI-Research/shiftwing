@@ -19,9 +19,9 @@ from openai_server import render_chat  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, required=True)
-    parser.add_argument("--user", default="Reply with exactly: colib ready")
-    parser.add_argument("--assistant", default="colib ready")
-    parser.add_argument("--next-user", default="Reply with exactly: colib ready")
+    parser.add_argument("--user", default="Reply with exactly: shiftwing ready")
+    parser.add_argument("--assistant", default="shiftwing ready")
+    parser.add_argument("--next-user", default="Reply with exactly: shiftwing ready")
     args = parser.parse_args()
     tokenizer = AutoTokenizer.from_pretrained(args.model, local_files_only=True)
     first_messages = [{"role": "user", "content": args.user}]

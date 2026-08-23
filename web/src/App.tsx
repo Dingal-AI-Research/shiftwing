@@ -49,13 +49,13 @@ export default function App() {
   const servedByEngine = typeof window !== "undefined" && window.location.port !== "5173" && window.location.protocol.startsWith("http")
   const defaultBase = servedByEngine ? `${window.location.origin}/v1` : "http://127.0.0.1:8000/v1"
   const [baseUrl, setBaseUrl] = useState(() => {
-    const saved = stored(localStorage, "colibri.baseUrl", defaultBase)
+    const saved = stored(localStorage, "shiftwing.baseUrl", defaultBase, "colibri.baseUrl")
     if (servedByEngine && saved === "http://127.0.0.1:8000/v1" && defaultBase !== saved) return defaultBase
     return saved
   })
   const [apiKey, setApiKey] = useState("")
   const [models, setModels] = useState<string[]>([])
-  const [model, setModel] = useState(() => stored(localStorage, "colibri.model", "qwen3.5-colib"))
+  const [model, setModel] = useState(() => stored(localStorage, "shiftwing.model", "qwen3.5-shiftwing", "colibri.model"))
   const [temperature] = useState(0)
   const [maxTokens, setMaxTokens] = useState(512)
   const [thinking, setThinking] = useState(false)
@@ -66,7 +66,6 @@ export default function App() {
   const [lastRun, setLastRun] = useState<StreamChatResult | null>(null)
   const [draft, setDraft] = useState("")
   const [loading, setLoading] = useState(false)
-  const [streamStart, setStreamStart] = useState<number | null>(null)
   const [tokenCount, setTokenCount] = useState(0)
   const [tokPerSec, setTokPerSec] = useState<number | null>(null)
   const [ttft, setTtft] = useState<number | null>(null)
@@ -183,13 +182,9 @@ export default function App() {
     setError("")
     updateMessages([...history, assistant])
     setLoading(true)
-    setStreamStart(null)
     setTokenCount(0)
     setTokPerSec(null)
     setTtft(null)
-    const t0 = performance.now()
-    let firstToken = true
-    let count = 0
     const controller = new AbortController()
     abortRef.current = controller
     try {
@@ -204,18 +199,16 @@ export default function App() {
         cacheSlot: supportsCacheSlots(health) ? cacheSlot : undefined,
         signal: controller.signal,
         onDelta: (delta) => {
-          if (firstToken) { setTtft(performance.now() - t0); setStreamStart(performance.now()); firstToken = false }
-          count++
-          setTokenCount(count)
-          const elapsed = (performance.now() - (firstToken ? t0 : t0)) / 1000
-          if (elapsed > 0.3) setTokPerSec(count / ((performance.now() - t0) / 1000))
           updateMessages((current) => current.map((item) =>
             item.id === assistant.id ? { ...item, content: item.content + delta } : item,
           ))
         },
       })
-      const finalElapsed = (performance.now() - t0) / 1000
-      if (count > 0 && finalElapsed > 0) setTokPerSec(count / finalElapsed)
+      if (result.metrics) {
+        setTokenCount(result.metrics.completion_tokens)
+        setTokPerSec(result.metrics.decode_tokens_per_second)
+        setTtft(result.metrics.ttft_ms)
+      }
       if (result.usage) setTotalTokens(prev => ({
         prompt: prev.prompt + (result.usage?.prompt_tokens || 0),
         completion: prev.completion + (result.usage?.completion_tokens || 0),
@@ -240,7 +233,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand-row">
           <div className="brand-mark"><Feather className="size-5" /></div>
-          <div><h1>colib</h1><p>{t("brand.tagline")}</p></div>
+          <div><h1>shiftwing</h1><p>{t("brand.tagline")}</p></div>
         </div>
 
         <section className="side-section">
@@ -354,7 +347,7 @@ export default function App() {
               {messages.map((item) => (
                 <article key={item.id} className={cn("message", item.role)}>
                   <div className="avatar">{item.role === "user" ? "Y" : <Feather className="size-4" />}</div>
-                  <div><div className="message-meta">{item.role === "user" ? t("chat.you") : t("chat.colibri")}</div><div className="message-body">{item.content || <span className="typing" aria-label="Generating"><i /><i /><i /></span>}</div></div>
+                  <div><div className="message-meta">{item.role === "user" ? t("chat.you") : t("chat.shiftwing")}</div><div className="message-body">{item.content || <span className="typing" aria-label="Generating"><i /><i /><i /></span>}</div></div>
                 </article>
               ))}
               <div ref={bottomRef} />
