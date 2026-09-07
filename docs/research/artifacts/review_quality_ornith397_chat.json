@@ -1,0 +1,18 @@
+{
+  "model": "c/ornith397",
+  "cases": 1,
+  "json_ok": 0,
+  "verdict_ok": 0,
+  "caught": 0,
+  "seconds_total": 5400,
+  "rows": [
+    {
+      "name": "null-instead-of-throw",
+      "json": false,
+      "verdict_ok": false,
+      "caught": false,
+      "seconds": 5400,
+      "note": "timeout"
+    }
+  ]
+}

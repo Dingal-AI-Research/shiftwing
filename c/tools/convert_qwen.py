@@ -27,6 +27,14 @@ from safetensors.torch import load_file, save_file
 
 
 DEFAULT_GROUP_SIZE = 128
+
+# Qwen4-Exp per-layer-embedding index tables. These are int64 lookup metadata,
+# not weights: they are stored verbatim rather than quantized or cast.
+INTEGER_METADATA_SUFFIXES = (
+    "ple_embedding.layer_multipliers",
+    "ple_embedding.ngram_heads_offsets",
+    "ple_embedding.ngram_heads_vocab_sizes",
+)
 DEFAULT_FP8_BLOCK = (128, 128)
 STATE_FILE = ".conversion-state.json"
 INDEX_FILE = "model.safetensors.index.json"
@@ -640,7 +648,10 @@ def is_text_tensor(name: str, include_mtp: bool = False) -> bool:
     if name.startswith("mtp."):
         return include_mtp
     return name.startswith("model.language_model.") or name.startswith("model.layers.") or name.startswith(
-        ("model.embed_tokens.", "model.norm.")
+        # hyper_connection_mixer terminates the Qwen4-Exp stack and sits beside
+        # embed_tokens when the text model is saved without the multimodal
+        # wrapper. model.visual.* stays excluded by omission.
+        ("model.embed_tokens.", "model.norm.", "model.hyper_connection_mixer.")
     )
 
 
@@ -655,6 +666,7 @@ def precision_for_name(
     xbits: str = "int4g128",
     io_bits: int = 8,
     shared_bits: int = 8,
+    expert_bits: int = 0,
 ) -> str:
     """Return the Phase-4 storage mode for one text tensor.
 
@@ -662,16 +674,70 @@ def precision_for_name(
     recurrent constant. MTP matrices stay int8 even when routed main experts
     use int4-g128.
     """
+    # Qwen4-Exp n-gram index metadata is int64 and must survive bit-exact:
+    # the layer multipliers reach ~4.6e11, far outside the range float32 can
+    # represent as exact integers, and a perturbed multiplier silently
+    # reindexes the whole trigram table.
+    if name.endswith(INTEGER_METADATA_SUFFIXES):
+        return "raw"
     if ndim < 2:
         return "f32"
     if name.startswith("mtp."):
         return "int8"
     if ".mlp.experts." in name:
+        # Qwen3.8-Flash-Next does not survive int4 experts. Measured on the
+        # released weights, int4-g128 reconstructs down_proj at 11.8% relative
+        # error, and against a transformers reference at real dimensions that
+        # alone flips the prediction (219 where int8 gives the correct 176).
+        # Partial precision does not help: int8 on down_proj alone, or on
+        # gate/up alone, both stay wrong. Ornith tolerates int4 here -- it has
+        # 17B active parameters against this model's 5.2B -- so this is opt-in
+        # rather than the default.
+        if expert_bits == 8:
+            return "int8"
         return xbits
     if ".mlp.shared_expert." in name:
         return _bits_mode(shared_bits)
     if name.endswith(("embed_tokens.weight", "lm_head.weight")):
         return _bits_mode(io_bits)
+    if ".ple." in name:
+        # The trigram table dominates this checkpoint: ngram_vocab_size_base
+        # 20M x ple_embed_dim 2560 is ~51.2B parameters, which f32 would store
+        # in ~205 GB. It follows the expert precision instead.
+        if "ngram_embedding" in name:
+            # Follows --xbits. Pinning this table to int4 to save ~25 GiB was
+            # tried and rejected: it holds in some configurations but flips the
+            # reference argmax at real dimensions with four layers, so the
+            # saving is not reliably free.
+            return xbits
+        # The depthwise conv is 40,960 parameters and its taps scale the PLE
+        # output directly; grouped int4 over its four columns measures 5.6%
+        # relative error. Convolutions stay exact here, as they do for
+        # linear_attn.conv1d.
+        if name.endswith("conv1d.weight"):
+            return "f32"
+        # key_proj / value_proj are ordinary dense matrices.
+        return xbits
+    if "hyper_connection" in name:
+        # Dense low-rank residual gates, read on every token (641M parameters
+        # total). block_inject_weight is tiny and scales the residual
+        # injection directly, so it stays exact.
+        if name.endswith("block_inject_weight.weight"):
+            return "f32"
+        # The mix matrices must not go to int4. Measured against the released
+        # weights, input_mix_weight_up has kurtosis ~20 -- heavy outliers that
+        # sixteen levels cannot represent -- and int4-g128 reconstructs it at
+        # 15% relative error against int8's 1%. Propagated through the gate
+        # that error puts 8.5% on `mixed`, the vector every attention, GDN and
+        # MoE block actually consumes, at all 96 gated residuals. That is what
+        # turned real output into fluent nonsense. int8 costs 0.32 GB more and
+        # these stay resident, so nothing is streamed for it.
+        return "int8"
+    if ".self_attn.indexer." in name:
+        # The indexer picks which positions attention sees at all; a rounding
+        # difference changes the selection rather than the magnitude, so keep
+        # it exact. It is only ~1.3M parameters per attention layer.
+        return "f32"
     if ".self_attn." in name:
         if name.endswith(("q_proj.weight", "k_proj.weight", "v_proj.weight")):
             return xbits
@@ -686,6 +752,25 @@ def precision_for_name(
     return "f32"
 
 
+def group_size_for_name(name: str, columns: int, default_group_size: int) -> int:
+    """Per-tensor quantization group size.
+
+    The PLE trigram table is ``[rows, 160]``. Under the default 128 each row
+    splits into a 128-wide group and a 32-wide one, and the short group still
+    costs a full scale, so the table stores at 6.80 bits/parameter instead of
+    4.20 -- **40.5 GiB rather than 25.0 GiB** across its 320M rows. One group
+    per row removes that. The engine derives ``gs`` from the payload
+    (``gs = rb*2/ng``), so a non-128 group needs no loader change.
+
+    Coarser groups are marginally less precise, but this table is an additive
+    feature lookup rather than a matmul weight, and 15.5 GiB of streaming is
+    the larger effect.
+    """
+    if "ngram_embedding" in name and columns > 0:
+        return columns
+    return default_group_size
+
+
 def precision_for_tensor(
     name: str,
     tensor: torch.Tensor,
@@ -693,9 +778,11 @@ def precision_for_tensor(
     xbits: str = "int4g128",
     io_bits: int = 8,
     shared_bits: int = 8,
+    expert_bits: int = 0,
 ) -> str:
     return precision_for_name(
-        name, tensor.ndim, xbits=xbits, io_bits=io_bits, shared_bits=shared_bits
+        name, tensor.ndim, xbits=xbits, io_bits=io_bits, shared_bits=shared_bits,
+        expert_bits=expert_bits
     )
 
 
@@ -708,12 +795,15 @@ def estimate_tensor_bytes(
     shared_bits: int = 8,
     group_size: int = DEFAULT_GROUP_SIZE,
     include_mtp: bool = False,
+    expert_bits: int = 0,
 ) -> int:
     """Predict payload bytes from a safetensors header without loading data."""
     if not is_text_tensor(name, include_mtp):
         return 0
-    mode = precision_for_name(name, len(shape), xbits=xbits, io_bits=io_bits, shared_bits=shared_bits)
+    mode = precision_for_name(name, len(shape), xbits=xbits, io_bits=io_bits, shared_bits=shared_bits, expert_bits=expert_bits)
     count = math.prod(shape)
+    if mode == "raw":
+        return count * 8  # int64 index metadata, stored verbatim
     if mode == "f32":
         return count * 4
     qtype_count = 1
@@ -724,8 +814,9 @@ def estimate_tensor_bytes(
     rows, columns = math.prod(shape[:-1]), shape[-1]
     if mode == "int8":
         return count + rows * 4 + qtype_count
-    groups = math.ceil(columns / group_size)
-    return rows * groups * (group_size // 2 + 4) + qtype_count
+    gs = group_size_for_name(name, columns, group_size)
+    groups = math.ceil(columns / gs)
+    return rows * groups * (gs // 2 + 4) + qtype_count
 
 
 def containerize_state_mixed(
@@ -736,6 +827,7 @@ def containerize_state_mixed(
     shared_bits: int = 8,
     group_size: int = DEFAULT_GROUP_SIZE,
     include_mtp: bool = False,
+    expert_bits: int = 0,
 ) -> tuple[dict[str, torch.Tensor], dict[str, dict[str, Any]]]:
     """Convert a source shard and return payload plus logical inventory."""
     if xbits not in {"int8", "int4g128"}:
@@ -786,14 +878,19 @@ def containerize_state_mixed(
             )
         else:
             value = tensor.detach().cpu().contiguous()
-        mode = precision_for_tensor(name, value, xbits=xbits, io_bits=io_bits, shared_bits=shared_bits)
-        if mode == "f32":
+        mode = precision_for_tensor(name, value, xbits=xbits, io_bits=io_bits, shared_bits=shared_bits, expert_bits=expert_bits)
+        if mode == "raw":
+            # dtype preserved: casting int64 index metadata to float loses the
+            # exact values the trigram hash depends on.
+            result[name] = value.contiguous()
+        elif mode == "f32":
             result[name] = value.float().contiguous()
         elif mode == "int8":
             result[name], result[f"{name}.qs"] = quantize_int8_rows(value)
             result[f"{name}.qtype"] = torch.tensor([8], dtype=torch.uint8)
         else:
-            result[name], result[f"{name}.qs"] = quantize_int4_grouped(value, group_size)
+            gs = group_size_for_name(name, value.shape[-1] if value.ndim else 0, group_size)
+            result[name], result[f"{name}.qs"] = quantize_int4_grouped(value, gs)
             result[f"{name}.qtype"] = torch.tensor([4], dtype=torch.uint8)
         inventory[name] = {"shape": list(value.shape), "mode": mode}
     return result, inventory
@@ -853,12 +950,20 @@ def annotate_model_family(
     Ornith deliberately retains Qwen's architecture/model_type, so neither key
     can distinguish the fine-tune. Hub identity is known at conversion time and
     is the only non-heuristic registry signal.
+
+    Qwen4-Exp is the exception: it declares its own architecture, so the
+    converted config is authoritative and is preferred over the repo name.
     """
-    family = "ornith-1.0" if "ornith-1.0" in source_repo.lower() else "qwen3.5"
-    if family != "ornith-1.0":
-        return family
     path = outdir / "config.json"
-    config = json.loads(path.read_text())
+    config = json.loads(path.read_text()) if path.exists() else {}
+    if config and is_qwen4_exp(config):
+        family = "qwen3.8-flash-next"
+    elif "ornith-1.0" in source_repo.lower():
+        family = "ornith-1.0"
+    else:
+        return "qwen3.5"
+    if not config:
+        return family
     config["shiftwing_model_family"] = family
     config["shiftwing_source_repo"] = source_repo
     config["shiftwing_source_revision"] = source_revision
@@ -920,8 +1025,148 @@ def _check_free_space(path: Path, minimum_gb: float) -> None:
         raise OSError(f"only {free / 1024**3:.1f} GiB free at {path}; require {minimum_gb:.1f} GiB")
 
 
+def is_qwen4_exp(config: Mapping[str, Any]) -> bool:
+    """Detect the Qwen4-Exp family (Qwen3.8-Flash-Next and relatives).
+
+    Unlike Ornith, which deliberately keeps Qwen3.5's architecture string, this
+    family declares itself: ``Qwen4ExpForConditionalGeneration`` with
+    ``model_type`` ``qwen4_exp`` (``qwen4_exp_text`` on the nested text config).
+    """
+    if any("Qwen4Exp" in name for name in config.get("architectures") or []):
+        return True
+    if str(config.get("model_type", "")).startswith("qwen4_exp"):
+        return True
+    text = config.get("text_config")
+    return isinstance(text, Mapping) and str(text.get("model_type", "")).startswith("qwen4_exp")
+
+
+def _qwen4_exp_loader_names(config: Mapping[str, Any], include_mtp: bool) -> set[str]:
+    """Tensor inventory for Qwen4-Exp.
+
+    Three structural differences from Qwen3.5/Ornith drive this:
+
+    * There is no ``input_layernorm`` / ``post_attention_layernorm``. The
+      ``hc_norm`` inside each gated residual replaces both.
+    * ``full_attention`` layers additionally carry a DeepSeek-style indexer
+      (``indexer_budget`` 2048), so they are not plain GQA.
+    * ``ple_layer_ids`` is **one-indexed** into ``layer_types`` (see the
+      validation in transformers' ``Qwen4ExpTextConfig``), so layer id ``n``
+      is tensor layer ``n - 1``.
+    """
+    text = config.get("text_config", config)
+    layers = int(text.get("num_hidden_layers", 0))
+    experts = int(text.get("num_experts", 0))
+    if layers <= 0 or experts <= 0:
+        return set()
+    layer_types = text.get("layer_types")
+    interval = int(text.get("full_attention_interval", 4))
+    prefix = "model.language_model."
+    hyper = (
+        "block_inject_weight.weight",
+        "hc_norm.weight",
+        "input_mix_weight_down.weight",
+        "input_mix_weight_up.weight",
+    )
+    mixer = ("hc_norm.weight", "input_mix_weight_down.weight", "input_mix_weight_up.weight")
+    common_mlp = (
+        "mlp.gate.weight",
+        "mlp.shared_expert.gate_proj.weight",
+        "mlp.shared_expert.up_proj.weight",
+        "mlp.shared_expert.down_proj.weight",
+        "mlp.shared_expert_gate.weight",
+    )
+    linear = (
+        "linear_attn.in_proj_qkv.weight",
+        "linear_attn.in_proj_z.weight",
+        "linear_attn.in_proj_b.weight",
+        "linear_attn.in_proj_a.weight",
+        "linear_attn.conv1d.weight",
+        "linear_attn.A_log",
+        "linear_attn.dt_bias",
+        "linear_attn.norm.weight",
+        "linear_attn.out_proj.weight",
+    )
+    full = (
+        "self_attn.q_proj.weight",
+        "self_attn.k_proj.weight",
+        "self_attn.v_proj.weight",
+        "self_attn.o_proj.weight",
+        "self_attn.q_norm.weight",
+        "self_attn.k_norm.weight",
+        "self_attn.indexer.index_qk_proj.weight",
+        "self_attn.indexer.k_layernorm.weight",
+        "self_attn.indexer.q_layernorm.weight",
+    )
+    # No final ``norm.weight``: the text model ends with
+    # ``hyper_connection_mixer`` (use_combine=False), whose hc_norm collapse
+    # feeds lm_head directly. The engine's m->final_norm has no source tensor
+    # in this family.
+    names = {"lm_head.weight", f"{prefix}embed_tokens.weight"}
+    names.update(f"{prefix}hyper_connection_mixer.{suffix}" for suffix in mixer)
+
+    ple_ids = text.get("ple_layer_ids") or []
+    ple_layers = {int(layer_id) - 1 for layer_id in ple_ids}
+    shards = int(text.get("split_ngram_parts", 0))
+
+    def block(stem: str, is_full: bool) -> None:
+        for group in ("attn_hyper_connection", "mlp_hyper_connection"):
+            names.update(f"{stem}{group}.{suffix}" for suffix in hyper)
+        names.update(stem + suffix for suffix in (full if is_full else linear))
+        names.update(stem + suffix for suffix in common_mlp)
+        for expert in range(experts):
+            for projection in ("gate_proj", "up_proj", "down_proj"):
+                names.add(f"{stem}mlp.experts.{expert}.{projection}.weight")
+
+    for layer in range(layers):
+        stem = f"{prefix}layers.{layer}."
+        # Anything that is not linear_attention is an attention layer: upstream
+        # renames the label (full_attention in the checkpoint,
+        # qwen_sparse_attention from transformers) and the reference only ever
+        # tests for linear_attention.
+        is_full = (
+            layer_types[layer] != "linear_attention"
+            if isinstance(layer_types, list) and len(layer_types) == layers
+            else (layer + 1) % interval == 0
+        )
+        block(stem, is_full)
+        if layer in ple_layers:
+            names.update(
+                f"{stem}ple.{suffix}"
+                for suffix in (
+                    "conv1d.weight",
+                    "key_proj.weight",
+                    "norm_conv.weight",
+                    "norm_key.weight",
+                    "norm_query.weight",
+                    "value_proj.weight",
+                )
+            )
+            names.update(f"{stem}ple.{suffix}" for suffix in INTEGER_METADATA_SUFFIXES)
+            names.update(
+                f"{stem}ple.ple_embedding.ngram_embedding.shard_{shard}.weight"
+                for shard in range(shards)
+            )
+
+    if include_mtp:
+        names.update(
+            f"mtp.{suffix}"
+            for suffix in (
+                "fc_embedding.weight",
+                "fc_hidden.weight",
+                "pre_fc_norm_embedding.weight",
+                "pre_fc_norm_hidden.weight",
+            )
+        )
+        names.update(f"mtp.hyper_connection_mixer.{suffix}" for suffix in mixer)
+        # The MTP block is declared full_attention by config.text_config.mtp.
+        block("mtp.layers.0.", True)
+    return names
+
+
 def expected_loader_names(config: Mapping[str, Any], include_mtp: bool = False) -> set[str]:
     """Build the complete text tensor inventory expected by ``qwen.c``."""
+    if is_qwen4_exp(config):
+        return _qwen4_exp_loader_names(config, include_mtp)
     text = config.get("text_config", config)
     layers = int(text.get("num_hidden_layers", 0))
     experts = int(text.get("num_experts", 0))
@@ -1025,6 +1270,7 @@ def convert_streaming(
     shared_bits: int = 8,
     group_size: int = DEFAULT_GROUP_SIZE,
     include_mtp: bool = False,
+    expert_bits: int = 0,
     delete_source: bool = False,
     resume: bool = True,
     max_shards: int | None = None,
@@ -1090,6 +1336,7 @@ def convert_streaming(
                 shared_bits=shared_bits,
                 group_size=group_size,
                 include_mtp=True,
+                expert_bits=expert_bits,
             )
             record = state["completed"].get(shard_name)
             if not record or not record.get("output"):
@@ -1156,6 +1403,7 @@ def convert_streaming(
             shared_bits=shared_bits,
             group_size=group_size,
             include_mtp=include_mtp,
+            expert_bits=expert_bits,
         )
         del source_state
         if payload:
@@ -1436,6 +1684,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--xbits", choices=("int8", "int4g128"), default="int4g128")
     parser.add_argument("--io-bits", type=int, choices=(4, 8), default=8)
     parser.add_argument("--shared-bits", type=int, choices=(4, 8), default=8)
+    parser.add_argument("--expert-bits", type=int, choices=(0, 8), default=0,
+                        help="8 forces routed experts to int8 regardless of --xbits; "
+                             "required for Qwen3.8-Flash-Next, which is wrong at int4 experts")
     parser.add_argument("--group-size", type=int, default=DEFAULT_GROUP_SIZE)
     parser.add_argument("--mtp", action="store_true")
     parser.add_argument("--min-free-gb", type=float, default=35.0)
@@ -1468,6 +1719,7 @@ def main() -> None:
         "include_mtp": args.mtp,
         "resume": not args.no_resume,
         "max_shards": args.max_shards,
+        "expert_bits": args.expert_bits,
     }
     if args.repo:
         result = convert_hub_repo(

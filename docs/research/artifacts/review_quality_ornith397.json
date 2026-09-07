@@ -1,0 +1,50 @@
+{
+  "model": "c/ornith397",
+  "cases": 5,
+  "json_ok": 0,
+  "verdict_ok": 0,
+  "caught": 0,
+  "seconds_total": 9000,
+  "rows": [
+    {
+      "name": "null-instead-of-throw",
+      "json": false,
+      "verdict_ok": false,
+      "caught": false,
+      "seconds": 1800,
+      "note": "timeout"
+    },
+    {
+      "name": "off-by-one-slice",
+      "json": false,
+      "verdict_ok": false,
+      "caught": false,
+      "seconds": 1800,
+      "note": "timeout"
+    },
+    {
+      "name": "swallowed-exception",
+      "json": false,
+      "verdict_ok": false,
+      "caught": false,
+      "seconds": 1800,
+      "note": "timeout"
+    },
+    {
+      "name": "missing-await",
+      "json": false,
+      "verdict_ok": false,
+      "caught": false,
+      "seconds": 1800,
+      "note": "timeout"
+    },
+    {
+      "name": "auth-check-removed",
+      "json": false,
+      "verdict_ok": false,
+      "caught": false,
+      "seconds": 1800,
+      "note": "timeout"
+    }
+  ]
+}

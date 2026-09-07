@@ -1,0 +1,19 @@
+{
+  "model": "c/ornith397",
+  "cases": 1,
+  "json_ok": 0,
+  "verdict_ok": 0,
+  "caught": 0,
+  "seconds_total": 2700,
+  "rows": [
+    {
+      "name": "null-instead-of-throw",
+      "json": false,
+      "verdict_ok": false,
+      "caught": false,
+      "seconds": 2700,
+      "note": "timeout",
+      "raw_tail": "shiftwing qwen engine \u2014 PHASE 5 target decoding\nmodel: hidden=4096 layers=60 (15 full / 45 GDN) vocab=248320 ctx=2048\nweights loaded in 619.09s, tokenizer=yes, format=mixed-with-int3-g128, matrices=210/197/0/7560/180 f32/i8/i2/i3/i4, experts/layer=42, KV=fp32, MTP=off\ntext:{\n  \"verdict\": \"changes_required\",\n  \"required_actions\": [\n    \"Restore the"
+    }
+  ]
+}

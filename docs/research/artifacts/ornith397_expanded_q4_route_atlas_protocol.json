@@ -1,0 +1,143 @@
+{
+  "schema": "colib.ornith397-route-atlas-protocol.v1",
+  "created_at": "2026-08-18T00:00:00+01:00",
+  "status": "ready_to_run_after_q3_reconstruction",
+  "repository": {
+    "branch": "prefill-throughput-and-serve-fixes",
+    "head": "35d9ab86fa2b8f8acbf56c8438413dfb08f2a2a7",
+    "dirty": true,
+    "engine_source_sha256": "4a7e2593485aaf8eead81f2d9f06fcfaea9c1bc4307e07d09ab0aa7075111ebf",
+    "engine_sha256": "b47aadfc3ead42b1b31695d52898e36dc4668bef85d2f4f59a4aed0f82f24271"
+  },
+  "model": {
+    "repository": "deepreinforce-ai/Ornith-1.0-397B-FP8",
+    "revision": "8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+    "path": "c/ornith397",
+    "base_state": "reconstruction_in_progress",
+    "q3_state": "awaiting_base_completion"
+  },
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 5070 Ti",
+    "vram_mib": 16303,
+    "driver": "591.86"
+  },
+  "bindings": {
+    "prompt_fixture": {
+      "path": "c/fixtures/ornith397_legacy_prompts.json",
+      "sha256": "c977a1530534b9e7b10cbe91dcdeda2bfca468bcb36b20446cdad70ed05abb38"
+    },
+    "qualifier_sha256": "df58026e4c270434e9812ecd7d1ad33c2311b266aee3d31443ce7d1a7aa1cc45",
+    "gateway_sha256": "7c64eb17494f0aed62a323519c8a5912cef67ed70b7ef495129b30c06eb1074e",
+    "trial_harness_sha256": "fa6612089bd2eef4202ccbdda2bf1146bdeb0465a7d5e67bd390b6d3733db7b7"
+  },
+  "common_configuration": {
+    "warmup_passes": 2,
+    "measured_passes": 1,
+    "paired_trials": 5,
+    "order": "alternating_AB_BA",
+    "max_tokens": 64,
+    "context": 4096,
+    "threads": 8,
+    "expert_ram_gb": 18,
+    "cuda_expert_gb": 6,
+    "minimum_tps": 0.7,
+    "uring_persist": true,
+    "direct_io": true,
+    "pinned_upload": true,
+    "decode_protect": true,
+    "decode_protect_prewarm": true,
+    "expert_q3": true,
+    "q3_native": false,
+    "cuda_events": true,
+    "sampling": {
+      "temperature": 0,
+      "top_p": 1
+    }
+  },
+  "arms": {
+    "control": {
+      "q3_route_atlas": false,
+      "device_representation": "expanded_q4"
+    },
+    "candidate": {
+      "q3_route_atlas": true,
+      "device_representation": "expanded_q4"
+    },
+    "diagnostic_not_promotable": {
+      "q3_route_atlas": true,
+      "q3_native": true,
+      "device_representation": "packed_q3"
+    }
+  },
+  "acceptance": {
+    "minimum_pairs": 5,
+    "decode_tps_ratio_95pct_lower_gt": 1.0,
+    "ttft_ratio_95pct_upper_lt": 1.0,
+    "exact_outputs": true,
+    "host_moe_fallbacks": 0,
+    "require_complete_telemetry": true,
+    "require_atlas_active_for_candidate": true,
+    "require_disk_or_cache_improvement": true,
+    "forbid_per_prompt_regression": true
+  },
+  "validation": {
+    "python_tests": {
+      "passed": 43,
+      "failed": 0
+    },
+    "cuda_backend": {
+      "passed": true,
+      "architecture": "sm_120",
+      "q3_native_vs_expanded_q4_maxdiff": 0,
+      "cached_prefill_path": {
+        "status": "tiny_composed_selftest_passed_awaiting_real_atlas",
+        "fixture": "temporary copy of c/qwen_tiny_i4 with generated grouped-int3 sidecar",
+        "executed_at": "2026-08-18T17:28:21+01:00",
+        "revalidated_at": "2026-08-18T17:42:23+01:00",
+        "converter": {
+          "path": "c/tools/requantize_expert_q2.py",
+          "sha256": "960a4c00703645809f8d26babc415318029f734a2f561c0badbfbe3eb1f3e950",
+          "command": "./.venv/bin/python c/tools/requantize_expert_q2.py --snapshot /tmp/colib-q3-prefill.ESuaFc --bits 3 --group-size 128 --iterations 1 --experts-per-file 8 --workers 2 --torch-threads 1"
+        },
+        "fixture_sha256": {
+          "config.json": "f3494f24092d9c150f880b7ecffef5286f58363f97ee109e8d26494575435c8a",
+          "model.safetensors": "6e561ddb8d507ba91927933141b41b68d8af0cfdc1437540b51280c6cc9669bf",
+          "tokenizer.json": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523",
+          "tokenizer_config.json": "316230d6a809701f4db5ea8f8fc862bc3a6f3229c937c174e674ff3ca0a64ac8"
+        },
+        "generated_q3_manifest_sha256": "c57ed68a3f86fb7dc0dd2efdae461fcb404d21cd4b15a0e13ad5eab0a1703de3",
+        "selftest_command": "SNAP=/tmp/colib-q3-prefill.ESuaFc MTP=0 EXPERT_Q3=1 Q3_NATIVE=0 COLI_CUDA=1 CUDA_DENSE=1 CUDA_F16=1 CUDA_EXPERTS=1 CUDA_EXPERT_GB=0.1 CUDA_HEADROOM_GB=1 RAM_GB=0.01 RAM_HEADROOM_GB=1 PREFETCH_THREADS=0 Q3_PREFILL_CACHE_TEST=1 ./c/qwen",
+        "environment": {
+          "MTP": "0",
+          "EXPERT_Q3": "1",
+          "Q3_NATIVE": "0",
+          "COLI_CUDA": "1",
+          "CUDA_DENSE": "1",
+          "CUDA_F16": "1",
+          "CUDA_EXPERTS": "1",
+          "CUDA_EXPERT_GB": "0.1",
+          "CUDA_HEADROOM_GB": "1",
+          "RAM_GB": "0.01",
+          "RAM_HEADROOM_GB": "1",
+          "PREFETCH_THREADS": "0",
+          "Q3_PREFILL_CACHE_TEST": "1"
+        },
+        "mtp_disabled_for_fixture_only": true,
+        "batch_tokens": 3,
+        "used_cached_device_copy": true,
+        "maxdiff": 1.1641532e-09,
+        "tolerance": 0.0020128214,
+        "telemetry_counters_passed": true,
+        "gpu": "NVIDIA GeForce RTX 5070 Ti",
+        "architecture": "sm_120"
+      }
+    },
+    "web_tests": {
+      "passed": 19,
+      "failed": 0,
+      "production_build": "passed"
+    },
+    "diff_check": "passed"
+  },
+  "results": null
+}

@@ -1,0 +1,566 @@
+{
+  "compact_artifacts": {
+    "base-shards.json": {
+      "bytes": 34355,
+      "path": "docs/research/artifacts/ornith397_retirement/base-shards.json",
+      "sha256": "d4fc004ec2f450bb4fbae352af4651d79b56641c24d23bc53d9cad1058aa1e23"
+    },
+    "chat_template.jinja": {
+      "bytes": 7756,
+      "path": "docs/research/artifacts/ornith397_retirement/chat_template.jinja",
+      "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+    },
+    "config.json": {
+      "bytes": 5367,
+      "path": "docs/research/artifacts/ornith397_retirement/config.json",
+      "sha256": "c31964d2d920c10228a40d77afe02b19122b66f7bf3f6eb4b0809ba42527b0d6"
+    },
+    "expert-q3.json": {
+      "bytes": 142751,
+      "path": "docs/research/artifacts/ornith397_retirement/expert-q3.json",
+      "sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180"
+    },
+    "generation_config.json": {
+      "bytes": 244,
+      "path": "docs/research/artifacts/ornith397_retirement/generation_config.json",
+      "sha256": "303aba891d66ab63908a7b3cc9163bcb835fdf8b9f6301c73216f3f1eb3992dd"
+    },
+    "quantization.json": {
+      "bytes": 527,
+      "path": "docs/research/artifacts/ornith397_retirement/quantization.json",
+      "sha256": "b0623a5f83d3890cbb095bbec25f0aeaec62edbc804fae918a2051189d1933a2"
+    },
+    "tokenizer_config.json": {
+      "bytes": 1165,
+      "path": "docs/research/artifacts/ornith397_retirement/tokenizer_config.json",
+      "sha256": "792fa3f0cb88b111e54ef3134c873531008c4df471d108da17903426e308aa7b"
+    }
+  },
+  "environment": {
+    "cpu_count": 16,
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "python": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+    "selected": {}
+  },
+  "historical_control": {
+    "artifact": "/home/dinga/Projects/colib/c/ornith397_q3_qualification.json",
+    "median_ttft_s": 81.97247937300006,
+    "sha256": "7d4d1fe8add387fbdd274a6bd287629023b76c7562a67ac328ffc731507c4106",
+    "sustained_tps": 0.8368667731547248
+  },
+  "performance": {
+    "aggregate": {
+      "maximum_trial_sustained_tps": 0.8384117934410047,
+      "mean_trial_sustained_tps": 0.8192399481642496,
+      "mean_turn_ttft_s": 43.61236433509998,
+      "measured_turn_count": 20,
+      "median_tps_over_historical": 0.9846653304572235,
+      "median_trial_sustained_tps": 0.8240336977370674,
+      "median_trial_ttft_s": 43.50844407749992,
+      "median_ttft_over_historical": 0.5307689167180497,
+      "median_turn_ttft_s": 44.11023923149992,
+      "minimum_trial_sustained_tps": 0.7735772494629829,
+      "token_weighted_decode_tps": 0.8185323062648885,
+      "trial_count": 5
+    },
+    "completed_at": "2026-08-16T19:32:08.894201+00:00",
+    "configuration": {
+      "context": 4096,
+      "cuda_expert_gb": 6.0,
+      "cuda_headroom_gb": 1.0,
+      "decode_protect": true,
+      "decode_protect_prewarm": true,
+      "expert_q2": false,
+      "expert_q3": true,
+      "expert_ram_gb": 18.0,
+      "max_tokens": 64,
+      "measured_passes": 1,
+      "minimum_tps": 0.7,
+      "pinned_upload": true,
+      "predictive_prefetch": false,
+      "q3_native": false,
+      "q3_route_atlas": false,
+      "ram_headroom_gb": 1.0,
+      "threads": 8,
+      "uring_persist": true,
+      "warmup_passes": 2
+    },
+    "hardware": {
+      "cores": 16,
+      "cpu": "AMD Ryzen 7 7700X 8-Core Processor",
+      "gpu": "NVIDIA GeForce RTX 5070 Ti",
+      "gpus": 1,
+      "ram_avail_gb": 2.308,
+      "ram_total_gb": 29.375,
+      "vram_total_gb": 15.92
+    },
+    "signature": {
+      "acceptance_key": "acceptance.passed",
+      "bindings": [
+        {
+          "bytes": 12783,
+          "path": "/home/dinga/Projects/colib/c/tools/run_perf_trials.py",
+          "sha256": "fa6612089bd2eef4202ccbdda2bf1146bdeb0465a7d5e67bd390b6d3733db7b7"
+        },
+        {
+          "bytes": 1207288,
+          "path": "/home/dinga/Projects/colib/c/qwen",
+          "sha256": "89b870b88bb41a45785378e4e0e3ba0fc9ac456b711fe5627380783723938cd7"
+        },
+        {
+          "bytes": 15175,
+          "path": "/home/dinga/Projects/colib/c/Makefile",
+          "sha256": "591064518a7c3c3611f2d26251d495a94ca114187cdcf81a1a0dd56031b0cc28"
+        },
+        {
+          "bytes": 289370,
+          "path": "/home/dinga/Projects/colib/c/qwen.c",
+          "sha256": "5fc616f74cd9ae273bca7382274c85405a974e65215a8165f5a25ad48b9f562f"
+        },
+        {
+          "bytes": 115577,
+          "path": "/home/dinga/Projects/colib/c/backend_cuda.cu",
+          "sha256": "c460f682044bd85682a4efe277365583f40bae0c1fe8956689ff569d7f333304"
+        },
+        {
+          "bytes": 14349,
+          "path": "/home/dinga/Projects/colib/c/backend_cuda.h",
+          "sha256": "336517e807f561c97d3fd942d8088e22a6dba828679b9e706eb7d991e763ceb4"
+        },
+        {
+          "bytes": 17479,
+          "path": "/home/dinga/Projects/colib/c/compat.h",
+          "sha256": "f456ed8d85b3766ccc55786888e97b40f7561d6a7295e4590cbff210ebec3fc7"
+        },
+        {
+          "bytes": 1248,
+          "path": "/home/dinga/Projects/colib/c/decode_batch.h",
+          "sha256": "d2d2556af4c95688601fb45fb3a3d6fab862679ffd836c25a8a2881978e9e99e"
+        },
+        {
+          "bytes": 6281,
+          "path": "/home/dinga/Projects/colib/c/json.h",
+          "sha256": "e4d1d43bc00bbca952a8b8588ad125ec61be38296c535225b0917227e909a246"
+        },
+        {
+          "bytes": 5975,
+          "path": "/home/dinga/Projects/colib/c/serve_mux.h",
+          "sha256": "31ec056e5b67f58bb8f6d95d583e1a1a13cefab07d92cad126b9bf7c422e6b17"
+        },
+        {
+          "bytes": 4556,
+          "path": "/home/dinga/Projects/colib/c/serve_scheduler.h",
+          "sha256": "a2e9dde4ad0c0f1de317f3311a983f92d19292a32a20bfbc783ec3c5b10bdb9d"
+        },
+        {
+          "bytes": 24115,
+          "path": "/home/dinga/Projects/colib/c/st.h",
+          "sha256": "b1a719c27561c6966a8c4d4f82c9eccb2bf1ac4958bd6f86e416cbb46d6a545a"
+        },
+        {
+          "bytes": 2469,
+          "path": "/home/dinga/Projects/colib/c/tier.h",
+          "sha256": "1971c5325fc4ffe5dce17e50d7781dc64ef31d14ebf354cb2452ca6c13a3d495"
+        },
+        {
+          "bytes": 14894,
+          "path": "/home/dinga/Projects/colib/c/tok.h",
+          "sha256": "d97c4bd0db568b01772e6133fc775cd5132a99b6dbc216c6801fd1930528045a"
+        },
+        {
+          "bytes": 90212,
+          "path": "/home/dinga/Projects/colib/c/tok_nfc.h",
+          "sha256": "85fb606dd9ac636d9a511fd9b481405c7509f95cfc24933bfdce15ede478a45a"
+        },
+        {
+          "bytes": 19989,
+          "path": "/home/dinga/Projects/colib/c/tok_unicode.h",
+          "sha256": "6ee7f1589ec91b5f09dc1ca1b75fbaa99892721713be67d04bfb639f8a524511"
+        },
+        {
+          "bytes": 5689,
+          "path": "/home/dinga/Projects/colib/c/uring.h",
+          "sha256": "c2af7fa490e0e3dca17f6a651107fcfc33d0cc0fa962dfec3964ef3712275a88"
+        },
+        {
+          "bytes": 21410,
+          "path": "/home/dinga/Projects/colib/c/tools/qualify_tiered_model.py",
+          "sha256": "ad51cdf28eca802ebc99f93c331ff25d1cdd325b93af5fef2b4fb4c46e1d5221"
+        },
+        {
+          "bytes": 126526,
+          "path": "/home/dinga/Projects/colib/c/openai_server.py",
+          "sha256": "7affa9f2d8f31dec6fa3e26f9c3a500f5e0f07e0e8988bcfd1033588e5897348"
+        },
+        {
+          "bytes": 2024,
+          "path": "/home/dinga/Projects/colib/c/tools/expert_lowbit.py",
+          "sha256": "210d49a89882f5352b5ba8f8c5c3c8bdcc18fd8845128e9b4ee8f003f997453e"
+        },
+        {
+          "bytes": 783,
+          "path": "/home/dinga/Projects/colib/c/tools/model_prompt.py",
+          "sha256": "c036269b0aa896554199e72ac1d43031b61a499fcce72d8a4ce02de8b0b922d1"
+        },
+        {
+          "bytes": 5868,
+          "path": "/home/dinga/Projects/colib/c/tools/runtime_env.py",
+          "sha256": "e3d4f8204788879f6d889c73461ff9526a7e2e1615ee1887087ca504816c87df"
+        },
+        {
+          "bytes": 5367,
+          "path": "/home/dinga/Projects/colib/c/ornith397/config.json",
+          "sha256": "c31964d2d920c10228a40d77afe02b19122b66f7bf3f6eb4b0809ba42527b0d6"
+        },
+        {
+          "bytes": 527,
+          "path": "/home/dinga/Projects/colib/c/ornith397/quantization.json",
+          "sha256": "b0623a5f83d3890cbb095bbec25f0aeaec62edbc804fae918a2051189d1933a2"
+        },
+        {
+          "bytes": 142751,
+          "path": "/home/dinga/Projects/colib/c/ornith397/expert-q3.json",
+          "sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180"
+        },
+        {
+          "bytes": 244,
+          "path": "/home/dinga/Projects/colib/c/ornith397/generation_config.json",
+          "sha256": "303aba891d66ab63908a7b3cc9163bcb835fdf8b9f6301c73216f3f1eb3992dd"
+        },
+        {
+          "bytes": 1165,
+          "path": "/home/dinga/Projects/colib/c/ornith397/tokenizer_config.json",
+          "sha256": "792fa3f0cb88b111e54ef3134c873531008c4df471d108da17903426e308aa7b"
+        },
+        {
+          "bytes": 7756,
+          "path": "/home/dinga/Projects/colib/c/ornith397/chat_template.jinja",
+          "sha256": "a4aee8afcf2e0711942cf848899be66016f8d14a889ff9ede07bca099c28f715"
+        },
+        {
+          "bytes": 6722759,
+          "path": "/home/dinga/Projects/colib/c/ornith397/vocab.json",
+          "sha256": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+        },
+        {
+          "bytes": 555,
+          "path": "/home/dinga/Projects/colib/c/fixtures/ornith397_legacy_prompts.json",
+          "sha256": "c977a1530534b9e7b10cbe91dcdeda2bfca468bcb36b20446cdad70ed05abb38"
+        }
+      ],
+      "command_template": [
+        "./.venv/bin/python",
+        "c/tools/qualify_tiered_model.py",
+        "--model",
+        "c/ornith397",
+        "--engine",
+        "c/qwen",
+        "--prompt-file",
+        "c/fixtures/ornith397_legacy_prompts.json",
+        "--expert-ram-gb",
+        "18",
+        "--cuda-expert-gb",
+        "6",
+        "--ram-headroom-gb",
+        "1",
+        "--cuda-headroom-gb",
+        "1",
+        "--threads",
+        "8",
+        "--uring-persist",
+        "1",
+        "--pinned-upload",
+        "1",
+        "--decode-protect",
+        "1",
+        "--decode-protect-prewarm",
+        "1",
+        "--expert-q3",
+        "1",
+        "--q3-native",
+        "0",
+        "--context",
+        "4096",
+        "--max-tokens",
+        "64",
+        "--warmup-passes",
+        "2",
+        "--measured-passes",
+        "1",
+        "--minimum-tps",
+        "0.70",
+        "--output",
+        "{output}"
+      ],
+      "label": "ornith397-legacy4-control",
+      "sha256": "512a4c74f0634b316f73e5d6f4f57b403de3b4c732a99dd9621e10d9765c404c",
+      "trials": 5
+    },
+    "state": "/home/dinga/Projects/colib/c/bench/deepseek_perf_qualification/ornith397-legacy4-control-state.json",
+    "state_sha256": "1efee0a3c8929a61fbd18f79ab2c4a938fe3f6bad081f1eff1f4cc78bbf0156b",
+    "trials": [
+      {
+        "artifact": "/home/dinga/Projects/colib/c/bench/deepseek_perf_qualification/ornith397-legacy4-control-trial-01.json",
+        "bytes": 109104,
+        "median_ttft_s": 45.976887493500044,
+        "sha256": "85a3a6ca12760d1d3fbf8c5061b9bb1092a2d31137aea0729dfe5ccb257df31f",
+        "sustained_tps": 0.7735772494629829,
+        "trial": 1,
+        "turns": [
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.903103,
+            "prompt_index": 0,
+            "ttft_s": 43.25040351100006,
+            "wall_s": 114.15540418500018
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.77217,
+            "prompt_index": 1,
+            "ttft_s": 37.647326249000116,
+            "wall_s": 120.56843553199997
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.679654,
+            "prompt_index": 2,
+            "ttft_s": 52.39681892900012,
+            "wall_s": 146.60020337399988
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.77095,
+            "prompt_index": 3,
+            "ttft_s": 48.70337147600003,
+            "wall_s": 131.75544576999982
+          }
+        ]
+      },
+      {
+        "artifact": "/home/dinga/Projects/colib/c/bench/deepseek_perf_qualification/ornith397-legacy4-control-trial-02.json",
+        "bytes": 109137,
+        "median_ttft_s": 42.98951848699994,
+        "sha256": "9f87dbc2c20e4fd67ea4497ff9ed9e13ef4baeca28a3dadff5879839f26244a8",
+        "sustained_tps": 0.8236914785569126,
+        "trial": 2,
+        "turns": [
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.869129,
+            "prompt_index": 0,
+            "ttft_s": 41.008962022000105,
+            "wall_s": 114.68506547900006
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.789494,
+            "prompt_index": 1,
+            "ttft_s": 38.52338091999991,
+            "wall_s": 119.62803189600027
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.872029,
+            "prompt_index": 2,
+            "ttft_s": 50.03935484400017,
+            "wall_s": 123.47127796699988
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.773859,
+            "prompt_index": 3,
+            "ttft_s": 44.97007495199978,
+            "wall_s": 127.71165565799993
+          }
+        ]
+      },
+      {
+        "artifact": "/home/dinga/Projects/colib/c/bench/deepseek_perf_qualification/ornith397-legacy4-control-trial-03.json",
+        "bytes": 109111,
+        "median_ttft_s": 44.11351323249983,
+        "sha256": "5a278be6f043ea9229402b642144af9b2e2ecb74d6e6f148c61fbcbf4c504fa5",
+        "sustained_tps": 0.8240336977370674,
+        "trial": 3,
+        "turns": [
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.886586,
+            "prompt_index": 0,
+            "ttft_s": 41.43692707399987,
+            "wall_s": 113.66594301399982
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.76568,
+            "prompt_index": 1,
+            "ttft_s": 36.94522351500018,
+            "wall_s": 120.57045189699966
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.879301,
+            "prompt_index": 2,
+            "ttft_s": 49.06466287300009,
+            "wall_s": 121.8898172270001
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.779452,
+            "prompt_index": 3,
+            "ttft_s": 46.790099390999785,
+            "wall_s": 128.9389487970002
+          }
+        ]
+      },
+      {
+        "artifact": "/home/dinga/Projects/colib/c/bench/deepseek_perf_qualification/ornith397-legacy4-control-trial-04.json",
+        "bytes": 109141,
+        "median_ttft_s": 43.50844407749992,
+        "sha256": "302af5f62f76502b1baa346cdc776a20e5051e01facb15c5e8f0e6ddfe38d59e",
+        "sustained_tps": 0.8384117934410047,
+        "trial": 4,
+        "turns": [
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.878029,
+            "prompt_index": 0,
+            "ttft_s": 41.312367688999984,
+            "wall_s": 114.24224148400026
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.799773,
+            "prompt_index": 1,
+            "ttft_s": 36.92243570499977,
+            "wall_s": 116.98445955999978
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.887147,
+            "prompt_index": 2,
+            "ttft_s": 47.40589849299977,
+            "wall_s": 119.58686524299992
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.797164,
+            "prompt_index": 3,
+            "ttft_s": 45.70452046599985,
+            "wall_s": 126.02853901600065
+          }
+        ]
+      },
+      {
+        "artifact": "/home/dinga/Projects/colib/c/bench/deepseek_perf_qualification/ornith397-legacy4-control-trial-05.json",
+        "bytes": 109132,
+        "median_ttft_s": 43.42162615500001,
+        "sha256": "ec18e0103fa735df7617927fd567b496afeab1046eef26536ca2490974dd53f2",
+        "sustained_tps": 0.8364855216232808,
+        "trial": 5,
+        "turns": [
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.864257,
+            "prompt_index": 0,
+            "ttft_s": 41.60874913099906,
+            "wall_s": 115.70036826999967
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.794202,
+            "prompt_index": 1,
+            "ttft_s": 36.875430398999015,
+            "wall_s": 117.49884968900005
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.901171,
+            "prompt_index": 2,
+            "ttft_s": 46.406775884001036,
+            "wall_s": 117.46536913000091
+          },
+          {
+            "completion_tokens": 64,
+            "decode_tps": 0.796143,
+            "prompt_index": 3,
+            "ttft_s": 45.23450317900097,
+            "wall_s": 125.66137641200112
+          }
+        ]
+      }
+    ]
+  },
+  "reconstruction": {
+    "commands": {
+      "base": [
+        "./.venv/bin/python",
+        "c/tools/convert_qwen.py",
+        "--repo",
+        "deepreinforce-ai/Ornith-1.0-397B-FP8",
+        "--revision",
+        "8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+        "--outdir",
+        "c/ornith397",
+        "--staging-dir",
+        "c/.ornith397.source",
+        "--xbits",
+        "int4g128",
+        "--io-bits",
+        "8",
+        "--shared-bits",
+        "8",
+        "--group-size",
+        "128",
+        "--min-free-gb",
+        "100"
+      ],
+      "q3": [
+        "./.venv/bin/python",
+        "c/tools/requantize_expert_q2.py",
+        "--snapshot",
+        "c/ornith397",
+        "--bits",
+        "3",
+        "--group-size",
+        "128",
+        "--iterations",
+        "3",
+        "--experts-per-file",
+        "64",
+        "--workers",
+        "8",
+        "--torch-threads",
+        "1"
+      ]
+    },
+    "tool_hashes": {
+      "c/tools/convert_qwen.py": "034d8103459cc6ab13189a04f53f6f7245112fb221ce75807f4ab9072dbf6fc3",
+      "c/tools/requantize_expert_q2.py": "960a4c00703645809f8d26babc415318029f734a2f561c0badbfbe3eb1f3e950"
+    }
+  },
+  "recorded_at": "2026-08-16T19:42:12.184935+00:00",
+  "repository": {
+    "branch": "prefill-throughput-and-serve-fixes",
+    "commit": "35d9ab86fa2b8f8acbf56c8438413dfb08f2a2a7",
+    "dirty": true
+  },
+  "retirement_acceptance": {
+    "all_acceptance_gates_passed": true,
+    "all_artifacts_hash_verified": true,
+    "base_shard_hashes_preserved": true,
+    "deepseek_promotion_gate_passed": false,
+    "five_trials_complete": true,
+    "ornith_weight_container_may_be_removed_for_space": true,
+    "q3_shard_hashes_preserved": true,
+    "source_and_conversion_identity_consistent": true
+  },
+  "schema": "colib.ornith397-retirement.v1",
+  "source_identity": {
+    "base_quantization_sha256": "b0623a5f83d3890cbb095bbec25f0aeaec62edbc804fae918a2051189d1933a2",
+    "config_sha256": "c31964d2d920c10228a40d77afe02b19122b66f7bf3f6eb4b0809ba42527b0d6",
+    "expert_q3_sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180",
+    "source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+    "source_fingerprint": "4b1c5ab0824e25b3768e3c6df8392394194fce86c4e9f4f3da24e3134ccf4c94"
+  }
+}

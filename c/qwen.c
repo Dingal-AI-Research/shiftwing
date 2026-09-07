@@ -38,6 +38,7 @@
 
 #define QW_MAX_LAYERS 128
 #define QW_MAX_TOPK 64
+#define QW_MAX_NGRAM 8
 #define QW_NAME 512
 #define QW_PREFILL_PIPE_MAX_BATCH 32
 #define QW_PREFILL_PIPE_SLOTS 2
@@ -54,6 +55,14 @@ typedef struct {
     int lin_k_heads, lin_v_heads, lin_k_dim, lin_v_dim, conv_kernel;
     int mtp_layers, full_interval;
     signed char layer_type[QW_MAX_LAYERS];
+    /* Qwen4-Exp (Qwen3.8-Flash-Next). Zero for the Qwen3.5/Ornith families.
+     * `hidden` stays the per-block width; the residual carried between layers
+     * is hc_count*hidden wide. */
+    int is_qwen4_exp;
+    int hc_count, hc_lowrank;
+    int idx_budget, idx_ratio, idx_head_dim, idx_n_heads, idx_kv_heads;
+    int ngram_size, heads_per_ngram, ple_embed_dim, ple_conv_kernel, ngram_shards, ngram_divisor;
+    signed char ple_layer[QW_MAX_LAYERS];
 } Cfg;
 
 typedef struct {
@@ -103,15 +112,59 @@ typedef struct {
     int cuda_aux_ready,cuda_state_pos;
 #endif
 } AttnW;
+/* Qwen4-Exp gated residual. Replaces both layernorms and both residual adds:
+ * hc_norm collapses hc_count streams to one block input, and the block output
+ * is scattered back weighted by `inject`. The model-level mixer is built with
+ * use_combine=False upstream and has no inject matrix. */
+typedef struct {
+    float *hc_norm;         /* hc_count*hidden, zero-centered */
+    QMat mix_down, mix_up;  /* lowrank x hc*hidden, hc*hidden x lowrank */
+    QMat inject;            /* hc_count x hc*hidden */
+    int has_inject;
+} HcW;
+
+/* Qwen4-Exp QSA indexer: picks which keys a full_attention layer may see.
+ * One kv head feeds the pooled block keys; index_qk_proj emits the query heads
+ * and that key head together. */
+typedef struct {
+    QMat qk;                /* (idx_n_heads+idx_kv_heads)*idx_head_dim x hidden */
+    float *q_norm, *k_norm; /* idx_head_dim */
+    float *k_cache;         /* max_seq * idx_head_dim */
+} IdxW;
+
+/* Qwen4-Exp per-layer embeddings. The trigram table is ~25 GiB spread over
+ * split_ngram_parts row shards and is never resident: exactly ngram_heads rows
+ * (16) are gathered per token, ~84 bytes each, so it is read straight from the
+ * container on demand rather than cached. */
+typedef struct {
+    int enabled;
+    QMat key_proj, value_proj;      /* hc*hidden x embed_dim, hidden x embed_dim */
+    float *norm_key,*norm_query,*norm_conv;  /* hc*hidden */
+    float *conv;                    /* hc*hidden * kernel, f32 (exact by convention) */
+    int64_t *mult,*vocab,*offset;   /* stored index metadata, int64 */
+    int ngram_heads, head_dim;      /* head_dim = embed_dim / ngram_heads */
+    int64_t rows_per_shard;
+    int shard_rb, shard_ng, shard_gs;   /* packed row geometry of one shard */
+    int shard_fmt;                  /* 1 = int8 rows, 4 = int4 nibble pairs */
+    int layer;
+    float *conv_state;              /* (kernel-1)*dilation rows of hc*hidden */
+    int hist[QW_MAX_NGRAM];         /* recent token window for the hash */
+    int seg;                        /* position within the current EOS segment */
+    int conv_pos;                   /* rows pushed into conv_state */
+} PleW;
+
 typedef struct {
     int type,index;
-    float *input_norm, *post_norm;
+    float *input_norm, *post_norm;   /* Qwen3.5/Ornith only; NULL for Qwen4-Exp */
 #ifdef COLI_CUDA
     float *d_input_norm,*d_post_norm;
 #endif
     GdnW gdn;
     AttnW attn;
     MoeW moe;
+    HcW attn_hc, mlp_hc;             /* Qwen4-Exp only */
+    PleW ple;                        /* Qwen4-Exp ple_layer_ids layers only */
+    IdxW idx;                        /* Qwen4-Exp full_attention layers only */
 } Layer;
 typedef struct {
     int enabled, pos;
@@ -158,13 +211,14 @@ typedef struct {
     shards S;
     Tok T; int has_tok;
     QMat embed, lm_head;
-    float *final_norm;
+    float *final_norm;      /* NULL for Qwen4-Exp: `mixer` terminates the stack */
+    HcW mixer;              /* Qwen4-Exp hyper_connection_mixer (use_combine=False) */
     Layer *layer;
     MtpW mtp;
     float *last_hidden;
     int pos, max_seq, quant_mode, kv16, expert_cap; /* 0=floating, 8=int8, 4=grouped int4 */
     int matrix_f32, matrix_i8, matrix_i2, matrix_i3, matrix_i4;
-    int dump_acts, debug_logits,route_record_suppress,decode_phase;
+    int dump_acts, debug_logits,route_record_suppress,decode_phase,qw4_trace;
     int decode_prewarmer;
     int prof_detail;
     double prof_gdn,prof_attn,prof_moe,prof_lm,prof_expert_load;uint64_t prof_expert_misses;
@@ -419,7 +473,7 @@ typedef struct {
     uint64_t cold_prefill_experts,cold_prefill_tokens,cold_prefill_bytes;
     pthread_mutex_t lock;
     int active,failed,use_f16;
-    uint64_t calls,uploads,mlp_calls,grouped_calls,grouped_kernel_calls,projection_groups,gdn_calls,attn_calls;
+    uint64_t calls,uploads,mlp_calls,grouped_calls,grouped_kernel_calls,projection_groups,gdn_calls,attn_calls,attn_prefill_calls,attn_prefill_rows;
     uint64_t q3_uploads,q3_upload_bytes,q3_gemv_calls,q3_grouped_calls;
     uint64_t q3_atlas_refreshes,q3_atlas_loads,q3_atlas_bytes;
     uint64_t q3_atlas_prefill_batches,q3_atlas_prefill_tokens;
@@ -444,7 +498,7 @@ static void cuda_backend_stop(void){
             (unsigned long long)cuda_rt.cold_prefill_experts,
             (unsigned long long)cuda_rt.cold_prefill_tokens,
             (double)cuda_rt.cold_prefill_bytes/(1024.*1024.*1024.));
-    fprintf(stderr,"[CUDA] qmat calls=%llu fused-mlp calls=%llu grouped-expert calls=%llu grouped-kernel calls=%llu projection-groups=%llu GDN-calls=%llu GQA-calls=%llu uploads=%llu cache-hits=%llu evictions=%llu expert-VRAM=%.2fGiB mtp-expert-VRAM=%.2fGiB\n",(unsigned long long)cuda_rt.calls,(unsigned long long)cuda_rt.mlp_calls,(unsigned long long)cuda_rt.grouped_calls,(unsigned long long)cuda_rt.grouped_kernel_calls,(unsigned long long)cuda_rt.projection_groups,(unsigned long long)cuda_rt.gdn_calls,(unsigned long long)cuda_rt.attn_calls,(unsigned long long)cuda_rt.uploads,(unsigned long long)cuda_rt.cache_hits,(unsigned long long)cuda_rt.evictions,(double)cuda_rt.expert_bytes/(1024.*1024.*1024.),(double)cuda_rt.mtp_expert_bytes/(1024.*1024.*1024.));
+    fprintf(stderr,"[CUDA] qmat calls=%llu fused-mlp calls=%llu grouped-expert calls=%llu grouped-kernel calls=%llu projection-groups=%llu GDN-calls=%llu GQA-calls=%llu GQA-prefill-calls=%llu GQA-prefill-rows=%llu uploads=%llu cache-hits=%llu evictions=%llu expert-VRAM=%.2fGiB mtp-expert-VRAM=%.2fGiB\n",(unsigned long long)cuda_rt.calls,(unsigned long long)cuda_rt.mlp_calls,(unsigned long long)cuda_rt.grouped_calls,(unsigned long long)cuda_rt.grouped_kernel_calls,(unsigned long long)cuda_rt.projection_groups,(unsigned long long)cuda_rt.gdn_calls,(unsigned long long)cuda_rt.attn_calls,(unsigned long long)cuda_rt.attn_prefill_calls,(unsigned long long)cuda_rt.attn_prefill_rows,(unsigned long long)cuda_rt.uploads,(unsigned long long)cuda_rt.cache_hits,(unsigned long long)cuda_rt.evictions,(double)cuda_rt.expert_bytes/(1024.*1024.*1024.),(double)cuda_rt.mtp_expert_bytes/(1024.*1024.*1024.));
     if(cuda_rt.q3_uploads)fprintf(stderr,"[CUDA_Q3] native-uploads=%llu upload=%.3fGiB gemv-calls=%llu grouped-calls=%llu\n",(unsigned long long)cuda_rt.q3_uploads,(double)cuda_rt.q3_upload_bytes/(1024.*1024.*1024.),(unsigned long long)cuda_rt.q3_gemv_calls,(unsigned long long)cuda_rt.q3_grouped_calls);
     if(cuda_rt.q3_atlas_refreshes)fprintf(stderr,
         "[CUDA_Q3_ATLAS] refreshes=%llu routes=%d entries=%d capacity=%d loads=%llu payload=%.3fGiB prefill-batches=%llu prefill-tokens=%llu\n",
@@ -884,6 +938,34 @@ static int cuda_attn_try(float*out,const float*x,AttnW*w,const Cfg*c,int pos,int
     int used=0,hd=c->head_dim,kvrows=c->n_kv_heads*hd,rd=(int)(hd*c->partial_rotary);pthread_mutex_lock(&cuda_rt.lock);if(!cuda_attn_prepare_locked(w,c,max_seq))goto done;
     if(w->cuda_state_pos!=pos){size_t bytes=(size_t)pos*kvrows*4;if(bytes&&(coli_cuda_upload(cuda_rt.ctx,w->d_k_cache,w->k_cache,bytes)||coli_cuda_upload(cuda_rt.ctx,w->d_v_cache,w->v_cache,bytes))){cuda_backend_fail("attention state synchronization");goto done;}w->cuda_state_pos=pos;}
     if(coli_cuda_gqa_decode_q4_f16(cuda_rt.ctx,out,x,(const unsigned char*)w->q.d_q,(const float*)w->q.d_s,w->q.rb,w->q.ng,(const unsigned char*)w->k.d_q,(const float*)w->k.d_s,w->k.rb,w->k.ng,(const unsigned char*)w->v.d_q,(const float*)w->v.d_s,w->v.rb,w->v.ng,w->o.d_q,(const float*)w->o.d_s,w->o.fmt,w->o.rb,w->o.ng,w->d_q_norm,w->d_k_norm,w->d_k_cache,w->d_v_cache,pos,c->hidden,c->n_heads,c->n_kv_heads,hd,rd,w->q.gs,c->theta,c->eps)){cuda_backend_fail("attention decode");goto done;}w->cuda_state_pos=pos+1;cuda_rt.calls+=4;cuda_rt.attn_calls++;used=1;
+done:pthread_mutex_unlock(&cuda_rt.lock);return used;
+}
+/* Batched prefill attention.  The per-token path below issues one upload, one
+ * kernel chain and one host stream synchronize per position: 126,825 of them
+ * for the 8,451-token qualification, at 32 blocks on a 70-multiprocessor
+ * device.  This hands the whole row block to the GPU at once.  Measured
+ * bit-identical against the per-token path by tests/bench_gqa_prefill and
+ * tests/test_attn_prefill, so it changes timing only. */
+static int cuda_attn_prefill_enabled(void){
+    static int v=-1;if(v<0){const char*e=getenv("CUDA_ATTN_PREFILL");v=!e||atoi(e)!=0;}return v;
+}
+/* Below this many rows the batched form has nothing to amortise, so short
+ * speculative blocks keep the unchanged per-token path. */
+static int cuda_attn_prefill_min(void){
+    static int v=-1;if(v<0){const char*e=getenv("CUDA_ATTN_PREFILL_MIN");v=e?atoi(e):16;if(v<1)v=1;}return v;
+}
+static int cuda_attn_prefill_try(float*out,const float*x,int T,int base,AttnW*w,
+                                 const Cfg*c,int max_seq,int kv16){
+    if(cuda_suppress||!cuda_attn_prefill_enabled()||T<cuda_attn_prefill_min())return 0;
+    if(!cuda_attn_eligible(w,c,kv16))return 0;
+    if(base<0||T<1||base+T>max_seq)return 0;
+    int used=0,hd=c->head_dim,kvrows=c->n_kv_heads*hd,rd=(int)(hd*c->partial_rotary);
+    pthread_mutex_lock(&cuda_rt.lock);
+    if(!cuda_attn_prepare_locked(w,c,max_seq))goto done;
+    if(w->cuda_state_pos!=base){size_t bytes=(size_t)base*kvrows*4;if(bytes&&(coli_cuda_upload(cuda_rt.ctx,w->d_k_cache,w->k_cache,bytes)||coli_cuda_upload(cuda_rt.ctx,w->d_v_cache,w->v_cache,bytes))){cuda_backend_fail("attention prefill state synchronization");goto done;}w->cuda_state_pos=base;}
+    if(coli_cuda_gqa_prefill_q4_f16(cuda_rt.ctx,out,x,T,base,(const unsigned char*)w->q.d_q,(const float*)w->q.d_s,w->q.rb,w->q.ng,(const unsigned char*)w->k.d_q,(const float*)w->k.d_s,w->k.rb,w->k.ng,(const unsigned char*)w->v.d_q,(const float*)w->v.d_s,w->v.rb,w->v.ng,w->o.d_q,(const float*)w->o.d_s,w->o.fmt,w->o.rb,w->o.ng,w->d_q_norm,w->d_k_norm,w->d_k_cache,w->d_v_cache,max_seq,c->hidden,c->n_heads,c->n_kv_heads,hd,rd,w->q.gs,c->theta,c->eps)){cuda_backend_fail("attention prefill");goto done;}
+    w->cuda_state_pos=base+T;cuda_rt.calls+=(uint64_t)4*T;cuda_rt.attn_calls+=(uint64_t)T;
+    cuda_rt.attn_prefill_calls++;cuda_rt.attn_prefill_rows+=(uint64_t)T;used=1;
 done:pthread_mutex_unlock(&cuda_rt.lock);return used;
 }
 static int cuda_attn_slots_try(float*out,const float*x,int B,const int*slot,
@@ -1701,6 +1783,302 @@ static void rmsnorm_zero(float *out,const float *x,const float *w,int n,float ep
     for(int i=0;i<n;i++) out[i]=x[i]*r*(1.f+w[i]);
 }
 
+/* ---------- Qwen4-Exp gated residual (hyper-connections) ----------
+ *
+ * Qwen3.8-Flash-Next carries hc*hidden features between layers instead of
+ * hidden: hc independent residual streams. Each block still reads one hidden
+ * vector, so before the block the streams are collapsed by a learned gate, and
+ * after it the single block output is scattered back with a per-stream weight.
+ * There is no separate input_layernorm/post_attention_layernorm in this family
+ * -- hc_norm inside the gated residual replaces both.
+ *
+ * Reference: Qwen4ExpTextGatedResidual and Qwen4ExpTextDecoderLayer.forward in
+ * transformers' modular_qwen4_exp.py. Parity fixture:
+ * tools/make_hyper_connection_fixture.py -> tests/test_hyper_connection.c.
+ *
+ * The three dense products take plain row-major float matrices here so the
+ * math can be validated independently of quantization; the production loader
+ * feeds the same shapes through qmat_mul_ex. */
+
+/* RMSNorm applied per stream, then one zero-centered weight over all hc*H.
+ * Normalizing across the full hc*H width instead would couple the streams and
+ * is not the same function. */
+static void hc_norm_grouped(float *out,const float *x,const float *w,int hc,int H,float eps){
+    for(int k=0;k<hc;k++){
+        const float *xk=x+(size_t)k*H; float *ok=out+(size_t)k*H;
+        float ms=0.f; for(int i=0;i<H;i++) ms += xk[i]*xk[i];
+        float r=1.f/sqrtf(ms/(float)H+eps);
+        for(int i=0;i<H;i++) ok[i]=xk[i]*r*(1.f+w[(size_t)k*H+i]);
+    }
+}
+
+/* Collapse hc streams to one hidden vector, and produce the per-stream
+ * injection weights the block output is scattered back with.
+ *
+ * normed = hc_norm(hyper)
+ * mixed  = mean_k( sigmoid(Wu @ silu(Wd @ normed / hc))[k] * normed[k] )
+ * inj    = 2 * sigmoid(Wi @ normed / hc)
+ *
+ * wi may be NULL for the model-level mixer (use_combine=False upstream), which
+ * only collapses the streams ahead of the final norm; inj is then untouched.
+ * scratch_normed is hc*H wide, scratch_low is lowrank wide, scratch_gate is
+ * hc*H wide. */
+static void hc_gated_residual(const float *hyper,int hc,int H,int lowrank,
+                              const float *hc_norm_w,float eps,
+                              const float *wd,const float *wu,const float *wi,
+                              float *mixed,float *inj,
+                              float *scratch_normed,float *scratch_low,float *scratch_gate){
+    int wide=hc*H; float inv_hc=1.f/(float)hc;
+    hc_norm_grouped(scratch_normed,hyper,hc_norm_w,hc,H,eps);
+    for(int j=0;j<lowrank;j++){
+        const float *row=wd+(size_t)j*wide; float acc=0.f;
+        for(int i=0;i<wide;i++) acc += row[i]*scratch_normed[i];
+        scratch_low[j]=siluf(acc*inv_hc);
+    }
+    for(int m=0;m<wide;m++){
+        const float *row=wu+(size_t)m*lowrank; float acc=0.f;
+        for(int j=0;j<lowrank;j++) acc += row[j]*scratch_low[j];
+        scratch_gate[m]=sigmoidf_stable(acc);
+    }
+    for(int i=0;i<H;i++){
+        float acc=0.f;
+        for(int k=0;k<hc;k++){ size_t o=(size_t)k*H+i; acc += scratch_gate[o]*scratch_normed[o]; }
+        mixed[i]=acc*inv_hc;
+    }
+    if(!wi) return;
+    for(int k=0;k<hc;k++){
+        const float *row=wi+(size_t)k*wide; float acc=0.f;
+        for(int i=0;i<wide;i++) acc += row[i]*scratch_normed[i];
+        inj[k]=2.f*sigmoidf_stable(acc*inv_hc);
+    }
+}
+
+/* hyper += block (x) inj. The base is the raw hyper input, not the normalized
+ * copy the gates were derived from. */
+static void hc_inject(float *hyper,const float *block,const float *inj,int hc,int H){
+    for(int k=0;k<hc;k++){
+        float g=inj[k]; float *hk=hyper+(size_t)k*H;
+        for(int i=0;i<H;i++) hk[i] += g*block[i];
+    }
+}
+
+/* Container-backed gated residual: identical math to hc_gated_residual, with
+ * the three dense products read from the loaded QMats instead of raw float
+ * matrices. `mixed` is hidden-wide. `inj` receives hc_count weights and is
+ * ignored for the model-level mixer, which carries no inject matrix.
+ * Scratch: `normed` and `gate` are hc_count*hidden wide, `low` is hc_lowrank. */
+static void hc_gated_residual_q(const Cfg *c,const HcW *w,const float *hyper,
+                                float *mixed,float *inj,
+                                float *normed,float *low,float *gate){
+    int hc=c->hc_count,H=c->hidden,wide=hc*H; float inv_hc=1.f/(float)hc;
+    hc_norm_grouped(normed,hyper,w->hc_norm,hc,H,c->eps);
+    qmat_mul(low,normed,&w->mix_down);
+    for(int j=0;j<c->hc_lowrank;j++) low[j]=siluf(low[j]*inv_hc);
+    qmat_mul(gate,low,&w->mix_up);
+    for(int i=0;i<wide;i++) gate[i]=sigmoidf_stable(gate[i]);
+    for(int i=0;i<H;i++){
+        float acc=0.f;
+        for(int k=0;k<hc;k++){ size_t o=(size_t)k*H+i; acc += gate[o]*normed[o]; }
+        mixed[i]=acc*inv_hc;
+    }
+    if(!w->has_inject||!inj) return;
+    qmat_mul(inj,normed,&w->inject);
+    for(int k=0;k<hc;k++) inj[k]=2.f*sigmoidf_stable(inj[k]*inv_hc);
+}
+
+/* Row-wise wrappers for the prefill path, where the stream is [T, hc*hidden]
+ * and the block input is [T, hidden]. `inj` is [T, hc_count]; the per-token
+ * injection weights have to survive until after the block runs, so they cannot
+ * share one scratch vector the way the decode path does. */
+static void hc_collapse_rows(const Cfg *c,const HcW *w,const float *x,int T,
+                             float *n,float *inj,float *normed,float *low,float *gate){
+    int H=c->hidden,wide=c->hc_count*H;
+    for(int t=0;t<T;t++)
+        hc_gated_residual_q(c,w,x+(int64_t)t*wide,n+(int64_t)t*H,
+                            inj?inj+(int64_t)t*c->hc_count:NULL,normed,low,gate);
+}
+static void hc_inject_rows(const Cfg *c,float *x,const float *block,const float *inj,int T){
+    int H=c->hidden,wide=c->hc_count*H;
+    for(int t=0;t<T;t++)
+        hc_inject(x+(int64_t)t*wide,block+(int64_t)t*H,inj+(int64_t)t*c->hc_count,c->hc_count,H);
+}
+
+/* ---------- Qwen4-Exp PLE n-gram indexing ----------
+ *
+ * One layer (ple_layer_ids, one-indexed) injects hashed n-gram features. Each
+ * token selects ngram_heads = (ngram_size-1)*heads_per_ngram rows from a single
+ * embedding table, which the checkpoint splits into split_ngram_parts row
+ * shards. The row index is a multiply-xor hash of the token and its
+ * predecessors, reduced modulo a per-head prime and shifted by a per-head
+ * offset.
+ *
+ * The multipliers, per-head vocabulary sizes and offsets are stored buffers, so
+ * nothing here recomputes splitmix64 or the prime search -- getting those from
+ * the container is both cheaper and exact. Multipliers reach ~2.4e13, so every
+ * intermediate is 64-bit; the arithmetic runs unsigned because a signed
+ * overflow would be undefined even though the values fit.
+ *
+ * A wrong index is silent: it still lands inside the table and simply reads the
+ * wrong rows. Parity fixture: tools/make_ple_ngram_fixture.py ->
+ * tests/test_ple_ngram.c. */
+
+/* Fill window[s] with the token s positions back, without crossing the EOS that
+ * starts the current segment. The segment boundary is computed from tokens
+ * strictly before `position`, so an EOS at `position` does not end its own
+ * segment. */
+static void ple_shift_window(const int *tokens,int position,int ngram_size,int eos,int *window){
+    int previous_eos=-1;
+    for(int i=0;i<position;i++) if(tokens[i]==eos) previous_eos=i;
+    int position_in_segment=position-(previous_eos+1);
+    for(int s=0;s<ngram_size;s++)
+        window[s]=(s==0||(position_in_segment>=s&&position-s>=0))?tokens[position-s]:eos;
+}
+
+/* Row index per head for one position. out holds ngram_heads entries, grouped
+ * as heads_per_ngram consecutive heads for each n-gram order 2..ngram_size. */
+static void ple_ngram_ids(const int *window,int ngram_size,int heads_per_ngram,
+                          const int64_t *mult,const int64_t *vocab,const int64_t *offset,
+                          int64_t *out){
+    for(int ngram=2;ngram<=ngram_size;ngram++){
+        int start=(ngram-2)*heads_per_ngram;
+        uint64_t mixed=(uint64_t)window[0]*(uint64_t)mult[0];
+        for(int position=1;position<ngram;position++)
+            mixed ^= (uint64_t)window[position]*(uint64_t)mult[position];
+        for(int h=0;h<heads_per_ngram;h++){
+            int idx=start+h;
+            out[idx]=(int64_t)(mixed%(uint64_t)vocab[idx])+offset[idx];
+        }
+    }
+}
+
+/* PLE layer: turn the gathered n-gram embedding into an additive correction on
+ * every hyper-connection stream.
+ *
+ * Per stream the projected n-gram key is scored against the normalized stream,
+ * squashed by a sign-preserving square root, and used to gate a shared value;
+ * a dilated depthwise convolution over the normalized result is then added.
+ *
+ * Two details the fixture exists to pin down: the gate is
+ * `sign(g)*sqrt(max(|g|,1e-6))`, so a plain sqrt would discard every negative
+ * score; and the convolution is depthwise with dilation = ngram_size and a left
+ * pad of (kernel-1)*dilation, so tap j reads t-(kernel-1-j)*dilation.
+ *
+ * `hidden` and `out` are [T, hc*H]; `embeddings` is [T, D]. History before
+ * position 0 is zero, matching the reference's left pad. Parity fixture:
+ * tools/make_ple_layer_fixture.py -> tests/test_ple_layer.c. */
+static void ple_layer_forward(int T,int hc,int H,int D,int kernel,int dilation,float eps,
+                              const float *hidden,const float *embeddings,
+                              const float *key_w,const float *value_w,
+                              const float *norm_key,const float *norm_query,const float *norm_conv,
+                              const float *conv_w,float *out){
+    int wide=hc*H; float inv=1.f/sqrtf((float)H);
+    float *kn=falloc(wide),*qn=falloc(wide),*val=falloc(H);
+    float *gv=falloc((int64_t)T*wide),*gvn=falloc((int64_t)T*wide);
+    for(int t=0;t<T;t++){
+        const float *e=embeddings+(int64_t)t*D;
+        for(int r=0;r<wide;r++){const float *row=key_w+(int64_t)r*D;float a=0.f;
+            for(int i=0;i<D;i++)a+=row[i]*e[i];kn[r]=a;}
+        hc_norm_grouped(kn,kn,norm_key,hc,H,eps);
+        for(int r=0;r<H;r++){const float *row=value_w+(int64_t)r*D;float a=0.f;
+            for(int i=0;i<D;i++)a+=row[i]*e[i];val[r]=a;}
+        hc_norm_grouped(qn,hidden+(int64_t)t*wide,norm_query,hc,H,eps);
+        float *g=gv+(int64_t)t*wide;
+        for(int k=0;k<hc;k++){
+            float dot=0.f;
+            for(int i=0;i<H;i++)dot += kn[(size_t)k*H+i]*qn[(size_t)k*H+i];
+            dot*=inv;
+            float mag=fabsf(dot); if(mag<1e-6f)mag=1e-6f;
+            float squashed=sqrtf(mag); if(dot<0.f)squashed=-squashed; else if(dot==0.f)squashed=0.f;
+            float gate=sigmoidf_stable(squashed);
+            for(int i=0;i<H;i++)g[(size_t)k*H+i]=gate*val[i];
+        }
+        hc_norm_grouped(gvn+(int64_t)t*wide,g,norm_conv,hc,H,eps);
+    }
+    for(int t=0;t<T;t++){
+        float *o=out+(int64_t)t*wide; const float *g=gv+(int64_t)t*wide;
+        for(int ch=0;ch<wide;ch++){
+            float acc=0.f;
+            for(int j=0;j<kernel;j++){
+                int src=t-(kernel-1-j)*dilation; if(src<0)continue;
+                acc += conv_w[(int64_t)ch*kernel+j]*gvn[(int64_t)src*wide+ch];
+            }
+            o[ch]=g[ch]+siluf(acc);
+        }
+    }
+    free(kn);free(qn);free(val);free(gv);free(gvn);
+}
+
+/* ---------- Qwen4-Exp QSA indexer selection ----------
+ *
+ * The full_attention layers are not plain GQA: an indexer first decides which
+ * keys the query may see at all. Visible keys are grouped into blocks of
+ * compress_ratio, each block is scored against the indexer query heads, and the
+ * top indexer_budget/compress_ratio blocks are admitted together with the
+ * trailing incomplete block, which bypasses scoring.
+ *
+ * This caps attention work at indexer_budget positions regardless of context
+ * length, which is why this family stays linear where Ornith's full attention
+ * is quadratic.
+ *
+ * Pooling, RMSNorm and RoPE over the block keys reuse the existing primitives;
+ * only scoring and selection live here. Parity fixture:
+ * tools/make_qsa_indexer_fixture.py -> tests/test_qsa_indexer.c. */
+
+/* scores[b] = sum_h relu(q[h] . K[b]) / sqrt(head_dim).
+ *
+ * The ReLU sits inside the head sum on purpose: a head that disagrees
+ * contributes nothing rather than cancelling a head that agrees, which makes
+ * this a selection rule instead of a soft attention score. */
+static void qsa_block_scores(const float *query,int n_heads,int head_dim,
+                             const float *block_keys,int n_blocks,float *scores){
+    float inv=1.f/sqrtf((float)head_dim);
+    for(int b=0;b<n_blocks;b++){
+        const float *k=block_keys+(size_t)b*head_dim; float total=0.f;
+        for(int h=0;h<n_heads;h++){
+            const float *q=query+(size_t)h*head_dim; float dot=0.f;
+            for(int i=0;i<head_dim;i++) dot += q[i]*k[i];
+            if(dot>0.f) total += dot;
+        }
+        scores[b]=total*inv;
+    }
+}
+
+/* Admit the top block_topk blocks plus the incomplete tail, as a per-position
+ * mask over `visible` keys.
+ *
+ * Selection uses a bounded min-heap so the cost is O(n_blocks log topk). At a
+ * 64K context that is ~16K blocks against a 512 budget; the obvious O(n*k) scan
+ * would cost 8.4M comparisons per query per layer.
+ *
+ * heap holds block indices ordered by score; caller supplies it with room for
+ * block_topk entries. */
+static void qsa_select_mask(const float *scores,int n_blocks,int block_topk,
+                            int compress_ratio,int visible,int *heap,uint8_t *mask){
+    memset(mask,0,(size_t)visible);
+    int keep=block_topk<n_blocks?block_topk:n_blocks,n=0;
+    for(int b=0;b<n_blocks;b++){
+        if(n<keep){
+            int i=n++; heap[i]=b;
+            while(i>0){ int p=(i-1)/2; if(scores[heap[p]]<=scores[heap[i]])break;
+                        int t=heap[p];heap[p]=heap[i];heap[i]=t;i=p; }
+        }else if(keep>0&&scores[b]>scores[heap[0]]){
+            heap[0]=b;
+            for(int i=0;;){
+                int l=2*i+1,r=l+1,small=i;
+                if(l<n&&scores[heap[l]]<scores[heap[small]])small=l;
+                if(r<n&&scores[heap[r]]<scores[heap[small]])small=r;
+                if(small==i)break;
+                int t=heap[small];heap[small]=heap[i];heap[i]=t;i=small;
+            }
+        }
+    }
+    for(int i=0;i<n;i++){
+        int base=heap[i]*compress_ratio;
+        for(int o=0;o<compress_ratio&&base+o<visible;o++) mask[base+o]=1;
+    }
+    for(int position=n_blocks*compress_ratio;position<visible;position++) mask[position]=1;
+}
+
 /* ---------- config ---------- */
 static char *read_file(const char *path,long *n_out){
     FILE *f=fopen(path,"rb"); if(!f){ perror(path); exit(1); }
@@ -1734,8 +2112,51 @@ static void load_cfg(Cfg *c,const char *snap){
     if(c->lin_v_heads%c->lin_k_heads) die("linear value heads must be divisible by key heads");
     jval *lt=json_get(tc,"layer_types");
     if(lt&&lt->t==J_ARR&&lt->len==c->n_layers){
-        for(int i=0;i<c->n_layers;i++) c->layer_type[i]=(lt->kids[i]->t==J_STR&&!strcmp(lt->kids[i]->str,"full_attention"))?LT_FULL:LT_LINEAR;
+        /* Branch on "is it linear", not "is it full_attention": upstream
+         * normalizes the attention label (the released checkpoint says
+         * full_attention, transformers writes qwen_sparse_attention) and the
+         * reference itself tests only for linear_attention. Qwen3.5/Ornith use
+         * exactly these two labels, so their classification is unchanged. */
+        for(int i=0;i<c->n_layers;i++) c->layer_type[i]=(lt->kids[i]->t==J_STR&&!strcmp(lt->kids[i]->str,"linear_attention"))?LT_LINEAR:LT_FULL;
     }else for(int i=0;i<c->n_layers;i++) c->layer_type[i]=((i+1)%c->full_interval==0)?LT_FULL:LT_LINEAR;
+    /* Qwen4-Exp declares its own architecture, unlike Ornith, which
+     * deliberately keeps Qwen3.5's strings. So this family -- and only this
+     * family -- is detectable from the config alone. */
+    jval *mv=json_get(root,"model_type");
+    c->is_qwen4_exp=(mv&&mv->t==J_STR&&!strncmp(mv->str,"qwen4_exp",9));
+    if(!c->is_qwen4_exp){jval*tv=json_get(tc,"model_type");
+        c->is_qwen4_exp=(tv&&tv->t==J_STR&&!strncmp(tv->str,"qwen4_exp",9));}
+    if(!c->is_qwen4_exp){jval*av=json_get(root,"architectures");
+        if(av&&av->t==J_ARR)for(int i=0;i<av->len;i++)
+            if(av->kids[i]->t==J_STR&&strstr(av->kids[i]->str,"Qwen4Exp"))c->is_qwen4_exp=1;}
+    if(c->is_qwen4_exp){
+        c->hc_count=jint(tc,"hc_count",4); c->hc_lowrank=jint(tc,"hc_lowrank",320);
+        c->idx_budget=jint(tc,"indexer_budget",2048);
+        c->idx_ratio=jint(tc,"indexer_compress_ratio",4);
+        c->idx_head_dim=jint(tc,"indexer_head_dim",128);
+        c->idx_n_heads=jint(tc,"indexer_n_heads",4);
+        c->idx_kv_heads=jint(tc,"indexer_kv_heads",1);
+        c->ngram_size=jint(tc,"ngram_size",3);
+        c->heads_per_ngram=jint(tc,"heads_per_ngram",8);
+        c->ple_embed_dim=jint(tc,"ple_embed_dim",c->hidden);
+        c->ple_conv_kernel=jint(tc,"ple_conv_kernel_size",4);
+        c->ngram_shards=jint(tc,"split_ngram_parts",0);
+        c->ngram_divisor=jint(tc,"make_ngram_vocab_size_divisible_by",128);
+        /* ple_layer_ids is one-indexed into layer_types (see the validation in
+         * transformers' Qwen4ExpTextConfig), so id n is layer n-1. */
+        jval *pl=json_get(tc,"ple_layer_ids");
+        if(pl&&pl->t==J_ARR)for(int i=0;i<pl->len;i++){
+            if(pl->kids[i]->t!=J_NUM)continue;
+            int id=(int)pl->kids[i]->num-1;
+            if(id<0||id>=c->n_layers) die("ple_layer_ids entry out of range");
+            if(c->layer_type[id]!=LT_LINEAR) die("PLE layers must be linear_attention");
+            c->ple_layer[id]=1;
+        }
+        if(c->hc_count<=1) die("Qwen4-Exp requires hc_count > 1");
+        if(c->idx_ratio<=0||c->idx_budget%c->idx_ratio)
+            die("indexer_budget must be divisible by indexer_compress_ratio");
+        if(c->ngram_size<2) die("Qwen4-Exp requires ngram_size >= 2");
+    }
     free(buf); free(arena);
     snprintf(path,sizeof(path),"%s/generation_config.json",snap);FILE*gf=fopen(path,"rb");
     if(gf){fclose(gf);char*gb=read_file(path,&n),*ga=NULL;jval*gr=json_parse(gb,&ga);jval*ev=json_get(gr,"eos_token_id");
@@ -2033,10 +2454,187 @@ static void load_moe(Model *m,Layer *l,int li){
     lname(m,n,sizeof(n),li,"mlp.shared_expert.down_proj.weight"); w->shared_down=load_qmat(m,n,c->hidden,c->shared_inter);
     lname(m,n,sizeof(n),li,"mlp.shared_expert_gate.weight"); w->shared_scale=load_qmat(m,n,1,c->hidden);
 }
+/* Load one gated residual. `group` is the tensor group under the layer (or the
+ * bare model-level name when layer < 0). */
+static void load_hc(Model *m,HcW *w,int layer,const char *group,int has_inject){
+    /* suffix stays small so lname's "layers.%d." prefix cannot overflow n */
+    Cfg *c=&m->c; char n[QW_NAME],suffix[96]; int wide=c->hc_count*c->hidden;
+    #define HC_NAME(field) do{ \
+        snprintf(suffix,sizeof(suffix),"%s." field,group); \
+        if(layer<0) snprintf(n,sizeof(n),"%s",suffix); else lname(m,n,sizeof(n),layer,suffix); \
+    }while(0)
+    HC_NAME("hc_norm.weight");              w->hc_norm=load_vec(m,n,wide);
+    HC_NAME("input_mix_weight_down.weight"); w->mix_down=load_qmat(m,n,c->hc_lowrank,wide);
+    HC_NAME("input_mix_weight_up.weight");   w->mix_up=load_qmat(m,n,wide,c->hc_lowrank);
+    w->has_inject=has_inject;
+    if(has_inject){ HC_NAME("block_inject_weight.weight"); w->inject=load_qmat(m,n,c->hc_count,wide); }
+    #undef HC_NAME
+}
+
+/* Load the PLE layer. Everything but the trigram table is small and resident;
+ * the table stays in the container and is gathered a row at a time. */
+static void load_ple(Model *m,Layer *l,int li){
+    Cfg *c=&m->c; PleW *w=&l->ple; char n[QW_NAME],rn[QW_NAME];
+    int wide=c->hc_count*c->hidden;
+    w->layer=li;
+    w->ngram_heads=(c->ngram_size-1)*c->heads_per_ngram;
+    if(w->ngram_heads<=0||c->ple_embed_dim%w->ngram_heads)die("bad PLE n-gram head geometry");
+    w->head_dim=c->ple_embed_dim/w->ngram_heads;
+    lname(m,n,sizeof(n),li,"ple.key_proj.weight");   w->key_proj=load_qmat(m,n,wide,c->ple_embed_dim);
+    lname(m,n,sizeof(n),li,"ple.value_proj.weight"); w->value_proj=load_qmat(m,n,c->hidden,c->ple_embed_dim);
+    lname(m,n,sizeof(n),li,"ple.norm_key.weight");   w->norm_key=load_vec(m,n,wide);
+    lname(m,n,sizeof(n),li,"ple.norm_query.weight"); w->norm_query=load_vec(m,n,wide);
+    lname(m,n,sizeof(n),li,"ple.norm_conv.weight");  w->norm_conv=load_vec(m,n,wide);
+    lname(m,n,sizeof(n),li,"ple.conv1d.weight");     w->conv=load_vec(m,n,wide*c->ple_conv_kernel);
+
+    /* Index metadata is int64 and read verbatim: the multipliers reach ~2.4e13
+     * and do not survive a float round trip. */
+    struct { int64_t **dst; const char *suffix; int count; } meta[3]={
+        {&w->mult,  "ple.ple_embedding.layer_multipliers",       c->ngram_size},
+        {&w->vocab, "ple.ple_embedding.ngram_heads_vocab_sizes", w->ngram_heads},
+        {&w->offset,"ple.ple_embedding.ngram_heads_offsets",     w->ngram_heads}};
+    for(int i=0;i<3;i++){
+        lname(m,n,sizeof(n),li,meta[i].suffix);
+        if(find_named(&m->S,n,rn,sizeof(rn))<0)die("missing PLE index metadata");
+        if(st_numel(&m->S,rn)!=meta[i].count)die("unexpected PLE index metadata length");
+        *meta[i].dst=xcalloc((size_t)meta[i].count,sizeof(int64_t));
+        st_read_raw(&m->S,rn,*meta[i].dst,0);
+    }
+
+    /* Shard row geometry. The logical table is the summed per-head vocabularies
+     * padded up to make_ngram_vocab_size_divisible_by, split evenly across
+     * split_ngram_parts shards -- the same arithmetic the checkpoint used. */
+    int64_t total=0; for(int h=0;h<w->ngram_heads;h++)total+=w->vocab[h];
+    int64_t padded=((total+c->ngram_divisor-1)/c->ngram_divisor)*c->ngram_divisor;
+    if(c->ngram_shards<=0||padded%c->ngram_shards)die("PLE table does not split evenly across shards");
+    w->rows_per_shard=padded/c->ngram_shards;
+    char base[QW_NAME];
+    snprintf(base,sizeof(base),"layers.%d.ple.ple_embedding.ngram_embedding.shard_0.weight",li);
+    if(find_named(&m->S,base,rn,sizeof(rn))<0)die("missing PLE n-gram shard 0");
+    int64_t nb=st_nbytes(&m->S,rn);
+    char qs[QW_NAME+8]; snprintf(qs,sizeof(qs),"%s.qs",rn);
+    int64_t ns=st_numel(&m->S,qs);
+    if(nb<=0||ns<=0||nb%w->rows_per_shard||ns%w->rows_per_shard)die("bad PLE shard geometry");
+    w->shard_rb=(int)(nb/w->rows_per_shard);
+    w->shard_ng=(int)(ns/w->rows_per_shard);
+    /* The table follows --xbits, so it can be int8 or int4. One byte per value
+     * means int8; a nibble pair means int4. Reading the qtype tag keeps the
+     * gather honest instead of assuming the packing. */
+    char qtn[QW_NAME+8]; snprintf(qtn,sizeof(qtn),"%s.qtype",rn);
+    int qtype=0; if(st_numel(&m->S,qtn)==1){uint8_t tag=0;st_read_raw(&m->S,qtn,&tag,0);qtype=tag;}
+    w->shard_fmt=(qtype==8||w->shard_rb>=w->head_dim)?1:4;
+    w->shard_gs=w->shard_fmt==1?w->head_dim:(w->shard_rb*2)/w->shard_ng;
+    if(w->shard_gs<=0)die("bad PLE shard row packing");
+    if(w->shard_fmt==4&&w->shard_rb*2<w->head_dim)die("PLE int4 row too short");
+    if(w->shard_fmt==1&&w->shard_rb<w->head_dim)die("PLE int8 row too short");
+
+    w->conv_state=falloc(((int64_t)(c->ple_conv_kernel-1)*c->ngram_size+1)*wide);
+    w->seg=0; w->conv_pos=0;
+    for(int i=0;i<QW_MAX_NGRAM;i++)w->hist[i]=c->eos_token;
+    w->enabled=1;
+    fprintf(stderr,"[PLE] layer %d: %d heads x %d dims, %lld rows/shard x %d shards, rb=%d ng=%d gs=%d fmt=int%d\n",
+            li,w->ngram_heads,w->head_dim,(long long)w->rows_per_shard,c->ngram_shards,
+            w->shard_rb,w->shard_ng,w->shard_gs,w->shard_fmt==1?8:4);
+}
+
+/* Dequantize one trigram row straight out of the container. ~84 bytes of I/O;
+ * the table is far too large to cache and only ngram_heads rows are touched
+ * per token. */
+static void ple_gather_row(Model *m,PleW *w,int64_t row,float *out){
+    int64_t shard=row/w->rows_per_shard,local=row%w->rows_per_shard;
+    char base[QW_NAME],rn[QW_NAME],qs[QW_NAME+8];
+    snprintf(base,sizeof(base),"layers.%d.ple.ple_embedding.ngram_embedding.shard_%lld.weight",
+             w->layer,(long long)shard);
+    if(find_named(&m->S,base,rn,sizeof(rn))<0)die("missing PLE n-gram shard");
+    uint8_t packed[1024]; float scales[16];
+    if(w->shard_rb>(int)sizeof(packed)||w->shard_ng>(int)(sizeof(scales)/sizeof(scales[0])))
+        die("PLE shard row larger than the gather buffers");
+    st_read_raw_range(&m->S,rn,local*(int64_t)w->shard_rb,w->shard_rb,packed);
+    snprintf(qs,sizeof(qs),"%s.qs",rn);
+    st_read_raw_range(&m->S,qs,local*(int64_t)w->shard_ng*(int64_t)sizeof(float),
+                      (int64_t)w->shard_ng*(int64_t)sizeof(float),scales);
+    if(w->shard_fmt==1){
+        const int8_t *q=(const int8_t*)packed;
+        for(int i=0;i<w->head_dim;i++)out[i]=(float)q[i]*scales[0];
+    }else{
+        for(int i=0;i<w->head_dim;i++){
+            uint8_t b=packed[i>>1]; int v=((i&1)?(b>>4):(b&15))-8;
+            out[i]=(float)v*scales[i/w->shard_gs];
+        }
+    }
+}
+
+/* One token through the PLE layer, maintaining the trigram window and the
+ * dilated conv history so prefill and decode share this path.
+ *
+ * `seg` tracks the position within the current EOS-delimited segment: the
+ * window may not reach back across the EOS that starts it. An EOS token does
+ * not end its own segment, so the reset lands on the following token.
+ *
+ * out is hc*hidden and is the additive correction for this position. */
+static void ple_forward_token(Model *m,PleW *w,const float *hidden,int token,float *out){
+    Cfg *c=&m->c; int hc=c->hc_count,H=c->hidden,wide=hc*H,K=c->ple_conv_kernel,dil=c->ngram_size;
+    int depth=(K-1)*dil;
+    float *emb=falloc(c->ple_embed_dim),*kn=falloc(wide),*qn=falloc(wide),*val=falloc(H);
+    float *gated=falloc(wide),*gnorm=falloc(wide);
+    int64_t ids[QW_MAX_NGRAM*64];
+
+    for(int s=c->ngram_size-1;s>0;s--)w->hist[s]=w->hist[s-1];
+    w->hist[0]=token;
+    int window[QW_MAX_NGRAM];
+    for(int s=0;s<c->ngram_size;s++)
+        window[s]=(s==0||w->seg>=s)?w->hist[s]:c->eos_token;
+    ple_ngram_ids(window,c->ngram_size,c->heads_per_ngram,w->mult,w->vocab,w->offset,ids);
+    for(int h=0;h<w->ngram_heads;h++)
+        ple_gather_row(m,w,ids[h],emb+(int64_t)h*w->head_dim);
+
+    qmat_mul(kn,emb,&w->key_proj);
+    hc_norm_grouped(kn,kn,w->norm_key,hc,H,c->eps);
+    qmat_mul(val,emb,&w->value_proj);
+    hc_norm_grouped(qn,hidden,w->norm_query,hc,H,c->eps);
+    float inv=1.f/sqrtf((float)H);
+    for(int k=0;k<hc;k++){
+        float dot=0.f;
+        for(int i=0;i<H;i++)dot+=kn[(size_t)k*H+i]*qn[(size_t)k*H+i];
+        dot*=inv;
+        float mag=fabsf(dot); if(mag<1e-6f)mag=1e-6f;
+        float sq=sqrtf(mag); if(dot<0.f)sq=-sq; else if(dot==0.f)sq=0.f;
+        float g=sigmoidf_stable(sq);
+        for(int i=0;i<H;i++)gated[(size_t)k*H+i]=g*val[i];
+    }
+    hc_norm_grouped(gnorm,gated,w->norm_conv,hc,H,c->eps);
+
+    /* conv_state is a ring of the last `depth` normalized rows; slot
+     * (w->conv_pos + depth - d) % (depth+1) holds the row d steps back. */
+    int slots=depth+1;
+    memcpy(w->conv_state+(int64_t)(w->conv_pos%slots)*wide,gnorm,(size_t)wide*sizeof(float));
+    for(int ch=0;ch<wide;ch++){
+        float acc=0.f;
+        for(int j=0;j<K;j++){
+            int back=(K-1-j)*dil;
+            if(back>w->conv_pos)continue;          /* zero history before the start */
+            int slot=(w->conv_pos-back)%slots;
+            acc+=w->conv[(int64_t)ch*K+j]*w->conv_state[(int64_t)slot*wide+ch];
+        }
+        out[ch]=gated[ch]+siluf(acc);
+    }
+    w->conv_pos++;
+    w->seg=(token==c->eos_token)?0:w->seg+1;
+    free(emb);free(kn);free(qn);free(val);free(gated);free(gnorm);
+}
+
 static void load_layer_into(Model *m,Layer*l,int li,int type){
     Cfg *c=&m->c; char n[QW_NAME]; l->type=type;l->index=li;
-    lname(m,n,sizeof(n),li,"input_layernorm.weight"); l->input_norm=load_vec(m,n,c->hidden);
-    lname(m,n,sizeof(n),li,"post_attention_layernorm.weight"); l->post_norm=load_vec(m,n,c->hidden);
+    if(c->is_qwen4_exp){
+        /* No input_layernorm/post_attention_layernorm in this family: the
+         * hc_norm inside each gated residual replaces both. */
+        load_hc(m,&l->attn_hc,li,"attn_hyper_connection",1);
+        load_hc(m,&l->mlp_hc,li,"mlp_hyper_connection",1);
+        if(li<c->n_layers&&c->ple_layer[li])load_ple(m,l,li);
+    }else{
+        lname(m,n,sizeof(n),li,"input_layernorm.weight"); l->input_norm=load_vec(m,n,c->hidden);
+        lname(m,n,sizeof(n),li,"post_attention_layernorm.weight"); l->post_norm=load_vec(m,n,c->hidden);
+    }
     if(l->type==LT_LINEAR){
         GdnW *w=&l->gdn; int kd=c->lin_k_heads*c->lin_k_dim, vd=c->lin_v_heads*c->lin_v_dim, cd=2*kd+vd;
         lname(m,n,sizeof(n),li,"linear_attn.in_proj_qkv.weight"); w->qkv=load_qmat(m,n,cd,c->hidden);
@@ -2058,6 +2656,16 @@ static void load_layer_into(Model *m,Layer*l,int li,int type){
         lname(m,n,sizeof(n),li,"self_attn.o_proj.weight"); w->o=load_qmat(m,n,c->hidden,c->n_heads*c->head_dim);
         lname(m,n,sizeof(n),li,"self_attn.q_norm.weight"); w->q_norm=load_vec(m,n,c->head_dim);
         lname(m,n,sizeof(n),li,"self_attn.k_norm.weight"); w->k_norm=load_vec(m,n,c->head_dim);
+        if(c->is_qwen4_exp){
+            /* Qwen4-Exp full_attention layers are QSA: the indexer restricts
+             * the visible keys to indexer_budget positions before attention
+             * runs, which is what keeps this family linear in context. */
+            IdxW *x=&l->idx; int rows=(c->idx_n_heads+c->idx_kv_heads)*c->idx_head_dim;
+            lname(m,n,sizeof(n),li,"self_attn.indexer.index_qk_proj.weight"); x->qk=load_qmat(m,n,rows,c->hidden);
+            lname(m,n,sizeof(n),li,"self_attn.indexer.q_layernorm.weight"); x->q_norm=load_vec(m,n,c->idx_head_dim);
+            lname(m,n,sizeof(n),li,"self_attn.indexer.k_layernorm.weight"); x->k_norm=load_vec(m,n,c->idx_head_dim);
+            x->k_cache=falloc((int64_t)m->max_seq*c->idx_head_dim);
+        }
         if(m->kv16){w->k_cache16=xcalloc((int64_t)m->max_seq*kvrows,sizeof(uint16_t));w->v_cache16=xcalloc((int64_t)m->max_seq*kvrows,sizeof(uint16_t));}
         else{w->k_cache=falloc((int64_t)m->max_seq*kvrows);w->v_cache=falloc((int64_t)m->max_seq*kvrows);}
     }
@@ -2144,6 +2752,11 @@ static size_t expert_device_bytes(Model*m){
 static size_t dense_container_bytes(Model*m,int use_mtp){
     size_t total=0;for(int i=0;i<m->S.n;i++){const char*n=m->S.t[i].name;
         if(strstr(n,".mlp.experts."))continue;
+        /* Qwen4-Exp's PLE trigram table is 51.2B parameters -- larger than this
+         * host's RAM on its own. Like the routed experts it is a sparse lookup
+         * (16 rows per token) and streams through the tier cache, so it is not
+         * resident and must not be charged against the dense budget. */
+        if(strstr(n,"ngram_embedding.shard_"))continue;
         if(!use_mtp&&!strncmp(n,"mtp.",4))continue;
         total+=(size_t)m->S.t[i].nbytes;
     }return total;
@@ -2199,7 +2812,11 @@ static void model_init(Model *m,const char *snap){
     char tp[2048]; snprintf(tp,sizeof(tp),"%s/tokenizer.json",snap);
     FILE *f=fopen(tp,"rb"); if(f){fclose(f);tok_load(&m->T,tp);m->has_tok=1;}
     double t0=now_s(); Cfg *c=&m->c;
-    m->embed=load_qmat(m,"embed_tokens.weight",c->vocab,c->hidden); m->final_norm=load_vec(m,"norm.weight",c->hidden);
+    m->embed=load_qmat(m,"embed_tokens.weight",c->vocab,c->hidden);
+    /* Qwen4-Exp has no final norm.weight: the text model ends at
+     * hyper_connection_mixer, whose stream collapse feeds lm_head directly. */
+    if(c->is_qwen4_exp) load_hc(m,&m->mixer,-1,"hyper_connection_mixer",0);
+    else m->final_norm=load_vec(m,"norm.weight",c->hidden);
     char name[QW_NAME]; m->lm_head=find_named(&m->S,"lm_head.weight",name,sizeof(name))>=0?load_qmat(m,"lm_head.weight",c->vocab,c->hidden):m->embed;
     m->layer=xcalloc(c->n_layers,sizeof(Layer)); for(int i=0;i<c->n_layers;i++) load_layer(m,i);
     m->last_hidden=falloc(c->hidden);
@@ -2211,6 +2828,13 @@ static void model_init(Model *m,const char *snap){
         "mtp.layers.0.mlp.gate.weight","mtp.layers.0.mlp.experts.0.gate_proj.weight"};
     int mtp_complete=c->mtp_layers>0;
     for(size_t i=0;i<sizeof(mtp_req)/sizeof(mtp_req[0])&&mtp_complete;i++){char found[QW_NAME];if(find_named(&m->S,mtp_req[i],found,sizeof(found))<0)mtp_complete=0;}
+    /* Qwen4-Exp ships an MTP block, but with a different shape: fc_embedding +
+     * fc_hidden instead of a single fc, its own hyper_connection_mixer, no
+     * mtp.norm, and gated residuals in place of the layernorms. The tensor
+     * probe above already declines it; say so rather than looking like the
+     * checkpoint is missing an MTP head. */
+    if(mtp_requested&&!mtp_complete&&c->is_qwen4_exp&&c->mtp_layers>0)
+        fprintf(stderr,"[MTP] disabled: Qwen4-Exp speculative decoding is not implemented yet\n");
     if(mtp_requested&&mtp_complete){
         m->mtp.enabled=1;m->mtp.fc=load_qmat(m,"mtp.fc.weight",c->hidden,2*c->hidden);
         m->mtp.pre_embed_norm=load_vec(m,"mtp.pre_fc_norm_embedding.weight",c->hidden);
@@ -2238,6 +2862,7 @@ static void model_init(Model *m,const char *snap){
     prefill_pipe_configure(m);expert_prefetch_start(m);
     m->dense_load_s=now_s()-t0; m->dump_acts=getenv("DUMP_ACTS")&&strcmp(getenv("DUMP_ACTS"),"0");
     m->debug_logits=getenv("DEBUG_LOGITS")&&strcmp(getenv("DEBUG_LOGITS"),"0");
+    m->qw4_trace=getenv("QW4_TRACE")&&strcmp(getenv("QW4_TRACE"),"0");
     m->prof_detail=getenv("PROF_DETAIL")&&atoi(getenv("PROF_DETAIL"))!=0;
     tier_atexit_model=m;atexit(tier_report_and_save);
 }
@@ -2245,6 +2870,15 @@ static void model_init(Model *m,const char *snap){
 /* ---------- hybrid forward ---------- */
 static void model_reset(Model *m){
     m->pos=0;m->mtp.pos=0;memset(m->last_hidden,0,(size_t)m->c.hidden*sizeof(float)); Cfg *c=&m->c;
+    /* PLE carries a trigram window and a dilated-conv ring across positions;
+     * both are sequence state and must not survive a reset. */
+    if(c->is_qwen4_exp)for(int li=0;li<c->n_layers;li++){
+        PleW *w=&m->layer[li].ple; if(!w->enabled)continue;
+        int wide=c->hc_count*c->hidden,slots=(c->ple_conv_kernel-1)*c->ngram_size+1;
+        memset(w->conv_state,0,(size_t)slots*wide*sizeof(float));
+        for(int i=0;i<QW_MAX_NGRAM;i++)w->hist[i]=c->eos_token;
+        w->seg=0; w->conv_pos=0;
+    }
     if(m->prefill_pipe.started){PrefillPipe*p=&m->prefill_pipe;
         pthread_mutex_lock(&p->lock);
         if(p->busy||p->job_slot>=0||p->slot[0].state!=PREFILL_PIPE_EMPTY||
@@ -2397,12 +3031,87 @@ static void gdn_forward(Model *m,Layer *l,const float *x,float *out){
 static void rope_head(float *x,int hd,int rd,int pos,float theta){
     int half=rd/2; for(int i=0;i<half;i++){ float angle=(float)pos*powf(theta,-2.f*(float)i/(float)rd),co=cosf(angle),si=sinf(angle); float a=x[i],b=x[i+half]; x[i]=a*co-b*si; x[i+half]=b*co+a*si; } (void)hd;
 }
+/* Decide which keys a Qwen4-Exp attention layer may see at `pos`.
+ *
+ * index_qk_proj emits the indexer query heads and its single key head together.
+ * The key is cached raw -- pooling happens before the norm and the rotation, so
+ * caching a normalized or rotated key would pool the wrong thing. Visible keys
+ * are then grouped into blocks of compress_ratio, each block pooled, normed and
+ * rotated at its first position, scored against the query heads, and the top
+ * indexer_budget/compress_ratio blocks admitted along with the trailing partial
+ * block.
+ *
+ * Returns 0 when every visible key is admitted -- below the budget this is
+ * exactly plain causal attention, so the caller can skip masking entirely.
+ *
+ * mask must hold pos+1 bytes. Scoring and selection are the fixture-tested
+ * qsa_block_scores / qsa_select_mask. */
+static int qsa_admitted(Model *m,Layer *l,const float *x,int pos,uint8_t *mask){
+    Cfg *c=&m->c; IdxW *ix=&l->idx;
+    int nq=c->idx_n_heads,nk=c->idx_kv_heads,d=c->idx_head_dim;
+    int ratio=c->idx_ratio,topk=c->idx_budget/ratio,visible=pos+1;
+    int rd=(int)(c->head_dim*c->partial_rotary);   /* the attention rotary width */
+    float *qk=falloc(((int64_t)nq+nk)*d);
+    qmat_mul_ex(qk,x,&ix->qk,0);
+    float *q=qk,*kraw=qk+(int64_t)nq*d;
+    /* Cache the raw key first: this must happen even when no restriction
+     * applies, or later positions pool a hole. */
+    memcpy(ix->k_cache+(int64_t)pos*d,kraw,(size_t)d*sizeof(float));
+    int blocks=visible/ratio;
+    if(blocks<=topk){ memset(mask,1,(size_t)visible); free(qk); return 0; }
+    for(int h=0;h<nq;h++){
+        rmsnorm_zero(q+(int64_t)h*d,q+(int64_t)h*d,ix->q_norm,d,c->eps);
+        rope_head(q+(int64_t)h*d,d,rd,pos,c->theta);
+    }
+    float *bk=falloc((int64_t)blocks*d),*scores=falloc(blocks);
+    for(int b=0;b<blocks;b++){
+        float *dst=bk+(int64_t)b*d;
+        for(int j=0;j<d;j++){
+            float s=0.f;
+            for(int r=0;r<ratio;r++) s+=ix->k_cache[(int64_t)(b*ratio+r)*d+j];
+            dst[j]=s/(float)ratio;
+        }
+        rmsnorm_zero(dst,dst,ix->k_norm,d,c->eps);
+        rope_head(dst,d,rd,b*ratio,c->theta);      /* rotated at the block's first position */
+    }
+    qsa_block_scores(q,nq,d,bk,blocks,scores);
+    int *heap=xcalloc(topk>0?topk:1,sizeof(int));
+    qsa_select_mask(scores,blocks,topk,ratio,visible,heap,mask);
+    /* QSA_DEBUG=<layer>: dump the admitted set at each position so it can be
+     * diffed against the reference indexer's selection. */
+    {const char*dbg=getenv("QSA_DEBUG");
+     if(dbg&&atoi(dbg)==l->index){
+        fprintf(stderr,"[QSA] layer %d pos %d blocks %d topk %d admitted",l->index,pos,blocks,topk);
+        for(int t=0;t<visible;t++)if(mask[t])fprintf(stderr," %d",t);
+        fprintf(stderr,"\n[QSA] scores");
+        for(int b=0;b<blocks;b++)fprintf(stderr," %d:%.6f",b,scores[b]);
+        fprintf(stderr,"\n");
+     }}
+    free(heap);free(bk);free(scores);free(qk);
+    return 1;
+}
+
 static void attn_forward(Model *m,Layer *l,const float *x,float *out){
     Cfg *c=&m->c; AttnW *w=&l->attn; int nh=c->n_heads,nkv=c->n_kv_heads,hd=c->head_dim,pos=m->pos,rd=(int)(hd*c->partial_rotary);
-    int qrows=nh*hd*2,kvrows=nkv*hd; float *qp=falloc(qrows),*q=falloc(nh*hd),*gate=falloc(nh*hd),*k=falloc(kvrows),*v=falloc(kvrows),*ctx=falloc(nh*hd),*scores=falloc((int64_t)nh*(pos+1));
+    int qrows=nh*hd*2,kvrows=nkv*hd;
+    /* Allocate after the CUDA early return, not before it.  These seven
+     * buffers were built and immediately freed on every CUDA call, and
+     * `scores` alone is nh*(pos+1) floats -- about 1.08 MB at 8.4k positions,
+     * zeroed 126,765 times across a prefill for nothing. */
 #ifdef COLI_CUDA
-    if(cuda_attn_try(out,x,w,c,pos,m->max_seq,m->kv16)){free(qp);free(q);free(gate);free(k);free(v);free(ctx);free(scores);return;}
+    /* CUDA has no QSA indexer yet. Taking these paths on a Qwen4-Exp
+     * attention layer would silently attend to every key and quietly produce
+     * wrong results, so fall back to the CPU path that implements it. */
+    if(!(c->is_qwen4_exp&&l->idx.k_cache)&&cuda_attn_try(out,x,w,c,pos,m->max_seq,m->kv16))return;
 #endif
+    float *qp=falloc(qrows),*q=falloc(nh*hd),*gate=falloc(nh*hd),*k=falloc(kvrows),*v=falloc(kvrows),*ctx=falloc(nh*hd),*scores=falloc((int64_t)nh*(pos+1));
+    /* Qwen4-Exp restricts what attention may see to indexer_budget positions.
+     * Below that every key is admitted and the mask is skipped. */
+    uint8_t *admit=NULL;
+    if(c->is_qwen4_exp&&l->idx.k_cache){
+        admit=xcalloc((size_t)pos+1,1);
+        if(!qsa_admitted(m,l,x,pos,admit)){free(admit);admit=NULL;}
+    }
     int projected=0;
 #ifdef COLI_CUDA
     float*py[3]={qp,k,v};const QMat*pm[3]={&w->q,&w->k,&w->v};projected=cuda_projection_group_try(py,x,pm,3);
@@ -2416,12 +3125,30 @@ static void attn_forward(Model *m,Layer *l,const float *x,float *out){
     #pragma omp parallel for schedule(static) if(par)
     for(int h=0;h<nh;h++){
         int hk=h/rep;float*sh=scores+(int64_t)h*(pos+1);float mx=-INFINITY;
-        for(int t=0;t<=pos;t++){float z0=0.f;int64_t off=(int64_t)t*kvrows+(int64_t)hk*hd;for(int j=0;j<hd;j++)z0+=q[(int64_t)h*hd+j]*(m->kv16?bf16_to_f32(w->k_cache16[off+j]):w->k_cache[off+j]);sh[t]=z0*scale;if(sh[t]>mx)mx=sh[t];}
-        float den=0.f;for(int t=0;t<=pos;t++){sh[t]=expf(sh[t]-mx);den+=sh[t];}
+        for(int t=0;t<=pos;t++){if(admit&&!admit[t]){sh[t]=-INFINITY;continue;}float z0=0.f;int64_t off=(int64_t)t*kvrows+(int64_t)hk*hd;for(int j=0;j<hd;j++)z0+=q[(int64_t)h*hd+j]*(m->kv16?bf16_to_f32(w->k_cache16[off+j]):w->k_cache[off+j]);sh[t]=z0*scale;if(sh[t]>mx)mx=sh[t];}
+        float den=0.f;for(int t=0;t<=pos;t++){sh[t]=(sh[t]==-INFINITY)?0.f:expf(sh[t]-mx);den+=sh[t];}
         for(int j=0;j<hd;j++){float sum=0.f;for(int t=0;t<=pos;t++){int64_t off=(int64_t)t*kvrows+(int64_t)hk*hd+j;sum+=(sh[t]/den)*(m->kv16?bf16_to_f32(w->v_cache16[off]):w->v_cache[off]);}ctx[(int64_t)h*hd+j]=sum*sigmoidf_stable(gate[(int64_t)h*hd+j]);}
     }
-    qmat_mul_ex(out,ctx,&w->o,0); free(qp);free(q);free(gate);free(k);free(v);free(ctx);free(scores);
+    qmat_mul_ex(out,ctx,&w->o,0); free(qp);free(q);free(gate);free(k);free(v);free(ctx);free(scores);free(admit);
 }
+/* A block of consecutive rows through one full-attention layer.  Mirrors
+ * gdn_prefill_layer, which is what the linear-attention layers already get.
+ * Falls back to the per-token loop whenever the batched path declines, and
+ * leaves m->pos exactly where that loop would have left it. */
+static void attn_prefill_layer(Model*m,Layer*l,const float*x,int T,int base,float*out){
+    Cfg*c=&m->c;
+#ifdef COLI_CUDA
+    /* CUDA has no QSA indexer yet. Taking these paths on a Qwen4-Exp
+     * attention layer would silently attend to every key and quietly produce
+     * wrong results, so fall back to the CPU path that implements it. */
+    if(!(c->is_qwen4_exp&&l->idx.k_cache)&&
+       cuda_attn_prefill_try(out,x,T,base,&l->attn,c,m->max_seq,m->kv16)){
+        m->pos=base+T-1;return;
+    }
+#endif
+    for(int t=0;t<T;t++){m->pos=base+t;attn_forward(m,l,x+(int64_t)t*c->hidden,out+(int64_t)t*c->hidden);}
+}
+
 /* ---- bit-exact panel GEMM for grouped low-bit weights ---------------------
  * The per-row loop below keeps the packed weight row hot but still re-decodes it
  * for every token, and with the row loop outermost it walks the whole activation
@@ -2641,7 +3368,11 @@ static void attn_forward_slot_batch(Model*m,Layer*l,const float*x,float*out,int 
     int rd=(int)(hd*c->partial_rotary),qrows=nh*hd*2,kvrows=nkv*hd,H=c->hidden,maxp=0;
     for(int row=0;row<B;row++){if(pos[row]<0||pos[row]>=max_seq)die("slot attention position outside context");if(pos[row]>maxp)maxp=pos[row];}
 #ifdef COLI_CUDA
-    int cuda_used=cuda_attn_slots_try(out,x,B,slot,pos,resident,resident_slots,w,c,max_seq,m->kv16);
+    /* CUDA has no QSA indexer yet. Taking these paths on a Qwen4-Exp
+     * attention layer would silently attend to every key and quietly produce
+     * wrong results, so fall back to the CPU path that implements it. */
+    int cuda_used=(c->is_qwen4_exp&&l->idx.k_cache)?0:
+        cuda_attn_slots_try(out,x,B,slot,pos,resident,resident_slots,w,c,max_seq,m->kv16);
     if(cuda_used>0)return;
     if(cuda_used<0)die("resident CUDA GQA state became unavailable");
 #endif
@@ -3515,21 +4246,36 @@ static int cuda_cached_prefill_selftest(Model*m){
 static void layer_forward_slot_batch(Model*m,Layer*l,float*x,int B,const int*slot,const int*pos,
                                      ResidentLayerState*resident,int resident_slots,float*conv_state,float*gdn_state,float*k_cache,float*v_cache,
                                      uint16_t*k_cache16,uint16_t*v_cache16,int max_seq){
-    Cfg*c=&m->c;int H=c->hidden;float*n=falloc((int64_t)B*H),*mix=falloc((int64_t)B*H),*moe=falloc((int64_t)B*H);
+    Cfg*c=&m->c;int H=c->hidden;
+    /* Qwen4-Exp carries hc_count streams per row; every other family carries
+     * one. `n` stays the hidden-wide block input either way. */
+    int q4e=c->is_qwen4_exp,hc=q4e?c->hc_count:1,wide=hc*H;
+    float*n=falloc((int64_t)B*H),*mix=falloc((int64_t)B*H),*moe=falloc((int64_t)B*H);
+    float*normed=NULL,*gate=NULL,*low=NULL,*inj=NULL;
+    if(q4e){normed=falloc(wide);gate=falloc(wide);low=falloc(c->hc_lowrank);inj=falloc((int64_t)B*c->hc_count);}
     expert_predict_submit(m,&l->moe);
-    #pragma omp parallel for schedule(static) if(B>1)
-    for(int row=0;row<B;row++)rmsnorm_zero(n+(int64_t)row*H,x+(int64_t)row*H,l->input_norm,H,c->eps);
+    if(q4e)hc_collapse_rows(c,&l->attn_hc,x,B,n,inj,normed,low,gate);
+    else{
+        #pragma omp parallel for schedule(static) if(B>1)
+        for(int row=0;row<B;row++)rmsnorm_zero(n+(int64_t)row*H,x+(int64_t)row*H,l->input_norm,H,c->eps);
+    }
     double core_t0=m->prof_detail?now_s():0.;
     if(l->type==LT_LINEAR)gdn_forward_slot_batch(m,l,n,mix,B,slot,pos,resident,resident_slots,conv_state,gdn_state);
     else attn_forward_slot_batch(m,l,n,mix,B,slot,pos,resident,resident_slots,k_cache,v_cache,k_cache16,v_cache16,max_seq);
     if(m->prof_detail){if(l->type==LT_LINEAR)m->prof_gdn+=now_s()-core_t0;else m->prof_attn+=now_s()-core_t0;}
-    #pragma omp parallel for schedule(static) if(B>1)
-    for(int row=0;row<B;row++){float*xr=x+(int64_t)row*H,*mr=mix+(int64_t)row*H,*nr=n+(int64_t)row*H;for(int h=0;h<H;h++)xr[h]+=mr[h];rmsnorm_zero(nr,xr,l->post_norm,H,c->eps);}
+    if(q4e){hc_inject_rows(c,x,mix,inj,B);hc_collapse_rows(c,&l->mlp_hc,x,B,n,inj,normed,low,gate);}
+    else{
+        #pragma omp parallel for schedule(static) if(B>1)
+        for(int row=0;row<B;row++){float*xr=x+(int64_t)row*H,*mr=mix+(int64_t)row*H,*nr=n+(int64_t)row*H;for(int h=0;h<H;h++)xr[h]+=mr[h];rmsnorm_zero(nr,xr,l->post_norm,H,c->eps);}
+    }
     double moe_t0=m->prof_detail?now_s():0.;moe_prefill_grouped(m,l,n,B,moe,0);
     if(m->prof_detail)m->prof_moe+=now_s()-moe_t0;
-    #pragma omp parallel for schedule(static) if(B>1)
-    for(int row=0;row<B;row++){float*xr=x+(int64_t)row*H,*er=moe+(int64_t)row*H;for(int h=0;h<H;h++)xr[h]+=er[h];}
-    free(n);free(mix);free(moe);
+    if(q4e)hc_inject_rows(c,x,moe,inj,B);
+    else{
+        #pragma omp parallel for schedule(static) if(B>1)
+        for(int row=0;row<B;row++){float*xr=x+(int64_t)row*H,*er=moe+(int64_t)row*H;for(int h=0;h<H;h++)xr[h]+=er[h];}
+    }
+    free(n);free(mix);free(moe);free(normed);free(gate);free(low);free(inj);
 }
 static void resident_batch_free(Model*m,ResidentBatchState*s);
 static int resident_batch_init(Model*m,ResidentBatchState*s,int nslots,
@@ -3659,7 +4405,17 @@ static int resident_forward_tokens_ex(Model*m,ResidentBatchState*s,const int*slo
                                       const int*token,int B,int output_mode,
                                       int allow_repeated){
     if(!m||!s||!slot||!token||B<1||B>s->activation_capacity||output_mode<0||output_mode>2)return 0;Cfg*c=&m->c;
-    float*x=falloc((int64_t)B*c->hidden),*n=falloc((int64_t)B*c->hidden),*bl=output_mode?falloc(output_mode==1?(int64_t)B*c->vocab:c->vocab):NULL;int*pos=xcalloc(B,sizeof(int));
+    /* Qwen4-Exp carries hc_count residual streams per row. */
+    int q4e=c->is_qwen4_exp,hc=q4e?c->hc_count:1,wide=hc*c->hidden;
+    /* PLE keeps a trigram window and a dilated-conv ring per *sequence*, and
+     * this model has one copy of that state, not one per slot. Serving more
+     * than one slot would interleave them. Refuse rather than return quietly
+     * wrong text; the deep lane runs kv-slots 1. */
+    if(q4e&&s->nslots>1)for(int li=0;li<c->n_layers;li++)
+        if(m->layer[li].ple.enabled)
+            die("Qwen4-Exp PLE state is per-sequence: serve this model with kv-slots 1");
+    float*x=falloc((int64_t)B*wide),*n=falloc((int64_t)B*c->hidden),*bl=output_mode?falloc(output_mode==1?(int64_t)B*c->vocab:c->vocab):NULL;int*pos=xcalloc(B,sizeof(int));
+    float*tnorm=q4e?falloc(wide):NULL,*tgate=q4e?falloc(wide):NULL,*tlow=q4e?falloc(c->hc_lowrank):NULL;
     int count[MUX_MAX_SLOTS]={0},ok=1,output_done=0,repeated_ok=0;
 #ifdef COLI_CUDA
     repeated_ok=allow_repeated&&s->cuda_activations;
@@ -3668,7 +4424,10 @@ static int resident_forward_tokens_ex(Model*m,ResidentBatchState*s,const int*slo
 #endif
     for(int row=0;row<B;row++){int sid=slot[row];if(sid<0||sid>=s->nslots||
         (count[sid]&&!repeated_ok)||token[row]<0||token[row]>=c->vocab||
-        s->pos[sid]+count[sid]>=s->max_seq){ok=0;break;}pos[row]=s->pos[sid]+count[sid]++;qmat_row(x+(int64_t)row*c->hidden,&m->embed,token[row]);}
+        s->pos[sid]+count[sid]>=s->max_seq){ok=0;break;}pos[row]=s->pos[sid]+count[sid]++;
+        float*xr=x+(int64_t)row*wide;qmat_row(xr,&m->embed,token[row]);
+        /* the stream starts as the embedding tiled hc_count times */
+        for(int k=1;k<hc;k++)memcpy(xr+(int64_t)k*c->hidden,xr,(size_t)c->hidden*sizeof(float));}
 #ifdef COLI_CUDA
     if(ok&&s->cuda_activations){
         float*moe=falloc((int64_t)B*c->hidden);
@@ -3732,12 +4491,23 @@ static int resident_forward_tokens_ex(Model*m,ResidentBatchState*s,const int*slo
         free(moe);
     }else
 #endif
-    for(int li=0;ok&&li<c->n_layers;li++){ResidentLayerState*r=&s->layer[li];layer_forward_slot_batch(m,&m->layer[li],x,B,slot,pos,r,s->nslots,r->conv,r->gdn,r->k,r->v,r->k16,r->v16,s->max_seq);}
+    for(int li=0;ok&&li<c->n_layers;li++){ResidentLayerState*r=&s->layer[li];Layer*lay=&m->layer[li];
+        if(q4e&&lay->ple.enabled){
+            float*pleout=falloc(wide);
+            for(int row=0;row<B;row++){float*xr=x+(int64_t)row*wide;
+                ple_forward_token(m,&lay->ple,xr,token[row],pleout);
+                for(int i=0;i<wide;i++)xr[i]+=pleout[i];}
+            free(pleout);
+        }
+        layer_forward_slot_batch(m,lay,x,B,slot,pos,r,s->nslots,r->conv,r->gdn,r->k,r->v,r->k16,r->v16,s->max_seq);}
     if(ok&&output_mode&&!output_done){
         if(output_mode==1){
             #pragma omp parallel for schedule(static) if(B>1)
-            for(int row=0;row<B;row++)rmsnorm_zero(n+(int64_t)row*c->hidden,x+(int64_t)row*c->hidden,m->final_norm,c->hidden,c->eps);
-        }else rmsnorm_zero(n,x+(int64_t)(B-1)*c->hidden,m->final_norm,c->hidden,c->eps);
+            for(int row=0;row<B;row++){
+                if(q4e)hc_gated_residual_q(c,&m->mixer,x+(int64_t)row*wide,n+(int64_t)row*c->hidden,NULL,tnorm,tlow,tgate);
+                else rmsnorm_zero(n+(int64_t)row*c->hidden,x+(int64_t)row*c->hidden,m->final_norm,c->hidden,c->eps);}
+        }else if(q4e)hc_gated_residual_q(c,&m->mixer,x+(int64_t)(B-1)*wide,n,NULL,tnorm,tlow,tgate);
+        else rmsnorm_zero(n,x+(int64_t)(B-1)*c->hidden,m->final_norm,c->hidden,c->eps);
         double lm_t0=m->prof_detail?now_s():0.;
         if(output_mode==1)qmat_mul_batch(bl,n,B,c->hidden,&m->lm_head,1);
         else qmat_mul_ex(bl,n,&m->lm_head,1);
@@ -3748,14 +4518,18 @@ static int resident_forward_tokens_ex(Model*m,ResidentBatchState*s,const int*slo
         if(output_mode==1)for(int row=0;row<B;row++){int sid=slot[row];memcpy(s->last_hidden+(int64_t)sid*c->hidden,n+(int64_t)row*c->hidden,(size_t)c->hidden*sizeof(float));memcpy(s->logits+(int64_t)sid*c->vocab,bl+(int64_t)row*c->vocab,(size_t)c->vocab*sizeof(float));}
         else if(output_mode==2){int sid=slot[B-1];memcpy(s->last_hidden+(int64_t)sid*c->hidden,n,(size_t)c->hidden*sizeof(float));memcpy(s->logits+(int64_t)sid*c->vocab,bl,(size_t)c->vocab*sizeof(float));}
     }
-    free(x);free(n);free(bl);free(pos);return ok;
+    free(x);free(n);free(bl);free(pos);free(tnorm);free(tgate);free(tlow);return ok;
 }
 static int resident_forward_tokens(Model*m,ResidentBatchState*s,const int*slot,
                                    const int*token,int B){
     return resident_forward_tokens_ex(m,s,slot,token,B,1,0);
 }
 static void dump_hidden(Model *m,int li,const float *x){
-    if(!m->dump_acts)return; const char *dir=getenv("ACTS_DIR");if(!dir)dir="acts"; mkdir(dir,0755); char p[2048];snprintf(p,sizeof(p),"%s/layer-%03d-token-%06d.f32",dir,li,m->pos);FILE*f=fopen(p,"wb");if(f){fwrite(x,sizeof(float),m->c.hidden,f);fclose(f);}
+    if(!m->dump_acts)return; const char *dir=getenv("ACTS_DIR");if(!dir)dir="acts"; mkdir(dir,0755); char p[2048];snprintf(p,sizeof(p),"%s/layer-%03d-token-%06d.f32",dir,li,m->pos);FILE*f=fopen(p,"wb");
+    /* Qwen4-Exp carries hc_count streams between layers; dumping only the first
+     * would silently compare a quarter of the state against a reference. */
+    int width=m->c.is_qwen4_exp?m->c.hc_count*m->c.hidden:m->c.hidden;
+    if(f){fwrite(x,sizeof(float),(size_t)width,f);fclose(f);}
 }
 static void layer_forward_one(Model*m,Layer*l,float*x,int pos){
     Cfg*c=&m->c;int old_pos=m->pos;m->pos=pos;
@@ -3794,12 +4568,53 @@ static int mtp_step(Model*m,int next_token,const float*target_hidden,int pos,flo
 }
 static void forward_token(Model *m,int token,float *logits){
     Cfg *c=&m->c; if(token<0||token>=c->vocab){fprintf(stderr,"token %d outside model vocab %d\n",token,c->vocab);exit(1);} if(m->pos>=m->max_seq)die("CTX exhausted");
-    float *x=falloc(c->hidden),*n=falloc(c->hidden),*mix=falloc(c->hidden),*moe=falloc(c->hidden); qmat_row(x,&m->embed,token);
+    /* Qwen4-Exp carries hc_count independent residual streams between layers;
+     * every other family carries one. `n` is always the hidden-wide block
+     * input -- an rmsnorm output for Qwen3.5/Ornith, the gated-residual stream
+     * collapse for Qwen4-Exp. */
+    int hc=c->is_qwen4_exp?c->hc_count:1, wide=hc*c->hidden;
+    float *x=falloc(wide),*n=falloc(c->hidden),*mix=falloc(c->hidden),*moe=falloc(c->hidden);
+    float *normed=NULL,*gate=NULL,*low=NULL,*inj=NULL;
+    if(c->is_qwen4_exp){normed=falloc(wide);gate=falloc(wide);low=falloc(c->hc_lowrank);inj=falloc(c->hc_count);}
+    qmat_row(x,&m->embed,token);
+    /* The stream starts as the embedding tiled hc_count times
+     * (inputs_embeds.repeat(1,1,hc_count) upstream). */
+    for(int k=1;k<hc;k++) memcpy(x+(size_t)k*c->hidden,x,(size_t)c->hidden*sizeof(float));
     for(int li=0;li<c->n_layers;li++){
-        Layer *l=&m->layer[li];expert_predict_submit(m,&l->moe);rmsnorm_zero(n,x,l->input_norm,c->hidden,c->eps);double t0=m->prof_detail?now_s():0.;if(l->type==LT_LINEAR)gdn_forward(m,l,n,mix);else attn_forward(m,l,n,mix);if(m->prof_detail){if(l->type==LT_LINEAR)m->prof_gdn+=now_s()-t0;else m->prof_attn+=now_s()-t0;}
-        for(int i=0;i<c->hidden;i++)x[i]+=mix[i]; rmsnorm_zero(n,x,l->post_norm,c->hidden,c->eps);t0=m->prof_detail?now_s():0.;moe_forward(m,l,n,moe);if(m->prof_detail)m->prof_moe+=now_s()-t0;for(int i=0;i<c->hidden;i++)x[i]+=moe[i]; dump_hidden(m,li,x);
+        Layer *l=&m->layer[li];expert_predict_submit(m,&l->moe);
+        if(c->is_qwen4_exp&&l->ple.enabled){
+            ple_forward_token(m,&l->ple,x,token,normed);
+            for(int i=0;i<wide;i++)x[i]+=normed[i];
+        }
+        if(c->is_qwen4_exp) hc_gated_residual_q(c,&l->attn_hc,x,n,inj,normed,low,gate);
+        else rmsnorm_zero(n,x,l->input_norm,c->hidden,c->eps);
+        double t0=m->prof_detail?now_s():0.;if(l->type==LT_LINEAR)gdn_forward(m,l,n,mix);else attn_forward(m,l,n,mix);if(m->prof_detail){if(l->type==LT_LINEAR)m->prof_gdn+=now_s()-t0;else m->prof_attn+=now_s()-t0;}
+        if(c->is_qwen4_exp){hc_inject(x,mix,inj,hc,c->hidden);hc_gated_residual_q(c,&l->mlp_hc,x,n,inj,normed,low,gate);}
+        else{for(int i=0;i<c->hidden;i++)x[i]+=mix[i]; rmsnorm_zero(n,x,l->post_norm,c->hidden,c->eps);}
+        t0=m->prof_detail?now_s():0.;moe_forward(m,l,n,moe);if(m->prof_detail)m->prof_moe+=now_s()-t0;
+        if(c->is_qwen4_exp) hc_inject(x,moe,inj,hc,c->hidden);
+        else for(int i=0;i<c->hidden;i++)x[i]+=moe[i];
+        /* QW4_TRACE: per-stream RMS after each layer. A 4-stream residual that
+         * diverges or goes non-finite shows up here immediately, and the layer
+         * index localises it. */
+        if(c->is_qwen4_exp&&m->qw4_trace&&m->pos==0){
+            fprintf(stderr,"[QW4] layer %2d %s ple=%d rms",li,l->type==LT_LINEAR?"gdn ":"attn",l->ple.enabled);
+            int bad=0;
+            for(int k=0;k<hc;k++){
+                double acc=0.;const float*xk=x+(size_t)k*c->hidden;
+                for(int i=0;i<c->hidden;i++){acc+=(double)xk[i]*xk[i];if(!isfinite(xk[i]))bad++;}
+                fprintf(stderr," %.4g",sqrt(acc/c->hidden));
+            }
+            fprintf(stderr," nonfinite=%d\n",bad);
+        }
+        dump_hidden(m,li,x);
     }
-    rmsnorm_zero(n,x,m->final_norm,c->hidden,c->eps);memcpy(m->last_hidden,n,(size_t)c->hidden*sizeof(float));double t0=m->prof_detail?now_s():0.;qmat_mul_ex(logits,n,&m->lm_head,1);if(m->prof_detail)m->prof_lm+=now_s()-t0;m->pos++;free(x);free(n);free(mix);free(moe);
+    /* Qwen4-Exp ends at the mixer instead of a final norm: its stream collapse
+     * is what lm_head consumes. */
+    if(c->is_qwen4_exp) hc_gated_residual_q(c,&m->mixer,x,n,NULL,normed,low,gate);
+    else rmsnorm_zero(n,x,m->final_norm,c->hidden,c->eps);
+    memcpy(m->last_hidden,n,(size_t)c->hidden*sizeof(float));double t0=m->prof_detail?now_s():0.;qmat_mul_ex(logits,n,&m->lm_head,1);if(m->prof_detail)m->prof_lm+=now_s()-t0;m->pos++;
+    free(x);free(n);free(mix);free(moe);free(normed);free(gate);free(low);free(inj);
 }
 static int use_gdn_chunk(void){const char*e=getenv("GDN_CHUNK");return !e||atoi(e)!=0;}
 static void gdn_prefill_layer(Model*m,Layer*l,const float*x,int T,float*out){
@@ -3871,7 +4686,7 @@ static void forward_decode_block(Model*m,const int*token,int T,float*logits,
 #ifdef COLI_CUDA
             int prior=cuda_suppress;if(cuda_spec_full_enabled())cuda_suppress=0;
 #endif
-            for(int t=0;t<T;t++){m->pos=base+t;attn_forward(m,l,n+(int64_t)t*c->hidden,mix+(int64_t)t*c->hidden);}
+            attn_prefill_layer(m,l,n,T,base,mix);
 #ifdef COLI_CUDA
             cuda_suppress=prior;
 #endif
@@ -4095,37 +4910,68 @@ static int session_state_read(Model*m,const char*path,SessionState*s){
     if(!ok||session_state_checksum(s)!=h.checksum){session_state_free(s);return 0;}return 1;
 }
 static double forward_prefill_core(Model*m,const int*token,int T,float*logits,int score_first,int*score_count,int grouped_moe,float*hidden_all){
-    Cfg*c=&m->c;if(T<=0||m->pos!=0||T>m->max_seq)die("prefill requires a fresh model and valid length");float*x=falloc((int64_t)T*c->hidden),*n=falloc((int64_t)T*c->hidden),*mix=falloc((int64_t)T*c->hidden),*moe=falloc(c->hidden);
-    for(int t=0;t<T;t++){if(token[t]<0||token[t]>=c->vocab)die("prefill token outside vocab");qmat_row(x+(int64_t)t*c->hidden,&m->embed,token[t]);}
+    Cfg*c=&m->c;if(T<=0||m->pos!=0||T>m->max_seq)die("prefill requires a fresh model and valid length");
+    int q4e=c->is_qwen4_exp,hc=q4e?c->hc_count:1,wide=hc*c->hidden;
+    float*x=falloc((int64_t)T*wide),*n=falloc((int64_t)T*c->hidden),*mix=falloc((int64_t)T*c->hidden),*moe=falloc(c->hidden);
+    float*normed=NULL,*gate=NULL,*low=NULL,*inj=NULL;
+    if(q4e){normed=falloc(wide);gate=falloc(wide);low=falloc(c->hc_lowrank);inj=falloc((int64_t)T*c->hc_count);}
+    for(int t=0;t<T;t++){if(token[t]<0||token[t]>=c->vocab)die("prefill token outside vocab");
+        float*xt=x+(int64_t)t*wide;qmat_row(xt,&m->embed,token[t]);
+        for(int k=1;k<hc;k++)memcpy(xt+(int64_t)k*c->hidden,xt,(size_t)c->hidden*sizeof(float));}
     for(int li=0;li<c->n_layers;li++){
         Layer*l=&m->layer[li];
-        for(int t=0;t<T;t++)rmsnorm_zero(n+(int64_t)t*c->hidden,x+(int64_t)t*c->hidden,l->input_norm,c->hidden,c->eps);
+        if(q4e&&l->ple.enabled){
+            float*pleout=falloc(wide);
+            for(int t=0;t<T;t++){
+                float*xt=x+(int64_t)t*wide;
+                ple_forward_token(m,&l->ple,xt,token[t],pleout);
+                for(int i=0;i<wide;i++)xt[i]+=pleout[i];
+            }
+            free(pleout);
+        }
+        if(q4e)hc_collapse_rows(c,&l->attn_hc,x,T,n,inj,normed,low,gate);
+        else for(int t=0;t<T;t++)rmsnorm_zero(n+(int64_t)t*c->hidden,x+(int64_t)t*c->hidden,l->input_norm,c->hidden,c->eps);
         double core_t0=m->prof_detail?now_s():0.;
         if(l->type==LT_LINEAR)gdn_prefill_layer(m,l,n,T,mix);
-        else for(int t=0;t<T;t++){m->pos=t;attn_forward(m,l,n+(int64_t)t*c->hidden,mix+(int64_t)t*c->hidden);}
+        else attn_prefill_layer(m,l,n,T,0,mix);
         if(m->prof_detail){if(l->type==LT_LINEAR)m->prof_gdn+=now_s()-core_t0;else m->prof_attn+=now_s()-core_t0;}
-        for(int t=0;t<T;t++){float*xt=x+(int64_t)t*c->hidden;for(int i=0;i<c->hidden;i++)xt[i]+=mix[(int64_t)t*c->hidden+i];rmsnorm_zero(n+(int64_t)t*c->hidden,xt,l->post_norm,c->hidden,c->eps);}
+        if(q4e){hc_inject_rows(c,x,mix,inj,T);hc_collapse_rows(c,&l->mlp_hc,x,T,n,inj,normed,low,gate);}
+        else for(int t=0;t<T;t++){float*xt=x+(int64_t)t*c->hidden;for(int i=0;i<c->hidden;i++)xt[i]+=mix[(int64_t)t*c->hidden+i];rmsnorm_zero(n+(int64_t)t*c->hidden,xt,l->post_norm,c->hidden,c->eps);}
         double moe_t0=m->prof_detail?now_s():0.;
-        if(grouped_moe){moe_prefill_grouped(m,l,n,T,mix,1);for(int t=0;t<T;t++){float*xt=x+(int64_t)t*c->hidden;for(int i=0;i<c->hidden;i++)xt[i]+=mix[(int64_t)t*c->hidden+i];}}
-        else for(int t=0;t<T;t++){float*xt=x+(int64_t)t*c->hidden;moe_forward(m,l,n+(int64_t)t*c->hidden,moe);for(int i=0;i<c->hidden;i++)xt[i]+=moe[i];}
+        if(grouped_moe){moe_prefill_grouped(m,l,n,T,mix,1);
+            if(q4e)hc_inject_rows(c,x,mix,inj,T);
+            else for(int t=0;t<T;t++){float*xt=x+(int64_t)t*c->hidden;for(int i=0;i<c->hidden;i++)xt[i]+=mix[(int64_t)t*c->hidden+i];}}
+        else for(int t=0;t<T;t++){moe_forward(m,l,n+(int64_t)t*c->hidden,moe);
+            if(q4e)hc_inject(x+(int64_t)t*wide,moe,inj+(int64_t)t*c->hc_count,hc,c->hidden);
+            else{float*xt=x+(int64_t)t*c->hidden;for(int i=0;i<c->hidden;i++)xt[i]+=moe[i];}}
         if(m->prof_detail)m->prof_moe+=now_s()-moe_t0;
     }
-    if(hidden_all)for(int t=0;t<T;t++)rmsnorm_zero(hidden_all+(int64_t)t*c->hidden,x+(int64_t)t*c->hidden,m->final_norm,c->hidden,c->eps);
+    /* Terminal collapse: the mixer for Qwen4-Exp, the final norm otherwise. */
+    if(hidden_all){
+        if(q4e)hc_collapse_rows(c,&m->mixer,x,T,hidden_all,NULL,normed,low,gate);
+        else for(int t=0;t<T;t++)rmsnorm_zero(hidden_all+(int64_t)t*c->hidden,x+(int64_t)t*c->hidden,m->final_norm,c->hidden,c->eps);
+    }
     m->pos=T;double nll=0.;int scored=0;
     double lm_t0=m->prof_detail?now_s():0.;
-    if(score_first<0){if(hidden_all)memcpy(n,hidden_all+(int64_t)(T-1)*c->hidden,(size_t)c->hidden*sizeof(float));else rmsnorm_zero(n,x+(int64_t)(T-1)*c->hidden,m->final_norm,c->hidden,c->eps);memcpy(m->last_hidden,n,(size_t)c->hidden*sizeof(float));qmat_mul_ex(logits,n,&m->lm_head,1);}
+    if(score_first<0){if(hidden_all)memcpy(n,hidden_all+(int64_t)(T-1)*c->hidden,(size_t)c->hidden*sizeof(float));
+        else if(q4e)hc_gated_residual_q(c,&m->mixer,x+(int64_t)(T-1)*wide,n,NULL,normed,low,gate);
+        else rmsnorm_zero(n,x+(int64_t)(T-1)*c->hidden,m->final_norm,c->hidden,c->eps);
+        memcpy(m->last_hidden,n,(size_t)c->hidden*sizeof(float));qmat_mul_ex(logits,n,&m->lm_head,1);}
     else{
         int total=T-1-score_first,lmb=32;const char*be=getenv("EVAL_LM_BATCH");if(be)lmb=atoi(be);if(lmb<1)lmb=1;if(lmb>total)lmb=total;
         float*bn=falloc((int64_t)lmb*c->hidden),*bl=falloc((int64_t)lmb*c->vocab);
         for(int base=0;base<total;base+=lmb){int B=total-base;if(B>lmb)B=lmb;
-            for(int b=0;b<B;b++){int t=score_first+base+b;rmsnorm_zero(bn+(int64_t)b*c->hidden,x+(int64_t)t*c->hidden,m->final_norm,c->hidden,c->eps);}
+            for(int b=0;b<B;b++){int t=score_first+base+b;
+                if(q4e)hc_gated_residual_q(c,&m->mixer,x+(int64_t)t*wide,bn+(int64_t)b*c->hidden,NULL,normed,low,gate);
+                else rmsnorm_zero(bn+(int64_t)b*c->hidden,x+(int64_t)t*c->hidden,m->final_norm,c->hidden,c->eps);}
             qmat_mul_batch(bl,bn,B,c->hidden,&m->lm_head,1);
             for(int b=0;b<B;b++){int t=score_first+base+b;float*lb=bl+(int64_t)b*c->vocab,mx=-INFINITY;for(int j=0;j<c->vocab;j++)if(lb[j]>mx)mx=lb[j];double den=0.;for(int j=0;j<c->vocab;j++)den+=exp((double)lb[j]-mx);nll+=(double)mx+log(den)-lb[token[t+1]];scored++;}
         }
         free(bn);free(bl);
     }
     if(m->prof_detail)m->prof_lm+=now_s()-lm_t0;
-    if(score_count)*score_count=scored;free(x);free(n);free(mix);free(moe);return nll;
+    if(score_count)*score_count=scored;free(x);free(n);free(mix);free(moe);
+    free(normed);free(gate);free(low);free(inj);return nll;
 }
 /* grouped_moe=1: stream each expert's weights once per layer instead of once per
  * routed token.  On CPU this is bit-identical to the per-token path (mlp_batch and
@@ -4368,9 +5214,7 @@ static int serve_prefill_step(Model*m,ResidentBatchState*resident,
 #ifdef COLI_CUDA
             int prior=cuda_suppress;if(cuda_spec_full_enabled())cuda_suppress=0;
 #endif
-            for(int t=0;t<T;t++){m->pos=job->cached+t;
-                attn_forward(m,l,job->n+(int64_t)t*c->hidden,
-                             job->mix+(int64_t)t*c->hidden);}
+            attn_prefill_layer(m,l,job->n,T,job->cached,job->mix);
 #ifdef COLI_CUDA
             cuda_suppress=prior;
 #endif
@@ -4819,7 +5663,27 @@ int main(void){
 #endif
     printf("shiftwing qwen engine — %s\n",phase);printf("model: hidden=%d layers=%d (%d full / %d GDN) vocab=%d ctx=%d\n",c->hidden,c->n_layers,nf,c->n_layers-nf,c->vocab,m.max_seq);
     printf("weights loaded in %.2fs, tokenizer=%s, format=%s, matrices=%d/%d/%d/%d/%d f32/i8/i2/i3/i4, experts/layer=%d, KV=%s, MTP=%s\n",m.dense_load_s,m.has_tok?"yes":"no",format,m.matrix_f32,m.matrix_i8,m.matrix_i2,m.matrix_i3,m.matrix_i4,m.expert_cap,m.kv16?"bf16":"fp32",m.mtp.enabled?"active":"off");if(getenv("LOAD_ONLY")&&atoi(getenv("LOAD_ONLY"))!=0)return 0;if(getenv("TF")&&strcmp(getenv("TF"),"0"))return run_oracle(&m,snap);if(getenv("EVAL_IDS"))return run_eval_ids(&m,getenv("EVAL_IDS"));if(getenv("PREFIX_IDS"))return run_prefix_ids(&m,getenv("PREFIX_IDS"),getenv("NGEN")?atoi(getenv("NGEN")):64);if(getenv("TFPREFIX_IDS"))return run_tfprefix_ids(&m,getenv("TFPREFIX_IDS"));
-    int ids[4096],nids=0;const char *prompt=getenv("PROMPT");if(!prompt)prompt=c->vocab<1000?"!":"Hello";char*chatbuf=NULL;if(getenv("CHAT")&&atoi(getenv("CHAT"))!=0){size_t z=strlen(prompt)+128;chatbuf=xcalloc(z,1);snprintf(chatbuf,z,"<|im_start|>user\n%s<|im_end|>\n<|im_start|>assistant\n<think>\n",prompt);prompt=chatbuf;}
+    int ids[4096],nids=0;const char *prompt=getenv("PROMPT");if(!prompt)prompt=c->vocab<1000?"!":"Hello";char*chatbuf=NULL;
+    if(getenv("CHAT")&&atoi(getenv("CHAT"))!=0){
+        /* The generation prompt opens <think> and the model closes it, which is
+         * what the official template does. NO_THINK=1 closes it immediately so
+         * the answer starts at the first token.
+         *
+         * That form is not in the template -- it has no switch for turning
+         * reasoning off -- but it is exactly what the template writes in front
+         * of a past turn that carried no reasoning, so the model has seen it.
+         *
+         * This is a time control, not a matter of taste. The review lane is
+         * bound to one JSON object and decodes below one token per second: a
+         * reasoning preamble can consume the whole output budget before the
+         * first brace appears, which is how a 400-token review budget timed out
+         * at 90 minutes having produced no JSON. */
+        int no_think=getenv("NO_THINK")&&atoi(getenv("NO_THINK"))!=0;
+        const char *tail=no_think?"<think>\n\n</think>\n":"<think>\n";
+        size_t z=strlen(prompt)+160;chatbuf=xcalloc(z,1);
+        snprintf(chatbuf,z,"<|im_start|>user\n%s<|im_end|>\n<|im_start|>assistant\n%s",prompt,tail);
+        prompt=chatbuf;
+    }
     if(m.has_tok)nids=tok_encode(&m.T,prompt,(int)strlen(prompt),ids,4096);else ids[nids++]=1;if(nids<=0)die("empty prompt");
     float *logits=falloc(c->vocab);model_reset(&m);double pt=now_s();if(m.mtp.enabled)prefill_mtp(&m,ids,nids,logits);else prefill_dispatch(&m,ids,nids,logits);pt=now_s()-pt;int warm=getenv("WARMUP")?atoi(getenv("WARMUP")):0;if(warm>0){if(m.mtp.enabled){suppress_emit=1;generate_mtp_greedy(&m,logits,warm,0);suppress_emit=0;m.mtp.proposed=m.mtp.accepted=m.mtp.target_forwards=m.mtp.emitted=0;m.mtp.draft_misses=m.mtp.verify_misses=m.mtp.replay_misses=0;m.mtp.draft_s=m.mtp.verify_s=m.mtp.replay_s=0.;}else for(int i=0;i<warm;i++){int p=argmax(logits,c->vocab);if(cfg_is_eos(c,p))break;if(i+1<warm)forward_token(&m,p,logits);}model_reset(&m);double wt=now_s();if(m.mtp.enabled)prefill_mtp(&m,ids,nids,logits);else prefill_dispatch(&m,ids,nids,logits);pt=now_s()-wt;fprintf(stderr,"[WARMUP] %d-token route/kernel warmup complete\n",warm);}if(m.prof_detail){double known=m.prof_gdn+m.prof_attn+m.prof_moe+m.prof_lm;fprintf(stderr,"[PREFILL_DETAIL] tokens=%d total=%.3fs (%.2f tok/s) gdn=%.3fs attn=%.3fs moe=%.3fs (load=%.3fs misses=%llu) lm=%.3fs other=%.3fs\n",nids,pt,nids/pt,m.prof_gdn,m.prof_attn,m.prof_moe,m.prof_expert_load,(unsigned long long)m.prof_expert_misses,m.prof_lm,pt-known);}
     m.prof_gdn=m.prof_attn=m.prof_moe=m.prof_lm=m.prof_expert_load=0.;m.prof_expert_misses=0;tier_counters_reset(&m);

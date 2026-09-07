@@ -48,6 +48,8 @@ ENGINE_ENV_KEYS = frozenset(
         "CTX",
         "CUDA_ASYNC_ALLOC",
         "CUDA_ATTN",
+        "CUDA_ATTN_PREFILL",
+        "CUDA_ATTN_PREFILL_MIN",
         "CUDA_DENSE",
         "CUDA_EXPERT_GB",
         "CUDA_EXPERTS",

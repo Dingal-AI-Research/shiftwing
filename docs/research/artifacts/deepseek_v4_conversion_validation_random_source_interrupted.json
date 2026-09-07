@@ -1,0 +1,1200 @@
+{
+  "binding": {
+    "allow_fixture": false,
+    "conversion_state_sha256": "385b9b3785fa36c66c0e57a6331d02163aeae2fc255518b31e99eef91b96a02c",
+    "manifest_sha256": "468d29fd3262af88ec4c31ef29a94e62631387475917ec7bdb4da9d0441e4d86",
+    "model": "/home/dinga/Projects/colib/c/deepseek-v4-flash-0731",
+    "signature_sha256": "ba80bd8a0270c4b7ea5b70bed52952bc365b39b3f08dab843f424178a773aea1",
+    "source": "/home/dinga/Projects/colib/c/.deepseek-v4-flash-0731.source",
+    "source_index_sha256": "98efab455cf08dfbbbaaba6f570e1bf10bf927d2b4c3c453a59c2f6f0e3be92b",
+    "source_marker_sha256": "e55e5a9031c57ebba4230bbbab6398154da4eeb8bf869ab2cf4a0317f466a4a0",
+    "validator_sha256": "71aac1fc764ec918afd33a8a5e496420db13d4b7863cb3e548ac69dd8aea6a18"
+  },
+  "command": "c/tools/validate_deepseek_v4_conversion.py --source c/.deepseek-v4-flash-0731.source --model c/deepseek-v4-flash-0731 --output docs/research/artifacts/deepseek_v4_conversion_validation.json",
+  "completed": {
+    "dense/model-00001-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:18.523095+00:00",
+      "file": "dense/model-00001-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 13001,
+        "mtime_ns": 1786913417171508327,
+        "size": 1059061760
+      },
+      "payload_bytes": 1059061760,
+      "records": 1,
+      "sha256": "c05019ecf9435fa47cdcbb35df74c8ade6c4ceedd6ebe75db9ea7a607f6ad2ef",
+      "size": 1059061760,
+      "source_bytes_compared": 1059061760,
+      "source_identities": {
+        "model-00001-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 46111,
+          "mtime_ns": 1786718650050448187,
+          "size": 1059061856
+        }
+      }
+    },
+    "dense/model-00002-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:18.963522+00:00",
+      "file": "dense/model-00002-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 12831,
+        "mtime_ns": 1786913421040655666,
+        "size": 143642636
+      },
+      "payload_bytes": 143596888,
+      "records": 29,
+      "sha256": "4a7f051b4c84c2728bb2622d281197c338afca30288e91c144a3f6211c5388e9",
+      "size": 143642636,
+      "source_bytes_compared": 143596888,
+      "source_identities": {
+        "model-00002-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 45439,
+          "mtime_ns": 1786718933339016578,
+          "size": 3566321192
+        }
+      }
+    },
+    "dense/model-00003-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:19.398772+00:00",
+      "file": "dense/model-00003-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 17860,
+        "mtime_ns": 1786913421824203370,
+        "size": 143642636
+      },
+      "payload_bytes": 143596888,
+      "records": 29,
+      "sha256": "04533abbe91458157856f86b1f7dcbb5182da6338612e945e685b5cf45a37b20",
+      "size": 143642636,
+      "source_bytes_compared": 143596888,
+      "source_identities": {
+        "model-00003-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 48823,
+          "mtime_ns": 1786719219026333961,
+          "size": 3566321192
+        }
+      }
+    },
+    "dense/model-00004-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:19.923322+00:00",
+      "file": "dense/model-00004-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 17868,
+        "mtime_ns": 1786913422663755430,
+        "size": 173559820
+      },
+      "payload_bytes": 173503576,
+      "records": 40,
+      "sha256": "5cfadcdd12637ac8cdfaaba84ea14b224efc3cb18146d85e61bfff723915fd7f",
+      "size": 173559820,
+      "source_bytes_compared": 173503576,
+      "source_identities": {
+        "model-00004-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 50099,
+          "mtime_ns": 1786719507693558837,
+          "size": 3596229272
+        }
+      }
+    },
+    "dense/model-00005-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:20.377889+00:00",
+      "file": "dense/model-00005-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 19083,
+        "mtime_ns": 1786913423583309801,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "ab0ebea06e3ab996dff377fdf5fa853828459179fc9a0f56abb28b9f56deb422",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00005-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 50616,
+          "mtime_ns": 1786719792206240975,
+          "size": 3568768976
+        }
+      }
+    },
+    "dense/model-00006-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:20.921915+00:00",
+      "file": "dense/model-00006-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21176,
+        "mtime_ns": 1786913424514937508,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "274c4e9c6e8ff7f9fd0d922b486f8bd82baa59782927a361270dee345751c0ce",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00006-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 50619,
+          "mtime_ns": 1786720108042826160,
+          "size": 3590024776
+        }
+      }
+    },
+    "dense/model-00007-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:21.399173+00:00",
+      "file": "dense/model-00007-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21170,
+        "mtime_ns": 1786913425454641086,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "d1598fa10f1306c2a70c71967a075622fd7620758c5506bf7a1053a1bb415607",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00007-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 52777,
+          "mtime_ns": 1786720469106892020,
+          "size": 3568768976
+        }
+      }
+    },
+    "dense/model-00008-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:21.922444+00:00",
+      "file": "dense/model-00008-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21321,
+        "mtime_ns": 1786913426386387704,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "97c20d772a3d4526bbb7abb366dbbac07da51310a1d6e94d97098adbd2ebc402",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00008-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 52811,
+          "mtime_ns": 1786721022290602559,
+          "size": 3590024776
+        }
+      }
+    },
+    "dense/model-00009-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:22.383758+00:00",
+      "file": "dense/model-00009-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21316,
+        "mtime_ns": 1786913427262183705,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "e612ca54f2e94bc9451b69e8937c7e4cce43b8e25ae714fb43090041cb9a4a7c",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00009-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211070,
+          "mtime_ns": 1786721575948381753,
+          "size": 3568768976
+        }
+      }
+    },
+    "dense/model-00010-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:22.921001+00:00",
+      "file": "dense/model-00010-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 17864,
+        "mtime_ns": 1786913509036359332,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "4d546210bc985143e0cc08aae87ee91810678bcdb23774347e63ae843f04c4de",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00010-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211084,
+          "mtime_ns": 1786722824494384079,
+          "size": 3590024776
+        }
+      }
+    },
+    "dense/model-00011-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:23.378392+00:00",
+      "file": "dense/model-00011-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 17866,
+        "mtime_ns": 1786913509996075579,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "4d018ccd8b489aa6f1981f950934122f2fa5b40ccc84d4299ba100f78b3b21c9",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00011-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211314,
+          "mtime_ns": 1786723199039135926,
+          "size": 3568768976
+        }
+      }
+    },
+    "dense/model-00012-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:23.892832+00:00",
+      "file": "dense/model-00012-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 17865,
+        "mtime_ns": 1786913511143809639,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "7756d533b831b14da8511cb59e1e0b000084826ab837833f0d7873cea829686b",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00012-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211319,
+          "mtime_ns": 1786723490837710922,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00013-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:24.351268+00:00",
+      "file": "dense/model-00013-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 18644,
+        "mtime_ns": 1786913512007651090,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "bf9fa23e9f5ee261309c7dc6661e94f05c2d48026709d154f3d9980a792b6e96",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00013-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211321,
+          "mtime_ns": 1786724089404676555,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00014-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:24.867038+00:00",
+      "file": "dense/model-00014-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 20438,
+        "mtime_ns": 1786913512883542763,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "9996cc9181f3e4c36c95cffef4eb7feacd6982a7ec5e48bf819733d0475b43b4",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00014-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 34534,
+          "mtime_ns": 1786724848144775640,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00015-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:25.339369+00:00",
+      "file": "dense/model-00015-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21219,
+        "mtime_ns": 1786913513847465709,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "5fc7a24e8312d64cf6ae29c9f0eae470dce96777faa5e015585b58dab7d41ed1",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00015-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211729,
+          "mtime_ns": 1786725953176853689,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00016-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:25.889545+00:00",
+      "file": "dense/model-00016-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21325,
+        "mtime_ns": 1786913514763431877,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "8a1688157b41e8a5f64081f2dc3a0c93b0b5c0fd73cfec6ea24294c995f7fbbc",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00016-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 21702,
+          "mtime_ns": 1786726114864869279,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00017-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:26.361449+00:00",
+      "file": "dense/model-00017-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21480,
+        "mtime_ns": 1786913515691433485,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "92b3e3691d8a4decb0f2e916db771d41326f6ae42b5aa839576d5591ba50c5fc",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00017-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211728,
+          "mtime_ns": 1786725640012820408,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00018-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:26.884455+00:00",
+      "file": "dense/model-00018-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21479,
+        "mtime_ns": 1786913516567466637,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "1e9b2ff45e0bc6041d12814bf2776f20b173117ec78d2c8d9537a543c5c3cfd2",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00018-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 38355,
+          "mtime_ns": 1786725468604802349,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00019-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:27.336418+00:00",
+      "file": "dense/model-00019-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21491,
+        "mtime_ns": 1786913517495532862,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "fae96fda29aa6a739c99c8d0bb79ae9061d0031a59e226544deb0aa39c672616",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00019-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211730,
+          "mtime_ns": 1786727551121012399,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00020-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:27.861783+00:00",
+      "file": "dense/model-00020-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21492,
+        "mtime_ns": 1786913518319616819,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "e49f96b206fad1b0cf3185bf0bb2978287868963b816f78cd50863c34fd38d2c",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00020-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211744,
+          "mtime_ns": 1786726734660931067,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00021-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:28.281385+00:00",
+      "file": "dense/model-00021-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21493,
+        "mtime_ns": 1786913519223735299,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "e2e9d40e3d5a29a9595e53bf929c0504cd70f07f288b00db0ddd955baf08665c",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00021-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211749,
+          "mtime_ns": 1786727030428959576,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00022-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:28.742085+00:00",
+      "file": "dense/model-00022-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21494,
+        "mtime_ns": 1786913520095873727,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "efcadb61b80d61e341e2986e3b4da044616c2f665941e96f863f5e140320ea02",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00022-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211760,
+          "mtime_ns": 1786726817184938073,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00023-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:29.126055+00:00",
+      "file": "dense/model-00023-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21495,
+        "mtime_ns": 1786913521024046091,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "918dc44f30157c55141cde11eb00e0ba456de8fd059880a95201f8fa96c38fc2",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00023-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211766,
+          "mtime_ns": 1786728417009100087,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00024-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:29.568437+00:00",
+      "file": "dense/model-00024-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21645,
+        "mtime_ns": 1786913521864225377,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "81db20bbc44f02de56102202b9e3d64ab49df9ad0ec4737267e53ec8cc59c95e",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00024-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211778,
+          "mtime_ns": 1786727527873010072,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00025-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:29.993722+00:00",
+      "file": "dense/model-00025-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21667,
+        "mtime_ns": 1786913522724427914,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "b8a6212e0688e444cadb236975ac6199d90f4c640015253a3f012fa9063d35a3",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00025-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211775,
+          "mtime_ns": 1786728209717080014,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00026-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:30.517833+00:00",
+      "file": "dense/model-00026-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21669,
+        "mtime_ns": 1786913523588649015,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "8c3c94ec240a72e6bfa28746f926cc409d37860dfaeb186b0777138566ecba3a",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00026-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211724,
+          "mtime_ns": 1786728441041102497,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00027-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:30.972131+00:00",
+      "file": "dense/model-00027-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21671,
+        "mtime_ns": 1786913524452888519,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "a7d9a59d665957b6c7461bc97afc069fed38c97ec765bd4e8a7d3e52240b5a67",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00027-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211800,
+          "mtime_ns": 1786728602377119262,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00028-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:31.491346+00:00",
+      "file": "dense/model-00028-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21675,
+        "mtime_ns": 1786913525265128539,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "531a72bcef35dff0991f4886dd366d73a5216cf0561a6a51050d4c37ea447f93",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00028-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211801,
+          "mtime_ns": 1786729298221190044,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00029-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:31.928901+00:00",
+      "file": "dense/model-00029-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21676,
+        "mtime_ns": 1786913526161409982,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "ef8b73a0e9a8398a9355642d3f808c4733269827cf9939955d19033f670c3486",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00029-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211817,
+          "mtime_ns": 1786729648553225421,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00030-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:32.434943+00:00",
+      "file": "dense/model-00030-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21681,
+        "mtime_ns": 1786913526985682781,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "7c7909ca994444bc67d5f976be05572b9d74de28582e2448ad49275e471cdea7",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00030-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211819,
+          "mtime_ns": 1786729476801208061,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00031-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:32.878460+00:00",
+      "file": "dense/model-00031-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21683,
+        "mtime_ns": 1786913527910006184,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "fb1e146eec5ab9b7d060c38f152293d7c14559285a0f09506bd15e14a9e0b3cc",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00031-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211820,
+          "mtime_ns": 1786729684945229049,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00032-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:33.399063+00:00",
+      "file": "dense/model-00032-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21684,
+        "mtime_ns": 1786913528894324129,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "a3c9765714dbfed0a20b12c189f32c64785bbc319450ea41fa5aed5ce1039089",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00032-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211823,
+          "mtime_ns": 1786730483737310346,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00033-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:33.852045+00:00",
+      "file": "dense/model-00033-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21685,
+        "mtime_ns": 1786913529586546238,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "b8ee57eacb2f82b860fb5acc92781eff86807a0d8a6cbc70f5ce684c10e10aa1",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00033-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211833,
+          "mtime_ns": 1786730588673319690,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00034-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:34.374237+00:00",
+      "file": "dense/model-00034-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21687,
+        "mtime_ns": 1786913530462837823,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "af0ed7227e601a9d3de93a5f48cfa415bd66809cf027ea1441681095eb653d66",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00034-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211845,
+          "mtime_ns": 1786730846745345776,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00035-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:34.818283+00:00",
+      "file": "dense/model-00035-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21689,
+        "mtime_ns": 1786913531331138199,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "cdeeb5be213e004020d0663b9f7fa9f547e507696d14b3c12564b9694fed3efe",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00035-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211849,
+          "mtime_ns": 1786730768737337410,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00036-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:35.330467+00:00",
+      "file": "dense/model-00036-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21691,
+        "mtime_ns": 1786913532171438972,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "d6c715d4893f3b5a51ce2f91aeffb48108103902aa84788a5aaff69fd291be70",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00036-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211853,
+          "mtime_ns": 1786880600945021127,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00037-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:35.773079+00:00",
+      "file": "dense/model-00037-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21693,
+        "mtime_ns": 1786913533031756906,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "93e18e1b864e453d981e14776ce1e77529caec32924e6b3cf03ca9a3499a100c",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00037-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211883,
+          "mtime_ns": 1786880726549208838,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00038-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:36.295463+00:00",
+      "file": "dense/model-00038-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 11522,
+        "mtime_ns": 1786913533876079670,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "fa1cb42718cc239cbe795a34f1a16e28543fec1cfa45b07b8a94f1f19e1ad75f",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00038-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211885,
+          "mtime_ns": 1786880919162405163,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00039-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:36.729372+00:00",
+      "file": "dense/model-00039-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 11520,
+        "mtime_ns": 1786913534788437892,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "accedaf464385a52cbcb697ac977fd062e90692aab05af66b309d3a53869973e",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00039-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 211895,
+          "mtime_ns": 1786881054803185686,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00040-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:37.237294+00:00",
+      "file": "dense/model-00040-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 11525,
+        "mtime_ns": 1786913535664791042,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "ac5f450baec04487502467537596c5c4024a7046ae37d06efa78056421e71fba",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00040-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 11570,
+          "mtime_ns": 1786881825217656056,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00041-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:37.683267+00:00",
+      "file": "dense/model-00041-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 12821,
+        "mtime_ns": 1786913536560973585,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "38a5168b81d6cf2611f53ca54173f8787fc3af08b4d49a1dcf2465230f01c77d",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00041-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 11562,
+          "mtime_ns": 1786881892661786048,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00042-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:38.209331+00:00",
+      "file": "dense/model-00042-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21694,
+        "mtime_ns": 1786913537396877680,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "ed65763da78674bf8b097a138ebde849acc87a0e05b55146364596bb68b31d32",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00042-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 11536,
+          "mtime_ns": 1786881988274132890,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00043-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:38.661183+00:00",
+      "file": "dense/model-00043-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21697,
+        "mtime_ns": 1786913538248786835,
+        "size": 146096140
+      },
+      "payload_bytes": 146044248,
+      "records": 33,
+      "sha256": "25ddf407beafbdbaedaa0a8f5bd9dc6d6d54b5dce0b897f886242e3c43d90c24",
+      "size": 146096140,
+      "source_bytes_compared": 146044248,
+      "source_identities": {
+        "model-00043-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 11567,
+          "mtime_ns": 1786882156432534645,
+          "size": 3568770544
+        }
+      }
+    },
+    "dense/model-00044-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:39.388225+00:00",
+      "file": "dense/model-00044-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21699,
+        "mtime_ns": 1786913539060706249,
+        "size": 167358476
+      },
+      "payload_bytes": 167299160,
+      "records": 40,
+      "sha256": "89c2d7aaf214e37f581811d1abd0359c9d8b5813757c5192e1caef48a8e0e8b7",
+      "size": 167358476,
+      "source_bytes_compared": 167299160,
+      "source_identities": {
+        "model-00044-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 17854,
+          "mtime_ns": 1786895081624308270,
+          "size": 3590026352
+        }
+      }
+    },
+    "dense/model-00045-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:42.246199+00:00",
+      "file": "dense/model-00045-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21701,
+        "mtime_ns": 1786913541621213180,
+        "size": 1059340288
+      },
+      "payload_bytes": 1059332116,
+      "records": 5,
+      "sha256": "f86c218ed9f2dd05d4500dff03020564ecd1045a2d984fdbd6705a077836fcbc",
+      "size": 1059340288,
+      "source_bytes_compared": 1059332116,
+      "source_identities": {
+        "model-00045-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 2666,
+          "mtime_ns": 1786882203454302361,
+          "size": 1059332516
+        }
+      }
+    },
+    "dspark/model-00046-of-00048.bin": {
+      "completed_at": "2026-08-16T21:58:55.498827+00:00",
+      "file": "dspark/model-00046-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21714,
+        "mtime_ns": 1786913562769331141,
+        "size": 3610341376
+      },
+      "payload_bytes": 3610287448,
+      "records": 1568,
+      "sha256": "a8e5cf8b6803d9c1dfbbb5d91dd50f894654ad94f7bc0faade42befb71e8c05c",
+      "size": 3610341376,
+      "source_bytes_compared": 3610287448,
+      "source_identities": {
+        "model-00046-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 45226,
+          "mtime_ns": 1786895205764263518,
+          "size": 3610455184
+        }
+      }
+    },
+    "dspark/model-00047-of-00048.bin": {
+      "completed_at": "2026-08-16T21:59:51.251844+00:00",
+      "file": "dspark/model-00047-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21712,
+        "mtime_ns": 1786913610418089473,
+        "size": 3559997440
+      },
+      "payload_bytes": 3559944536,
+      "records": 1565,
+      "sha256": "377eb78d9356ede6b4e11d7f1634cc969ceb9e4af564b5ee78be19ce920b2f05",
+      "size": 3559997440,
+      "source_bytes_compared": 3559944536,
+      "source_identities": {
+        "model-00047-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 45253,
+          "mtime_ns": 1786895233548062853,
+          "size": 3560111960
+        }
+      }
+    },
+    "dspark/model-00048-of-00048.bin": {
+      "completed_at": "2026-08-16T22:01:06.548922+00:00",
+      "file": "dspark/model-00048-of-00048.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21716,
+        "mtime_ns": 1786913691479464484,
+        "size": 3692670976
+      },
+      "payload_bytes": 3692606316,
+      "records": 1572,
+      "sha256": "aced7569445c11df7d0bb26ec485c9fa5b1d7a3df933cbf261a89e0cc11fe9cf",
+      "size": 3692670976,
+      "source_bytes_compared": 3692606316,
+      "source_identities": {
+        "model-00048-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 45294,
+          "mtime_ns": 1786895246022195195,
+          "size": 3692775244
+        }
+      }
+    },
+    "experts/layer-00.bin": {
+      "completed_at": "2026-08-16T22:02:38.466990+00:00",
+      "file": "experts/layer-00.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21722,
+        "mtime_ns": 1786913738531455135,
+        "size": 3422552064
+      },
+      "payload_bytes": 3422552064,
+      "records": 1536,
+      "sha256": "160820d860124427a8391a2bd6960f390ff4528b8911c6579a5bf49e9a591fb8",
+      "size": 3422552064,
+      "source_bytes_compared": 3422552064,
+      "source_identities": {
+        "model-00002-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 45439,
+          "mtime_ns": 1786718933339016578,
+          "size": 3566321192
+        }
+      }
+    },
+    "experts/layer-01.bin": {
+      "completed_at": "2026-08-16T22:05:02.503628+00:00",
+      "file": "experts/layer-01.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 21721,
+        "mtime_ns": 1786913818035080678,
+        "size": 3422552064
+      },
+      "payload_bytes": 3422552064,
+      "records": 1536,
+      "sha256": "94e1ea79dc15a019422a6d6db163f111138c2daebe0b4e391fae7f1c41db05e1",
+      "size": 3422552064,
+      "source_bytes_compared": 3422552064,
+      "source_identities": {
+        "model-00003-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 48823,
+          "mtime_ns": 1786719219026333961,
+          "size": 3566321192
+        }
+      }
+    },
+    "experts/layer-02.bin": {
+      "completed_at": "2026-08-16T22:07:55.061920+00:00",
+      "file": "experts/layer-02.bin",
+      "output_identity": {
+        "device": 2096,
+        "inode": 34449,
+        "mtime_ns": 1786914008098323157,
+        "size": 3422552064
+      },
+      "payload_bytes": 3422552064,
+      "records": 1536,
+      "sha256": "5544173be122377fea2a4cd62e14479660bc48ba273684009fe5b745ae0d19b1",
+      "size": 3422552064,
+      "source_bytes_compared": 3422552064,
+      "source_identities": {
+        "model-00004-of-00048.safetensors": {
+          "device": 2096,
+          "inode": 50099,
+          "mtime_ns": 1786719507693558837,
+          "size": 3596229272
+        }
+      }
+    }
+  },
+  "repository": {
+    "branch": "prefill-throughput-and-serve-fixes",
+    "commit": "35d9ab86fa2b8f8acbf56c8438413dfb08f2a2a7",
+    "dirty": true
+  },
+  "schema": "colib.deepseek-v4.conversion-validation.v1",
+  "started_at": "2026-08-16T21:58:15.432859+00:00",
+  "interrupted_at": "2026-08-16T22:11:04.545549426Z",
+  "interruption_reason": "replaced random source-record order with equivalent shard/offset-sequential validation",
+  "status": "interrupted",
+  "updated_at": "2026-08-16T22:11:04.545549426Z"
+}

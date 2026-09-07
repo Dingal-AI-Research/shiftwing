@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import os
 import shutil
 import struct
@@ -65,6 +66,14 @@ def nvidia_gpu_info() -> dict[str, Any] | None:
         }
     except (OSError, ValueError, IndexError, subprocess.SubprocessError):
         return None
+
+
+# A routed expert, in either naming convention the converters emit.
+_ROUTED_EXPERT_RE = re.compile(r"\.(?:mlp\.)?experts\.\d+\.")
+
+# Stored width divided by resident width. Weights that arrive unquantised are
+# quantised to int8 when they are loaded; anything already packed is kept.
+_RAM_DIVISOR = {"BF16": 2, "F16": 2, "F32": 4}
 
 
 def _safetensors_header(path: Path) -> tuple[dict[str, Any], int, int]:
@@ -158,6 +167,9 @@ def inspect_container(model_path: Path) -> dict[str, Any]:
     tensor_bytes = 0
     file_bytes = 0
     parsed_shards = 0
+    routed_bytes = 0
+    resident_bytes = 0
+    resident_ram_bytes = 0
     for shard_name in shard_names:
         shard_path = model_path / shard_name
         if not shard_path.is_file():
@@ -171,10 +183,27 @@ def inspect_container(model_path: Path) -> dict[str, Any]:
         parsed_shards += 1
         tensor_bytes += payload_bytes
         file_bytes += shard_bytes
-        for name in tensors:
+        for name, record in tensors.items():
             if name in actual:
                 errors.append(f"duplicate tensor {name}")
             actual[name] = shard_name
+            # Routed experts stream; everything else stays resident. Deriving
+            # this as "total minus a computed expert size" was wrong by ~10 GiB
+            # on GLM-5.3-Flash, because the MTP layer carries a full set of
+            # routed experts that also stream. Reading it off the names is
+            # exact and the headers are already open.
+            start, end = record["data_offsets"]
+            if _ROUTED_EXPERT_RE.search(name):
+                routed_bytes += end - start
+            else:
+                span = end - start
+                resident_bytes += span
+                # What the engine will actually hold, which is not what the
+                # file holds: it quantises on load, so a bf16 tensor costs half
+                # its stored size in RAM. Measured on GLM-5.3-Flash: 18.1 GiB
+                # of resident tensors on disk, 9 GiB resident in the process.
+                # Sizing RAM off the file blocked a configuration that fits.
+                resident_ram_bytes += span // _RAM_DIVISOR.get(record["dtype"], 1)
 
     if expected:
         missing = sorted(set(expected) - set(actual))
@@ -201,6 +230,9 @@ def inspect_container(model_path: Path) -> dict[str, Any]:
         "header_tensors": len(actual),
         "tensor_bytes": tensor_bytes,
         "file_bytes": file_bytes,
+        "routed_expert_bytes": routed_bytes,
+        "resident_bytes": resident_bytes,
+        "resident_ram_bytes": resident_ram_bytes,
         "metadata_total_size": metadata_total,
     }
     if errors:
@@ -688,8 +720,27 @@ def run_doctor(
         except (AttributeError, OSError, ValueError):
             pass
         disk_free = shutil.disk_usage(model_path if model_path.exists() else ".").free
+        # GLM's container size is measured rather than predicted; summing the
+        # snapshot is cheap and is the ground truth the disk check is about.
+        # Both numbers come from the headers inspect_container already read,
+        # so the plan sizes the real container rather than a prediction of it.
+        container = inventory.get("details") or {}
+        snapshot_bytes = int(container.get("tensor_bytes") or 0)
+        routed_bytes = int(container.get("routed_expert_bytes") or 0)
+        resident_ram_bytes = int(container.get("resident_ram_bytes") or 0)
+        if not snapshot_bytes and model_path.exists():
+            try:
+                snapshot_bytes = sum(
+                    entry.stat().st_size
+                    for entry in model_path.glob("*.safetensors")
+                )
+            except OSError:
+                snapshot_bytes = 0
         plan = plan_resources(
             config,
+            snapshot_bytes=snapshot_bytes,
+            routed_bytes=routed_bytes,
+            resident_ram_bytes=resident_ram_bytes,
             slots=slots,
             context=context,
             cuda_expert_gib=cuda_expert_gib,

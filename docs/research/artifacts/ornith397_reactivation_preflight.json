@@ -1,0 +1,65 @@
+{
+  "schema": "colib.ornith397.reactivation-preflight.v1",
+  "date": "2026-08-18",
+  "source": {
+    "repository": "deepreinforce-ai/Ornith-1.0-397B-FP8",
+    "revision": "8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+    "shards": 122,
+    "bytes": 405108696032,
+    "kept_tensors": 93078
+  },
+  "conversion": {
+    "base_converter_sha256": "034d8103459cc6ab13189a04f53f6f7245112fb221ce75807f4ab9072dbf6fc3",
+    "q3_converter_sha256": "960a4c00703645809f8d26babc415318029f734a2f561c0badbfbe3eb1f3e950",
+    "base_output_data_bytes": 212634789241,
+    "q3_data_bytes": 157073113440,
+    "base_manifest_sha256": "d4fc004ec2f450bb4fbae352af4651d79b56641c24d23bc53d9cad1058aa1e23",
+    "q3_manifest_sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180",
+    "minimum_free_gib": 100,
+    "resumable": true,
+    "attempts": [
+      {
+        "attempt": 1,
+        "result": "interrupted",
+        "exit_code": 1,
+        "committed_output_shards": 15,
+        "next_source_shard": 16,
+        "committed_output_bytes": 25708187394,
+        "checkpoint_sha256": "128d9049ea12af06ec22e3a5eff9eb3097a8d853b1df70d8dfd13099e4de5574",
+        "failure_detail": "process ended while downloading source shard 16; no converter traceback was retained"
+      },
+      {
+        "attempt": 2,
+        "status": "stopped_resumable",
+        "started_at": "2026-08-18T17:13:15+01:00",
+        "resume_action": "rehash all committed outputs, then resume source shard 16",
+        "last_observed_at": "2026-08-19T00:38:31+01:00",
+        "last_progress_at": "2026-08-18T20:56:58+01:00",
+        "committed_output_shards": 58,
+        "next_source_shard": 59,
+        "output_directory_bytes": 101716700399,
+        "partial_source_shard_bytes": 2404667544,
+        "checkpoint_sha256": "b2f4bbdb73dc86096202c1e758e746d9b3685dec411b292cf506d978fb41f5d9",
+        "source_fingerprint": "4b1c5ab0824e25b3768e3c6df8392394194fce86c4e9f4f3da24e3134ccf4c94",
+        "available_bytes": 511674691584,
+        "failure_detail": "no converter process is running and the prior terminal session is unavailable; no more specific stop cause is asserted"
+      }
+    ]
+  },
+  "storage": {
+    "available_bytes": 511674691584,
+    "projected_available_after_base_and_q3_bytes": 243645474510,
+    "deepseek_bytes_pending_confirmed_deletion": 333872366031
+  },
+  "control": {
+    "median_tokens_per_second": 0.8240336977370674,
+    "median_ttft_seconds": 43.50844407749992,
+    "control_sha256": "980eaa16d7cb47768503ab709a9ac4bfb845c784ebddfde67115493ae820757d"
+  },
+  "decision": {
+    "deepseek": "rejected",
+    "ornith397_reconstruction": "authorized_and_started",
+    "localforge": "carry-forward_notes_only",
+    "deepseek_deletion_completed": false
+  }
+}

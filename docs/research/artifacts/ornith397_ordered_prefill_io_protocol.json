@@ -1,0 +1,118 @@
+{
+  "schema": "colib.ornith397-prefill-expert-io-protocol.v1",
+  "created_at": "2026-08-18T17:42:23+01:00",
+  "status": "ready_to_run_after_q3_reconstruction",
+  "repository": {
+    "branch": "prefill-throughput-and-serve-fixes",
+    "head": "35d9ab86fa2b8f8acbf56c8438413dfb08f2a2a7",
+    "dirty": true,
+    "engine_source_sha256": "4a7e2593485aaf8eead81f2d9f06fcfaea9c1bc4307e07d09ab0aa7075111ebf",
+    "engine_sha256": "b47aadfc3ead42b1b31695d52898e36dc4668bef85d2f4f59a4aed0f82f24271"
+  },
+  "model": {
+    "repository": "deepreinforce-ai/Ornith-1.0-397B-FP8",
+    "revision": "8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+    "path": "c/ornith397",
+    "base_state": "reconstruction_in_progress",
+    "q3_state": "awaiting_base_completion"
+  },
+  "bindings": {
+    "prompt_fixture_path": "c/fixtures/ornith397_legacy_prompts.json",
+    "prompt_fixture_sha256": "c977a1530534b9e7b10cbe91dcdeda2bfca468bcb36b20446cdad70ed05abb38",
+    "qualifier_sha256": "df58026e4c270434e9812ecd7d1ad33c2311b266aee3d31443ce7d1a7aa1cc45",
+    "mux_test_sha256": "fc079594f228c11b063cba9bfd1cf90e41387deabd5b3858016b808c80ee964d",
+    "gateway_sha256": "7c64eb17494f0aed62a323519c8a5912cef67ed70b7ef495129b30c06eb1074e",
+    "trial_harness_sha256": "fa6612089bd2eef4202ccbdda2bf1146bdeb0465a7d5e67bd390b6d3733db7b7"
+  },
+  "hardware": {
+    "cpu": "AMD Ryzen 7 7700X",
+    "gpu": "NVIDIA GeForce RTX 5070 Ti",
+    "vram_mib": 16303,
+    "driver": "591.86"
+  },
+  "treatment": {
+    "environment": "PREFILL_EXPERT_BATCH",
+    "qualifier_option": "--prefill-expert-batch",
+    "control": 1,
+    "candidate": 4,
+    "minimum": 1,
+    "maximum": 32,
+    "capacity_clamped": true,
+    "default_promoted": false
+  },
+  "tiny_validation": {
+    "fixture": "c/qwen_tiny_i4",
+    "prompt_hex": "210001",
+    "environment": {
+      "MTP": "0",
+      "PIPE": "1",
+      "URING": "1",
+      "URING_PERSIST": "1",
+      "PREFETCH_THREADS": "0"
+    },
+    "exact_semantic_output": true,
+    "control": {
+      "prefill_expert_batch": 1,
+      "host_hits": 44,
+      "gpu_hits": 0,
+      "misses": 30,
+      "uring_batches": 50,
+      "uring_reads": 300
+    },
+    "candidate": {
+      "prefill_expert_batch": 4,
+      "host_hits": 44,
+      "gpu_hits": 0,
+      "misses": 30,
+      "uring_batches": 41,
+      "uring_reads": 300
+    },
+    "uring_batch_reduction_fraction": 0.18,
+    "real_model_performance_claim": false
+  },
+  "common_configuration": {
+    "warmup_passes": 2,
+    "measured_passes": 1,
+    "paired_trials": 5,
+    "order": "alternating_AB_BA",
+    "max_tokens": 64,
+    "context": 4096,
+    "threads": 8,
+    "expert_ram_gb": 18,
+    "cuda_expert_gb": 6,
+    "minimum_tps": 0.7,
+    "uring_persist": true,
+    "direct_io": true,
+    "pinned_upload": true,
+    "decode_protect": true,
+    "decode_protect_prewarm": true,
+    "expert_q3": true,
+    "q3_route_atlas": false,
+    "q3_native": false,
+    "sampling": {
+      "temperature": 0,
+      "top_p": 1
+    }
+  },
+  "acceptance": {
+    "exact_outputs": true,
+    "identical_hit_miss_read_counts": true,
+    "ttft_ratio_95pct_upper_lt": 1.0,
+    "decode_tps_ratio_95pct_lower_gte": 0.98,
+    "maximum_per_prompt_decode_regression_fraction": 0.05,
+    "require_lower_uring_batches_when_multiple_misses": true,
+    "extra_read_bytes": 0,
+    "direct_io_fallbacks": 0,
+    "require_full_serving_regression_gate": true
+  },
+  "validation": {
+    "python_tests_passed": 43,
+    "python_tests_failed": 0,
+    "cuda_backend_passed": true,
+    "cuda_architecture": "sm_120",
+    "q3_native_vs_expanded_q4_maxdiff": 0,
+    "cached_prefill_cpu_cuda_maxdiff": 1.1641532e-09,
+    "diff_check": "passed"
+  },
+  "results": null
+}

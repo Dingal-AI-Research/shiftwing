@@ -1,0 +1,61 @@
+{
+  "schema": "colib.deepseek-v4.pinned-direct-ab.v1",
+  "recorded_at": "2026-08-17T15:08:36+01:00",
+  "source_revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+  "repository_commit": "35d9ab86fa2b8f8acbf56c8438413dfb08f2a2a7",
+  "model_manifest_sha256": "468d29fd3262af88ec4c31ef29a94e62631387475917ec7bdb4da9d0441e4d86",
+  "control_artifact_sha256": "f0d0358c4ce3839ca0b8f46cbcac3efaa6023440ef49d68be4e8773c34dc00c1",
+  "intervention_binary_sha256": "1bfc55c990294201f9c4157ec406ec12c251b960f1487e2e6846db544b149c9b",
+  "command": "SNAP=/home/dinga/Projects/colib/c/deepseek-v4-flash-0731 CTX=16384 DSV4_SMOKE_CONTEXT=128 DSV4_SMOKE_TOKEN=0 DSV4_SMOKE_TOKENS=2 DSV4_SMOKE_PROFILE=1 COLI_CUDA=1 RAM_GB=12 CUDA_EXPERT_GB=5 DIRECT=1 URING=1 URING_PERSIST=1 URING_WORKERS=4 DSV4_DENSE_PINNED_MB=64 c/deepseek_v4",
+  "intervention": {
+    "direct_io": true,
+    "io_uring": true,
+    "io_uring_persistent": true,
+    "io_uring_workers": 4,
+    "pinned_upload": true,
+    "dense_pinned_staging_mib": 64
+  },
+  "identity": {
+    "input_tokens": [0, 5],
+    "control_top_tokens": [5, 223],
+    "intervention_top_tokens": [5, 223],
+    "control_top_logits": [16.258379, 18.0251122],
+    "intervention_top_logits": [16.258379, 18.0251122],
+    "exact": true
+  },
+  "control": {
+    "initialization_seconds": 408.372656,
+    "decode_seconds": [134.734045, 84.532588],
+    "dense_fp8_seconds": [1.971629, 1.862323],
+    "dense_bf16_seconds": [0.052205, 0.050372],
+    "read_bytes": [3449290752, 3074949120],
+    "cpu_hits": [0, 28],
+    "cpu_misses": [258, 230],
+    "aggregate_tokens_per_second": 0.009121
+  },
+  "intervention_result": {
+    "initialization_seconds": 200.970412,
+    "decode_seconds": [83.758211, 96.703443],
+    "dense_fp8_seconds": [1.960653, 1.856267],
+    "dense_bf16_seconds": [0.052435, 0.050438],
+    "read_bytes": [3449290752, 3074949120],
+    "cpu_hits": [0, 28],
+    "cpu_misses": [258, 230],
+    "cuda_pinned_upload_bytes": 15370206592,
+    "cuda_upload_bytes": 15375519072,
+    "aggregate_tokens_per_second": 0.011083
+  },
+  "ratios": {
+    "initialization": 0.492124,
+    "cold_decode": 0.621667,
+    "resident_decode": 1.143975,
+    "aggregate_decode": 0.823014
+  },
+  "acceptance": {
+    "correctness": "pass",
+    "initialization": "pass",
+    "decode": "fail",
+    "promotion_authorized": false,
+    "decision": "Reject the combined direct/persistent-I/O intervention for decode qualification because the resident token regressed. Retain reversible pinned staging and benchmark storage modes/extent coalescing."
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "schema": "colib.deepseek-v4.cold-warm-profile.v1",
+  "recorded_at": "2026-08-17T14:59:19+01:00",
+  "source_revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+  "repository_commit": "35d9ab86fa2b8f8acbf56c8438413dfb08f2a2a7",
+  "model_manifest_sha256": "468d29fd3262af88ec4c31ef29a94e62631387475917ec7bdb4da9d0441e4d86",
+  "binary_sha256": "8199bb1de51d2117382d9dd355aa02cda45599b40a59c5770dd7d1730819b863",
+  "command": "SNAP=/home/dinga/Projects/colib/c/deepseek-v4-flash-0731 CTX=16384 DSV4_SMOKE_CONTEXT=128 DSV4_SMOKE_TOKEN=0 DSV4_SMOKE_TOKENS=2 DSV4_SMOKE_PROFILE=1 COLI_CUDA=1 RAM_GB=12 CUDA_EXPERT_GB=5 c/deepseek_v4",
+  "reconstruction_note": "This binary predates pinned staging. Current source reproduces that transfer path with DSV4_PINNED_UPLOAD=0.",
+  "environment": {
+    "context": 16384,
+    "runtime_context": 128,
+    "tokens": 2,
+    "ram_gb": 12,
+    "cuda_expert_gb": 5,
+    "direct_io": false,
+    "io_uring": false,
+    "pinned_upload": false,
+    "cuda": true
+  },
+  "hardware": {
+    "cpu": "AMD Ryzen 7 7700X",
+    "ram_gib": 29.4,
+    "gpu": "NVIDIA GeForce RTX 5070 Ti",
+    "gpu_sm": 120,
+    "gpu_memory_mib": 16303,
+    "driver": "591.86",
+    "cuda_toolkit": "12.9"
+  },
+  "initialization_seconds": 408.372656,
+  "tokens": [
+    {
+      "step": 0,
+      "input": 0,
+      "top": 5,
+      "top_logit": 16.258379,
+      "decode_seconds": 134.734045,
+      "tokens_per_second": 0.007422,
+      "read_bytes": 3449290752,
+      "dense_calls": 667,
+      "dense_fp8_seconds": 1.971629,
+      "dense_bf16_seconds": 0.052205,
+      "cpu_hits": 0,
+      "cpu_misses": 258,
+      "cuda_hits": 0,
+      "cuda_misses": 258,
+      "layer_seconds": [
+        3.664464, 5.502429, 6.224686, 6.586389, 6.231764, 5.868599,
+        3.485649, 1.886912, 7.896090, 7.731567, 2.668356, 2.563240,
+        2.762723, 3.802506, 3.077415, 2.854031, 3.750547, 2.932222,
+        2.117124, 2.128415, 3.622160, 4.286522, 2.866230, 2.553642,
+        2.101144, 1.937237, 2.272040, 2.721210, 2.702400, 2.023307,
+        2.214626, 1.687002, 1.616150, 1.763725, 1.551614, 1.868030,
+        3.976632, 1.460163, 1.685259, 1.303750, 1.503226, 1.570381,
+        1.655928
+      ],
+      "layers_seconds": 134.677506,
+      "head_seconds": 0.052285,
+      "unattributed_seconds": 0.004255
+    },
+    {
+      "step": 1,
+      "input": 5,
+      "top": 223,
+      "top_logit": 18.0251122,
+      "decode_seconds": 84.532588,
+      "tokens_per_second": 0.011830,
+      "read_bytes": 3074949120,
+      "dense_calls": 667,
+      "dense_fp8_seconds": 1.862323,
+      "dense_bf16_seconds": 0.050372,
+      "cpu_hits": 28,
+      "cpu_misses": 230,
+      "cuda_hits": 28,
+      "cuda_misses": 230,
+      "layer_seconds": [
+        1.452052, 1.280287, 0.313982, 0.268630, 4.169565, 2.399724,
+        1.448293, 1.535047, 0.284765, 1.105091, 0.932217, 0.937562,
+        0.685414, 0.399736, 0.363909, 0.426013, 0.757320, 1.564108,
+        3.802703, 4.397101, 2.134244, 1.786401, 3.479187, 2.273266,
+        2.435909, 2.524108, 3.281767, 6.508513, 6.708563, 6.780035,
+        4.754714, 0.465893, 1.836194, 1.204059, 0.834680, 0.486352,
+        0.482995, 0.414782, 0.657149, 2.598244, 1.690691, 1.451541,
+        1.167636
+      ],
+      "layers_seconds": 84.480441,
+      "head_seconds": 0.050450,
+      "unattributed_seconds": 0.001697
+    }
+  ],
+  "aggregate": {
+    "decode_seconds": 219.266633,
+    "tokens_per_second": 0.009121,
+    "read_bytes_including_dense_initialization": 15370199260,
+    "dense_bytes": 8845959388,
+    "expert_capacity_per_layer": 20,
+    "cpu_hits": 28,
+    "cpu_misses": 488,
+    "cuda_hits": 28,
+    "cuda_misses": 488,
+    "cuda_upload_bytes": 15375519072
+  },
+  "acceptance": {
+    "profiling_gate": "pass",
+    "performance_gate": "fail",
+    "promotion_authorized": false,
+    "finding": "Expert I/O and pageable CUDA transfer dominate. Dense projections are 2.023834 seconds cold and 1.912695 seconds resident."
+  }
+}

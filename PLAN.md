@@ -1,23 +1,30 @@
-# PLAN.md — `colib`: a from-scratch C inference engine for Qwen3.5 MoE + Ornith-1.0
+# PLAN.md — shiftwing: a phase-aware C inference engine for Qwen3.5 MoE + Ornith-1.0
 
 > **How to use this file (for any model/human picking up mid-work):** work top to bottom. Each phase has checkboxes and a **GATE** — a measurable validation that MUST pass before the next phase starts. Update the *Current status* block and check boxes as you go. All architecture facts and design decisions are recorded here; you do not need the original conversation. [colibri](https://github.com/JustVugg/colibri) (Apache-2.0) is the design reference — consult it freely (clone it if needed), but **this repo is NOT a fork**: it supports only Qwen3.5 MoE + Ornith-1.0, text-only.
 
 ## Current status
 
-- **Active phase:** **Phase 10 evidence closure passes; release publication is pending**. Ornith35 and Ornith397 both pass reversed-order batching, 20-trial cancellation, exact two-turn web history, manifest binding, and complete CUDA residency. Ornith397 reports 1.123472× A/B, 1.096309× B/A, a 1.109807× geometric mean, 1.935734 s cancellation p95, two exact `colib ready` responses, and zero host-MoE fallback. The q3 release audit is 20/20 green and the post-publication `make check` exits zero. Only review of the large prospective release tree, an intentional clean release commit, and the `v0.1` tag remain.
+- **Active phase:** **Phase 12 Ornith397 reactivation and RTX 5070 Ti optimization in progress**. DeepSeek is rejected and frozen. The resumable Ornith397 base reconstruction is stopped, not running: 58/122 outputs are atomically committed, shard 59 is partially staged, and the stop cause was not retained. Q3 reconstruction has not started. Two reversible candidates are locally validated but have no real-model A/B result. `CURRENT_STATUS_HANDOFF.md` is the authoritative continuation snapshot. LocalForge is no longer documentation-only; see `CURRENT_STATUS_HANDOFF.md` for the 2026-08-23 owner-directed changes.
 - **Last full gate passed:** **GATE 9** (2026-08-05: both Ornith models pass the manifest-bound AB/BA, cancellation, and exact-web production sequence; the independent q3 release audit is 20/20).
 - **Current evidence and decision:** the complete optimized int4 run sustains **0.631963761 tok/s** with a 0.674006 median and 0.530693 minimum. Expanded-q4 q3 is **13.68% faster sustained** and **28.46% faster at the median**, but its minimum turn is **14.27% slower**; no twofold speed claim is supported. Ornith35 routed int3 retains 95.546875% teacher-forced agreement with an 85.9375% worst prompt and increases PPL 10.660342%. The owner accepts this quality class, waived the Ornith397 PPL run, selected q3, and accepted a **≥0.70 tok/s sustained regression floor**. The release auditor now encodes that waiver and floor explicitly without rewriting historical evidence; 28 focused policy/runtime tests and the CUDA/native-q3 suites pass.
 - **Python env:** `.venv` created with **uv** (`export PATH="$HOME/.local/bin:$PATH"`; system python3-venv broken, sudo needs password). CPU torch + **transformers 5.14.1** (has `Qwen3_5MoeForCausalLM` — text-only class, use it for the oracle) + safetensors installed. Pin/gate transformers ≥ 5.14 in the oracle script.
 - **Reopening decisions (2026-07-31):** the first amendment set Ornith397 production throughput to ≥0.85 tok/s; its full int4 rerun failed. The second owner decision authorizes the measured Ornith35 int3 quality trade-off and a full Ornith397 q3 sidecar. Historical reports remain unchanged. See `docs/research/phase8_preflight_08_owner_accepted_q3.md`.
 - **Q3 implementation verification (2026-08-01):** during conversion preflight, the complete current Python suite passed **130/130** and all **21/21 C test executables** passed, including the grouped-int3 matmul cases. The C loader now also fails closed if `EXPERT_Q3=1` selects a missing int3 expert tensor instead of silently mixing in its int4 base tensor, a production-layout regression opens all 122 base shards plus 480 q3 sidecars successfully, and every Gate-8/9 harness uses one fail-closed sidecar identity loader that records the manifest SHA-256. Gate-8 and Gate-9 engine environments discard ambient model/mode/kernel settings and explicitly freeze eight OpenMP threads. These are implementation controls, not model-quality or throughput evidence; the Gate-8 supervisor is now stopped at the conversion boundary.
 - **Q3 completion evidence (2026-08-01):** the final sidecar manifest is complete at 60 layers × 512 experts, 480 files, 276,480 tensors, and 157,073,113,440 data bytes. Its SHA-256 is `5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180`; the independent audit verified 480/480 hashes and 480/480 headers. The accepted expanded-q4 qualification artifact is `c/ornith397_q3_qualification_expand_q4.json`, SHA-256 `047fdf9d6d8e5fcbd494dcdbb1d8d4ac752f799dae9bf3f10f456c0223a8d9f7`.
-- **Optional q3 optimization:** native q3 stores packed 24-bit triplets in VRAM and adds dedicated single/grouped CUDA kernels. Its CUDA unit tests now pass, but its complete real-model numerical/performance protocol remains open. The release default therefore expands q3 to the already benchmarked q4 CUDA representation; `Q3_NATIVE=1` opts into packed execution, and `Q3_ROUTE_ATLAS=1` additionally opts into the unqualified adaptive atlas. See `docs/research/phase8_preflight_10_native_q3_hot_route_atlas.md`.
+- **Optional q3 optimization:** native q3 stores packed 24-bit triplets in VRAM and adds dedicated single/grouped CUDA kernels. Its CUDA unit tests pass, but its historical real-model path was slower. The release default therefore expands q3 to the faster q4 CUDA representation. Phase 12 decouples `Q3_ROUTE_ATLAS=1` from `Q3_NATIVE=1`, so the atlas can retain compact q3 on NVMe/RAM while caching expanded-q4 experts in VRAM. Full-model A/B qualification remains open. See `docs/research/phase12_experiment_02_expanded_q4_route_atlas.md`.
 - **Directional streaming probes (2026-08-01):** the CUDA target builds. A visible six-token warm/measured q3-atlas probe streamed the exact requested text and measured 1.084803 tok/s with 100% decode cache hits; all 2,597 learned routes fit in the host hot set, so device-atlas overflow remains untested. Two cold Snake-game generations streamed at 0.574879 and 0.579593 tok/s with complete CUDA residency; both reached their 384/1,024-token safety ceilings, while the second produced a substantially complete game through most of its keyboard handler. The owner accepts this as a directional coding-quality pass. It does not replace the frozen four-output Gate-8 control.
 - **Q3 coherence repair (2026-08-02):** the q3 sidecar and native packed kernel were coherent, and disabling pinned staging did not change the expanded-route failure. A new actual-dimension CUDA equivalence test reports zero maximum difference between packed-q3 and expanded-q4 grouped MoE. The defect was a representation mismatch limited to resident batched prefill: expanded q4 buffers were sent to the q3 kernel based only on the source `fmt`. Dispatch now additionally requires `Q3_NATIVE=1`. The fixed cold control is coherent with 3,840/3,840 device-MoE forwards and zero host fallback; the old malformed Gate-8 artifact remains rejected and will not be acknowledged.
 - **Repaired Gate-8 controls and tier attempt (2026-08-02):** regenerated q3 teacher forcing passes at 1,243/1,280 positions, all four frozen coherence prompts pass semantic review, and the HTTP tool gate emits the exact Paris weather call and final answer with complete device-MoE telemetry. The first repaired full tier attempt is a real 0.520672 tok/s sustained failure despite a 0.796441 median because one turn falls to 0.243102 tok/s and then immediately recovers. One unchanged complete retry is preregistered after an idle health check. Its first launch was owner-interrupted after three warm-up turns, produced no measured evidence, and left the failed artifact unchanged. See `docs/research/phase8_experiment_16_repaired_q3_gate8_retry.md`.
 - **Gate-8 closure (2026-08-03):** after Windows GPU contention was removed, the unchanged complete retry sustains 0.836866773 tok/s, with a 0.8581515 median and 0.773247 minimum. Every measured turn exceeds 0.70; the earlier 0.243102 TypeScript outlier repeats at 0.857416 instead. The artifact hashes to `7d4d1fe8…c4106`, all 46,080 MoE layer-forwards use CUDA, host fallback is zero, and the schema-2 pipeline closes passed. Gate 9 is now authorized. See `docs/research/phase8_experiment_16_repaired_q3_gate8_retry.md`.
 - **Gate-9 closure (2026-08-05):** the resumed controller verifies all five Ornith35 artifacts, restarts Ornith397 A/B from its atomic boundary, and completes all five remaining controls. Ornith397 batching passes at 1.109807× geometric mean with a 1.096309× minimum ordering; cancellation passes at 1.935734 s p95 over 20 trials with 12,720/12,720 device-MoE forwards; and the web gate returns exact output twice with 480/480 device-MoE forwards. The final controller state and regenerated q3 release audit both report 20/20 checks passed. See `docs/research/phase9_experiment_23_gate9_production_execution.md`.
 - **Phase-10 evidence closure (2026-08-06):** after the missing indexed disposition paper was added, the complete clean-build `make check` rerun exits zero: 21 C executables, 10,000 tokenizer cases, 18 web tests, 137 Python tests, production web build, zero-vulnerability audit, 91-document/111-link/75-report documentation validation, 273-path source-package validation after final evidence staging, and both CUDA suites pass. The actual-shape native-q3 versus expanded-q4 CUDA comparison is exact. A final live audit exposed nondeterministic CUDA executable hashes across identical forced rebuilds; Gate-8/9 resumption now retains the raw hash as provenance and binds to deterministic engine-source fingerprint `c7751e41…b07527`. Source drift fails, identical-source rebuilds resume, both real controllers replay successfully, and the regenerated q3 audit returns 20/20. The CLI now reports release version `0.1.0`, matching the web package. See `docs/research/phase10_experiment_07_q3_release_disposition.md`.
+- **Phase-11 preflight (2026-08-14):** source/model/tokenizer/reference identity is pinned to `deepseek-ai/DeepSeek-V4-Flash-0731@9e165c30e2704aec5d9d593cce3eebd58bbef1cb`. The corrected read-only preflight includes both the remaining 166,888,735,421-byte source copy and the 167,174,674,555-byte native-container upper bound: from 526,791,335,936 bytes free it projects 339,063,409,976 new bytes at peak and 187,727,925,960 bytes free afterward, above the mandatory 100 GiB floor. No Qwen or Ornith artifact is deleted. The pinned metadata inventory passes at 48 shards, 72,317 tensors, and 166,878,536,440 indexed payload bytes; the resumable shard fetch is active. Nine tooling and four protocol tests pass. See `docs/research/phase11_preflight_01_deepseek_v4_spec_and_storage.md`.
+- **Phase-11 host recovery (2026-08-16):** repeated ext4 write failures were traced to Windows `C:\` having only 46,899,200 bytes free. Compact Ornith35 reconstruction metadata and exact source/hash commands were preserved; only the verified 32,193,227,292-byte Ornith35 container and independently rehashed 21,166,757,760-byte GGUF were removed. A root `fstrim` discarded 424,089,743,360 bytes, and direct use of Microsoft's `CompactVirtualDisk` API shrank the detached VHDX by 53,822,357,504 bytes, leaving 53,990,948,864 host bytes free. Ornith397 and the partial DeepSeek source remain intact. See `docs/research/phase11_experiment_03_storage_recovery.md`.
+- **Phase-11 CUDA residency (2026-08-16):** the native runtime now has a bounded reference-protected device expert cache, a persistent FP8 dense arena mirror, and a resident BF16 output head. Focused CPU/CUDA parity controls pass; the full post-change gate, embedding residency, live 43-layer mux, and end-to-end tok/s/TTFT evidence remain open.
+- **Phase-11 source completion (2026-08-16):** attempt 3 resumes at 58/62 and completes all 48 pinned shards; no partial remains. A separate full-file pass accepts 72,317 tensors and 166,878,536,440 indexed payload bytes with all 43 base and three DSpark expert layers complete. Host free space is now 47,417,536,512 bytes, so real conversion remains storage-locked until the fresh Ornith397 control is captured. See `docs/research/phase11_experiment_04_pinned_fetch_completion.md`.
+- **Phase-11 first real forward (2026-08-17):** the manifest-bound SM120 binary loads the 8,845,959,388-byte dense arena, streams exactly 258 cold routed experts, traverses all 43 base layers, and returns finite logits (BOS input 0, top token 5, logit 16.258379). Correctness smoke passes without OOM, but performance does not: initialization is 334.191103 seconds and cold decode is 118.610136 seconds (0.008431 tok/s), with 12,295,250,140 storage bytes and 12,297,913,712 CUDA upload bytes attributed. This is a diagnostic failure, not DeepSeek qualification or promotion evidence. See `docs/research/phase11_experiment_07_first_real_forward.md`.
+- **Phase-11 cold/warm profile (2026-08-17):** a two-token resident run isolates the bottleneck. Token 0 takes 134.734045 seconds with 258/258 expert misses; token 1 takes 84.532588 seconds with 230 misses and only 28 hits. The 667 dense projections consume just 2.023834 and 1.912695 seconds respectively, while the second token reads another 3,074,949,120 expert bytes. Cache-only tuning cannot qualify this path; direct persistent I/O and pinned transfers are the next controlled intervention. See `docs/research/phase11_experiment_08_cold_warm_profile.md`.
+- **Phase-11 pinned/direct A/B (2026-08-17):** matched two-token output is exact and all 15,370,206,592 model-upload bytes use pinned staging. Initialization improves 408.372656 to 200.970412 seconds and cold decode improves 134.734045 to 83.758211 seconds, but the resident token regresses 84.532588 to 96.703443 seconds. The combined optimization is rejected for decode qualification; the next step is a short storage-mode benchmark and expert-extent coalescing rather than another full blind run. See `docs/research/phase11_experiment_09_pinned_direct_ab.md`.
 - **Phase-4 handoff:** exact commands, revisions, hashes, timings, artifacts, revised statistical-gate rationale, and evaluation controls are in `docs/phase4_handoff.md`.
 - **Phase-5 handoff:** CUDA architecture, controls, correctness evidence, and repeatable benchmark command are in `docs/phase5_cuda.md`.
 - **Phase-6 handoff:** implemented MTP math, additive conversion, rollback design, controls, correctness evidence, and the open performance results are in `docs/phase6_mtp.md`.
@@ -81,14 +88,14 @@ Prefill fast path = chunked WY decomposition (chunk 64); sequential recurrence i
 ## Repo layout
 
 ```
-colib/
+shiftwing/
 ├── PLAN.md  README.md  LICENSE (Apache-2.0)  NOTICE (credits colibri/JustVugg)  Makefile
 ├── c/
 │   ├── Makefile                # targets: qwen, test-c, CUDA=1 CUDA_ARCH=native
 │   ├── qwen.c                  # THE engine (new, self-contained; ports generic glm.c subsystems w/ attribution)
 │   ├── st.h json.h tok.h tok_unicode.h tok_nfc.h tier.h uring.h compat.h grammar.h schema_gbnf.h decode_batch.h
 │   ├── backend_cuda.cu backend_cuda.h    # Phase 5 (new; generic kernels ported)
-│   ├── openai_server.py resource_plan.py doctor.py colib   # vendored+adapted (Phase 9 / Phase 4 CLI)
+│   ├── openai_server.py resource_plan.py doctor.py shiftwing   # vendored+adapted (Phase 9 / Phase 4 CLI)
 │   ├── iobench.c
 │   ├── tools/
 │   │   ├── make_qwen_oracle.py convert_qwen.py compare_acts.py preflight.py eval_qwen.py gen_unicode.py
@@ -299,6 +306,314 @@ rows were collected without converter, download, or build contention.
 
 **GATE 10 — EVIDENCE PASS; PUBLICATION PENDING:** q3 model evidence, the 20/20 release audit, and the full post-publication `make check` are green. The code and evidence are release-candidate ready. Gate closure still requires an intentional clean release commit and `v0.1` tag; neither is performed implicitly.
 
+---
+
+## Phase 11 — DeepSeek-V4-Flash-0731 replacement
+
+DeepSeek is a new engine, not a Qwen/Ornith alias. Source weights, tokenizer,
+encoding, configuration, and reference code are pinned to
+`deepseek-ai/DeepSeek-V4-Flash-0731@9e165c30e2704aec5d9d593cce3eebd58bbef1cb`.
+The Qwen/Ornith engine and compact evidence remain available for tests and
+rollback. DeepSeek becomes the documented/runtime default only at Gate 11.6.
+
+### 11.0 Specification, storage, and reproducibility
+
+- [x] One dependency-free contract defines the pinned source, 48 shards,
+  inference-critical official config, FP4 experts/FP8 dense quantization,
+  43-layer compression schedule, 16K default/64K validated context, supported
+  reasoning modes, sampling profiles, and DSpark draft sweep.
+- [x] Read-only preflight records command, UTC timestamp, git commit/dirty
+  state, sanitized relevant environment, CPU/RAM/GPU identity, storage
+  projection, cleanup order, and a machine-readable acceptance result.
+- [x] Peak-storage gate requires at least 100 GiB free after the planned native
+  container and staging high-water mark. The 2026-08-14 run passes without any
+  deletion; Ornith397 remains protected until the paired control is complete.
+- [x] Recover from host-volume exhaustion without unsafe sparse-VHD mode:
+  preserve exact Ornith35 reconstruction evidence, remove only verified
+  Ornith35 weights, trim ext4, compact the detached VHDX, verify the filesystem
+  read/write, and retain Ornith397 until its fresh performance control.
+- [x] Resumable converter preserves native tensor bytes, validates source
+  identity/config/index/header ranges, packs routed experts by
+  layer→expert→gate/up/down with 4 KiB alignment, splits fused expert tensors
+  without decoding, isolates dense/DSpark segments, and atomically records
+  per-record and per-segment SHA-256 evidence. Before writing, the real plan
+  must also match all 72,317 pinned tensor names, dtypes, and physical shapes.
+- [x] Pinned fetcher downloads metadata and 48 shards with hash-bound atomic
+  state. Two stale attempts are closed as interrupted, and attempt 3 resumes
+  from 58/62 to a complete 62/62 state without restarting partial shards.
+- [x] Deliberately interrupt the real conversion after nine fsynced segments;
+  atomic state remains `running`, binds plan
+  `ec527bb2d8dad257876e0dd1255e6df50666004f82190a186753a9b26e27ae93`,
+  and leaves only segment ten as an uncommitted partial.
+- [x] Resume from that boundary and complete all 91 segments. The final
+  166,881,088,004-byte segment set and 72,317 records bind manifest
+  `468d29fd3262af88ec4c31ef29a94e62631387475917ec7bdb4da9d0441e4d86`.
+- [x] Independently compare all 166,878,536,440 native payload bytes with the
+  pinned source, rehash every record/segment, reject nonzero padding and
+  descriptor drift, and publish dependency-bound atomic evidence with
+  signature
+  `765b7c2dc2abf7d5941ecda6b769879d12c7eaf1d2ba50781242d6f6c3d8ee1c`.
+  The Python and compiled C contracts both accept all 72,317 real descriptors.
+
+**GATE 11.0:** PASS. Pinned metadata/source, independent 72,317-tensor
+inventory, deliberate nine-segment interruption, hash-verified resume,
+complete conversion, native-byte audit, and Python/C descriptor contracts all
+pass. Fixture conversion/resume/corruption controls also pass.
+
+### 11.1 CPU reference correctness
+
+- [x] Vendor the pinned MIT DeepSeek encoder/parser and malformed-output
+  recovery; never substitute a generic Jinja template.
+- [x] Pin a generated reference fixture for native E2M1/E4M3/UE8M0 formats,
+  MXFP activation quantization, mHC/Sinkhorn, YaRN/RoPE, window/compression
+  indices, learned pooling, attention sink, routing, and a complete scalar
+  routed-expert projection. The official route weight is applied before the
+  quantized `w2` boundary.
+- [x] Add typed, bounds-checked model-semantic row reads over the native
+  container: BF16 token embeddings expand into four hC copies, I64 hash routes
+  read only one token row, and the CPU output-head fallback scans bounded
+  contiguous BF16 row blocks with exact logits and attributed direct-I/O bytes.
+- [x] Replay official decode-time compressor state for both ratio-4 overlap
+  and ratio-128-style non-overlap across successive windows, and implement the
+  learned ratio-4 indexer's per-head ReLU scoring, aggregation, top-k ordering,
+  cache offsets, and invalid-state rejection from the pinned fixture.
+- [x] Assemble pure sliding, ratio-4 overlapping/indexed, and ratio-128
+  non-overlapping attention through the complete low-rank Q/KV/O projections,
+  cache mutation, learned compressed selection, attention sink, inverse RoPE,
+  and output projection. Compressed modes use the pinned 160,000 theta and
+  factor-16 YaRN configuration.
+- [x] Complete the CPU MoE subgraph over converted records: BF16 gate logits,
+  token-row hash or biased sqrt-softplus routing, grouped native-FP4 routed
+  experts, native-FP8 shared expert, and exact summed output.
+- [ ] Complete the separate `deepseek_v4` live mux engine around the tested
+  scalar components: allocate/version all 43 layer states and scratch arenas,
+  run embedding -> scheduled hC/attention/MoE blocks -> hC head/logits, and wire
+  tokenization, sampling, streaming, batching, cancellation, and snapshots.
+- [ ] Generate a tiny pinned fixture and compare every mHC, attention, window
+  wrap, route, prefill/decode, FP4/FP8, BOS/EOS, and DSpark intermediate.
+
+**GATE 11.1:** all CPU fixture intermediates and greedy/teacher-forced tokens
+agree with the pinned layer-streamed oracle within preregistered tolerances.
+
+### 11.2 CUDA correctness and tiered execution
+
+- [x] Load converted native records through the established direct-I/O and
+  persistent-`io_uring` reader while retaining and validating exact dtype,
+  physical shape, layer, expert, and projection descriptors.
+- [x] Add SM120 scalar-correct FP8/FP4 GEMMs and a grouped top-k expert path
+  through `w1`/`w3`, clamped SwiGLU, route-aware MXFP requantization, and
+  `w2`; the current CPU/CUDA grouped fixture has zero maximum error after the
+  official route-order correction. Tensor-core tuning and actual-shape
+  performance qualification remain open.
+- [x] Add SM120 FP8 dense and fused grouped native-FP4 expert kernels with
+  scalar fallbacks and actual-shape equivalence tests. The 4096-hidden x
+  2048-intermediate top-6 control is exact on the RTX 5070 Ti.
+- [x] Cross-bind the complete 72,317-record Python layout to a compiled C
+  startup contract. It validates every base/DSpark tensor name, dtype, and
+  physical shape against a sparse 167 GB logical fixture in 1.4 seconds and
+  rejects deliberate drift. Manifest ingestion now inserts names into its hash
+  table incrementally instead of performing a quadratic duplicate scan.
+- [x] Reuse the bounded adaptive host expert tier, LFRU heat, kernel prefetch,
+  persistent `io_uring`, direct I/O, and grouped unique-prompt submissions.
+  Cold native-FP4 expert triplets batch their six records; warm hits read zero
+  bytes and active scheduler references cannot be evicted.
+- [x] Add a bounded reference-protected SM120 device expert cache with pinned
+  upload staging, hit/miss/eviction/upload telemetry, a persistent FP8 dense
+  arena mirror, and a resident BF16 output head. Focused generic, grouped,
+  actual-shape, and one-layer runtime parity controls pass.
+- [x] Run the first manifest-bound real-weight CUDA forward over all 43 base
+  layers. BOS token 0 produces finite logits with top token 5/logit
+  16.258379; the run attributes 667 CUDA dense calls, 258 cold routed-expert
+  loads, 12,295,250,140 storage bytes, and 12,297,913,712 CUDA upload bytes,
+  with no OOM. The correctness smoke passes, but 334.191103-second
+  initialization and 118.610136-second cold decode (0.008431 tok/s) fail the
+  performance objective. Warm-path isolation and host-stage profiling are
+  required before any performance qualification.
+- [x] Isolate cold versus resident-token cost with per-layer and per-kernel
+  telemetry. The second token still misses 230/258 experts (89.15%) and reads
+  3,074,949,120 bytes; all 667 dense projections take only 1.912695 seconds
+  of the 84.532588-second decode. This rejects cache-capacity tuning as the
+  sole remedy and selects pinned transfer plus persistent direct I/O next.
+- [x] A/B pinned staging plus persistent direct I/O against the frozen
+  two-token control. Token IDs and logits remain exact and initialization
+  improves 50.79%, but the second token regresses 14.40%; reject the combined
+  path for decode and microbenchmark buffered/direct/uring combinations before
+  retrying. Pinned staging remains separately reversible.
+- [ ] Complete decode-route protection, incremental prefix prefill,
+  cancellation, embedding residency, and the byte-identical live mux runtime
+  around the complete 43-layer state.
+- [ ] Validate 16 GiB VRAM bounds, zero silent fallback, exact prefill/decode
+  equivalence, batching, cancellation, session restore, and prefix reuse.
+
+**GATE 11.2:** CPU/CUDA fixture parity passes and the real 43-layer path runs
+with all fallbacks and storage traffic explicitly attributed.
+
+### 11.3 Serving and interfaces
+
+- [x] Add `--context` to chat/serve/web (16,384 default; 65,536 maximum; reject
+  overflow), `--dspark auto|on|off`, DeepSeek model-family dispatch, and model
+  ID `deepseek-v4-flash-0731-colib` without changing the default yet.
+- [x] Support non-thinking chat and `reasoning_effort=high`; return explicit
+  errors for `low`/`max`; accept only deterministic `(0,1)` and agent/tool
+  `(1,0.95)` sampling profiles.
+- [x] Define and fixture-test an atomic versioned session format binding
+  model, tokenizer/protocol, and engine fingerprints plus position, mHC,
+  sliding/compressed attention, compressor buffers, and sampler state; reject
+  corruption, context drift, and fingerprint drift.
+- [ ] Wire the versioned DeepSeek snapshot format into live mux slot save,
+  restore, cancellation, and exact-prefix continuation after the full native
+  state object is available.
+- [x] Emit final `colib.metrics` telemetry with TTFT, prefill/decode time, true
+  decode tok/s, token counts, cache hits, and disk bytes; the web client must
+  consume it instead of counting streamed text chunks.
+
+**GATE 11.3:** protocol, tool, malformed-output, sampling, mux, batch,
+cancellation, session, prefix, 16K boundary, web, and telemetry tests pass.
+
+### 11.4 Real-model correctness and quality
+
+- [ ] Produce a hash-bound layer-streamed Python oracle from the pinned native
+  checkpoint; require ≥95% teacher-forced agreement overall, ≥85% per prompt,
+  ≤2% perplexity delta, coherent retained outputs, and exact DSML tool calls.
+- [ ] Validate 64K continuation/soak without OOM, truncation, state drift, or
+  an unreported CPU/CUDA fallback.
+
+**GATE 11.4:** every numerical, quality, tools, long-context, memory, and
+manifest criterion passes on the real pinned model.
+
+### 11.5 DSpark and paired performance qualification
+
+- [ ] Keep DSpark off unless an on/off A/B over draft lengths 1–5 proves a
+  decode gain without TTFT, stop-rate, memory, or correctness regression;
+  `auto` records its decision and evidence.
+- [x] Capture the fresh Ornith397 side on the current commit: five independent
+  process-fresh legacy-four-prompt trials all pass, with 0.824033698 tok/s
+  median sustained decode and 43.508444 s median trial TTFT. The exact command,
+  environment, binary/sources, manifests, trial hashes, and reconstruction
+  evidence are preserved.
+- [ ] Run the DeepSeek side, then complete the paired AB/BA analysis with
+  identical hardware state, cache budgets, sampling, workload, warmup, and
+  concurrency. The sequential Ornith control block alone is not a paired pass.
+- [ ] Require the bootstrap 95% lower confidence bound for DeepSeek tok/s ÷
+  Ornith tok/s >1.0 and the 95% upper bound for DeepSeek TTFT ÷ Ornith TTFT
+  <1.0; also beat historical 0.836866773 tok/s and 81.9725 s median TTFT on
+  the legacy subset with no short-prompt/agent regression.
+
+**GATE 11.5:** pending. Neither weight format nor speculative decoding is
+treated as evidence of a speedup.
+
+### 11.6 Promotion and cleanup
+
+- [ ] Only after Gates 11.0–11.5 pass, change CLI/web defaults to
+  `c/deepseek-v4-flash-0731`, install the DeepSeek-bound audit, update active
+  docs/NOTICE, and pass complete CPU, CUDA, Python, web, docs, and source gates.
+- [x] Independently verify Ornith397's five-trial fresh control, source
+  identity, exact base/q3 conversion commands, 122 base and 480 q3 shard
+  hashes, environment, and reconstruction instructions; preserve the compact
+  tracked evidence and tiny legacy fixture.
+- [x] Remove only the exact verified `c/ornith397` weight target after the
+  control/evidence gate: 369,831,132,527 bytes removed, ext4 free space rose
+  to 782,775,443,456 bytes, and detached VHDX compaction reclaimed
+  370,328,731,648 host bytes. The pinned DeepSeek source and retirement
+  evidence reverify after a clean read/write restart.
+
+**GATE 11.6 / PROMOTION:** pending. Current runtime/documentation defaults stay
+on the qualified rollback model until this gate passes.
+
+## Phase 12 - Ornith397 reactivation and device optimization
+
+- [x] Reject DeepSeek promotion and freeze its runtime work.
+- [x] Revalidate the pinned Ornith397 revision, 122 base hashes, 480 q3
+  hashes, tokenizer/template, five-trial control, and exact converter hashes.
+- [x] Run the pinned metadata-only dry-run: 122 source shards,
+  405,108,696,032 source bytes, 93,078 kept tensors, and
+  212,634,789,241 estimated base output bytes.
+- [ ] Complete the shard-streamed int4-g128 base reconstruction and reproduce
+  every preserved base hash. Attempt 1 committed 15/122 outputs before ending
+  during source shard 16. Attempt 2 revalidated them and committed through
+  58/122 before stopping during staged source shard 59; no process is now
+  running and no stop cause was retained. Resume from the hash-bound ledger
+  `b2f4bbdb...f41f5d9`, preserving the partial source shard.
+- [ ] Rebuild the q3 sidecar and reproduce every preserved q3 hash.
+- [ ] Re-baseline 0.824033698 tok/s median decode and 43.508444 s median TTFT,
+  then optimize both with matched exact-output A/B trials.
+- [x] Implement the resumable hash-bound paired controller the preregistered
+  protocol needs. `c/tools/run_paired_perf_trials.py` alternates AB/BA per
+  pair, supports unmeasured priming trials, refuses resume across binding
+  drift, and promotes only on identical outputs with a 95% decode lower bound
+  above 1.0 and a TTFT upper bound below 1.0. Twenty focused tests pass, the
+  extractor reproduces the preserved five-trial control aggregates exactly,
+  and replaying those artifacts holds on a null effect while promoting a
+  uniform 1.12 decode / 0.93 TTFT scaling. See `docs/research/phase12_preflight_05_paired_ab_controller.md`.
+- [x] Implement and locally validate the first device candidate: q3 on
+  NVMe/RAM, expanded-q4 experts in VRAM, and an independent adaptive route
+  atlas. Its cached-only grouped-prefill seam matches the CPU q3 reference on
+  the RTX 5070 Ti at `1.1641532e-09` maximum difference and advances exact
+  batch/token telemetry. Real-model performance qualification still awaits
+  reconstruction.
+- [x] Implement and locally validate a second reversible TTFT candidate:
+  ordered grouped-prefill expert I/O batches. Batch 4 preserves exact tiny
+  mux output, 44 hits, 30 misses, and 300 reads while reducing persistent-ring
+  submissions from 50 to 41; the production default remains batch 1 until the
+  reconstructed real-model protocol passes.
+- [x] Record LocalForge carry-forward requirements without modifying
+  LocalForge.
+- [x] Removed both rejected DeepSeek weight directories after explicit owner
+  confirmation on 2026-08-21, freeing 310.6 GiB. All DeepSeek evidence remains
+  in tracked artifacts; the weights are re-downloadable.
+- [ ] Candidate 3, frozen expert-map cold-start preload: build a diverse-corpus
+  heat map excluding the benchmark prompts, freeze it, and measure cold-start
+  TTFT and first-turn decode as the preregistered metric. Mechanism is
+  implemented and unit-tested; the achievable target is filling every cache
+  slot with the hottest experts, about 52% of routing mass, since 80% of mass
+  would need roughly twice the cache. See
+  `docs/research/phase12_preflight_06_frozen_expert_map_preload.md`.
+
+- [ ] Candidate 4, NVMe read-path throughput: decode achieves 1.40 GB/s against
+  5.11 MB misses while expert I/O is 70.2% of decode. Measure the O_DIRECT
+  ceiling by block size and thread count first; pursue coalescing the three
+  projection reads or raising ring depth only if headroom exists. Estimated
+  1.3-1.5x, confidence low until measured.
+- [ ] Candidate 5, heat-tiered q2 cold tail: keep hot experts at q3 and demote
+  the rarely-routed tail to 2-bit, cutting bytes per miss from 5.11 MB to about
+  3.4 MB. Estimated 1.31x. Requires the teacher-forcing, perplexity, and
+  coherence gates because roughly 39% of expert activations would be q2.
+  Both are recorded in
+  `docs/research/phase12_preflight_07_storage_bound_optimization_candidates.md`.
+
+- [ ] Candidate 6, prefix KV caching for a stable 10-16k preamble: the engine
+  already checkpoints and prefix-matches session state, but `SESSION_DIR` is
+  unset by default. Reusing a stable preamble pays prefill once instead of per
+  request, which is the largest available win for long-context first requests.
+  Any varying text must sit after the stable block or the common prefix
+  collapses.
+- [ ] Long-context measurement (blocks the above): one 10k-token prefill with
+  telemetry. About 137 GB of prefill expert reads means a single expert-major
+  pass; a multiple means the serve path splits the prompt, which would make
+  `PREFILL_EXPERT_BATCH` matter considerably more. Also test that flag at 1
+  versus 4, since it defaults to the legacy value and was only ever validated
+  on the tiny fixture. See
+  `docs/research/phase12_preflight_08_long_context_ingestion.md`.
+
+- [ ] Prefill compute for the 10-16k reviewer. Measured TTFT is 33.0 min at
+  8,451 tokens and ~70 min projected at 16k, against a 10-minute target;
+  prefill is 91% compute and 9% storage, which retires candidates 4 and 5 for
+  this workload. Three candidates, largest first: (A) cold experts on CUDA
+  during prefill, 14.0 min, needs code because the host path is deliberate and
+  its "2.2x slower" basis was measured at short prompts; (B) GDN prefill via
+  the existing CUDA block kernel, 9.0 min, flag ready and verified to engage;
+  (C) full attention, 6.8 min, diagnosis incomplete and the first proposed fix
+  withdrawn. Split GDN/attention timers and recorded `--cuda-attn` /
+  `--cuda-spec-gdn` flags are in place; environment variables cannot be used
+  because `isolated_engine_env` strips 102 engine keys. See
+  `docs/research/phase12_preflight_09_prefill_compute_candidates.md`.
+
+**GATE 12:** Ornith397 becomes the retained working model after byte-exact
+reconstruction and current-device correctness. Each optimization must improve
+tok/s or TTFT repeatably without quality, CUDA-residency, batch, session, web,
+or cancellation regression.
+
+---
 ---
 
 ## Risk register

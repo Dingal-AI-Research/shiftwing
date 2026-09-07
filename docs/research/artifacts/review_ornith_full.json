@@ -1,0 +1,22 @@
+{
+  "model": "c/ornith397",
+  "cases": 1,
+  "json_ok": 1,
+  "verdict_ok": 1,
+  "caught": 1,
+  "seconds_total": 8350.3,
+  "rows": [
+    {
+      "name": "null-instead-of-throw",
+      "json": true,
+      "verdict_ok": true,
+      "caught": true,
+      "seconds": 8350.3,
+      "actions": [
+        "Restore the NotFoundError throw or explicitly document the null-return contract as an intentional breaking change",
+        "Add or update tests to cover the null-return path when user is not found"
+      ],
+      "raw_tail": null
+    }
+  ]
+}

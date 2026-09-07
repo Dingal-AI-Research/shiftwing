@@ -1,0 +1,6 @@
+[
+  "Explain, for an undergraduate programmer, why a hash table can have constant average lookup time but linear worst-case lookup time.",
+  "Write a TypeScript function that groups an array of records by a string key. Explain its time and space complexity.",
+  "A service becomes slow only after several hours. Give a concise, ordered debugging plan that distinguishes memory growth, lock contention, and I/O.",
+  "Summarize the trade-off between caching more data in RAM and reading it from NVMe on demand. Include one failure mode of each approach."
+]

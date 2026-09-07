@@ -291,6 +291,18 @@ def _argument_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--cuda-attn-prefill",
+        type=int,
+        choices=(0, 1),
+        default=1,
+        help=(
+            "batch full-attention prefill into one CUDA call per row block "
+            "instead of one call per token. Bit-identical to the per-token "
+            "path; recorded as a flag because the engine environment is "
+            "isolated and an ambient CUDA_ATTN_PREFILL would be stripped"
+        ),
+    )
+    parser.add_argument(
         "--cuda-spec-gdn",
         type=int,
         choices=(0, 1),
@@ -486,6 +498,7 @@ def main() -> int:
             "EMAP_SAVE_EVERY": "0",
             "PREFILL_COLD_DEVICE": str(args.prefill_cold_device),
             "CUDA_ATTN": str(args.cuda_attn),
+            "CUDA_ATTN_PREFILL": str(args.cuda_attn_prefill),
             "CUDA_SPEC_GDN": str(args.cuda_spec_gdn),
             "PREFILL_EXPERT_BATCH": str(args.prefill_expert_batch),
             "PREFILL_CACHE_BYPASS": str(args.prefill_cache_bypass),
@@ -673,6 +686,7 @@ def main() -> int:
                 "expert_q3": bool(args.expert_q3),
                 "expert_map": str(args.expert_map) if args.expert_map else None,
                 "cuda_attn": bool(args.cuda_attn),
+                "cuda_attn_prefill": bool(args.cuda_attn_prefill),
                 "prefill_cold_device": args.prefill_cold_device,
                 "prefetch_threads": args.prefetch_threads,
                 "cuda_spec_gdn": bool(args.cuda_spec_gdn),

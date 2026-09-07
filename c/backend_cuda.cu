@@ -15,6 +15,7 @@
 struct ColiCuda {
     int device;
     int major, minor;
+    int sm_count, shared_per_block;
     int async_alloc;
     char name[256];
     cudaStream_t stream;
@@ -32,6 +33,8 @@ struct ColiCuda {
     __half *attn_x16,*attn_ctx16;
     size_t attn_x_cap,attn_qp_cap,attn_q_cap,attn_gate_cap,attn_k_cap,
            attn_v_cap,attn_ctx_cap,attn_x16_cap,attn_ctx16_cap;
+    float *attn_score;
+    size_t attn_score_cap;
     int profile_stages, profile_pending, profile_shared_marked,
         profile_download_marked;
     cudaEvent_t profile_event[9];
@@ -82,6 +85,8 @@ extern "C" int coli_cuda_create(ColiCuda **out, int device) {
     ctx->device = device;
     ctx->major = prop.major;
     ctx->minor = prop.minor;
+    ctx->sm_count = prop.multiProcessorCount;
+    ctx->shared_per_block = (int)prop.sharedMemPerBlock;
     snprintf(ctx->name, sizeof(ctx->name), "%s", prop.name);
     error = cudaStreamCreateWithFlags(&ctx->stream, cudaStreamNonBlocking);
     if (error != cudaSuccess) {
@@ -177,6 +182,17 @@ extern "C" int coli_cuda_compute_capability(const ColiCuda *ctx, int *major,
         return fail_arg("coli_cuda_compute_capability: null argument");
     *major = ctx->major;
     *minor = ctx->minor;
+    return 0;
+}
+
+/* Occupancy planning needs the SM count: a kernel launched with fewer blocks
+ * than the device has multiprocessors cannot use the whole GPU no matter how
+ * efficient its inner loop is. */
+extern "C" int coli_cuda_device_limits(const ColiCuda *ctx, int *sm_count,
+                                         int *shared_per_block) {
+    if (!ctx) return fail_arg("coli_cuda_device_limits: null context");
+    if (sm_count) *sm_count = ctx->sm_count;
+    if (shared_per_block) *shared_per_block = ctx->shared_per_block;
     return 0;
 }
 
@@ -1162,12 +1178,130 @@ __global__ static void knorm_rope_kernel(float *k,const float *weight,
     int h=blockIdx.x,j=threadIdx.x;if(h>=heads||j>=head_dim)return;size_t base=(size_t)h*head_dim;float v=k[base+j];float ms=block_sum(v*v);__shared__ float inv;if(j==0)inv=rsqrtf(ms/head_dim+eps);__syncthreads();k[base+j]=v*inv*(1.f+weight[j]);__syncthreads();int half=rotary_dim/2;if(j<half){float angle=position*powf(theta,-2.f*j/rotary_dim),cs=cosf(angle),sn=sinf(angle);float a=k[base+j],b=k[base+half+j];k[base+j]=a*cs-b*sn;k[base+half+j]=b*cs+a*sn;}
 }
 
+/* Score storage.  The scores were dynamic shared memory, (position+1)*4 bytes,
+ * and nothing raises the 48 KB default cap, so the launch failed at position
+ * 12,256 -- measured, not estimated.  In the engine that failure reaches
+ * cuda_backend_fail, which clears cuda_rt.active and drops the whole model to
+ * the CPU for the rest of the run, so a 16k prompt was unservable.  Passing a
+ * global buffer removes the ceiling.  score_global==NULL keeps the shared path
+ * for short rows, and the choice is storage only: the arithmetic below is
+ * untouched either way. */
 __global__ static void gqa_decode_kernel(float*ctx,const float*q,const float*gate,
-        const float*kcache,const float*vcache,int position,int qheads,int kvheads,int hd){
-    int h=blockIdx.x,j=threadIdx.x;if(h>=qheads||j>=hd)return;int hk=h/(qheads/kvheads),T=position+1,kvrows=kvheads*hd;extern __shared__ float score[];
+        const float*kcache,const float*vcache,float*score_global,int position,int qheads,int kvheads,int hd){
+    int h=blockIdx.x,j=threadIdx.x;if(h>=qheads||j>=hd)return;int hk=h/(qheads/kvheads),T=position+1,kvrows=kvheads*hd;extern __shared__ float score_shared[];
+    float*score=score_global?score_global+(size_t)h*(size_t)T:score_shared;
     for(int t=0;t<T;t++){size_t off=(size_t)t*kvrows+(size_t)hk*hd;float p=q[(size_t)h*hd+j]*kcache[off+j];float sum=block_sum(p);if(j==0)score[t]=sum*rsqrtf((float)hd);__syncthreads();}
     if(j==0){float mx=score[0];for(int t=1;t<T;t++)mx=fmaxf(mx,score[t]);float den=0.f;for(int t=0;t<T;t++){score[t]=expf(score[t]-mx);den+=score[t];}for(int t=0;t<T;t++)score[t]/=den;}__syncthreads();
     float sum=0.f;for(int t=0;t<T;t++)sum+=score[t]*vcache[(size_t)t*kvrows+(size_t)hk*hd+j];float g=gate[(size_t)h*hd+j];ctx[(size_t)h*hd+j]=sum/(1.f+expf(-g));
+}
+
+/* Batched prefill attention.
+ *
+ * The decode kernel above launches <<<query_heads, head_dim>>>.  For Ornith397
+ * that is 32 blocks on a 70-multiprocessor device, and prefill called it once
+ * per position: 126,825 launches for the 8,451-token qualification, each
+ * followed by a host stream synchronize.  Measured effective throughput was
+ * 0.042 TFLOP/s, roughly 0.1% of the device's fp32 capability.  The work was
+ * never the problem; the shape of the launch was.
+ *
+ * This kernel keeps the body byte-for-byte and changes only how many of them
+ * run at once.  Each (row, head) pair does exactly what one decode block did,
+ * at position base+row: the same block_sum tree for the QK dot, the same
+ * single-threaded sequential max, the same sequential exp/denominator, the
+ * same sequential PV accumulation.  Identical operations in identical order on
+ * identical inputs, so the results are bit-identical to the per-token path --
+ * which matters because the qualification harness binds generated text by
+ * SHA-256.
+ *
+ * Two details are deliberate:
+ *
+ *  - Pairs are walked grid-stride rather than one block per pair, so the score
+ *    scratch is sized by resident blocks (tens of MB) instead of by row count
+ *    (which would be gigabytes at 16k).  All threads evaluate the loop bound
+ *    identically, so block_sum's __syncthreads() stays uniform.
+ *  - pair = row*qheads + h means consecutive blocks share a row.  The 32 query
+ *    heads map onto 2 KV heads, so those neighbours read the same K/V prefix
+ *    and hit in L2 instead of re-streaming it from DRAM 16 times.
+ */
+#define ATTN_STAGE 1024
+__global__ static void gqa_prefill_kernel(float*ctx,const float*q,const float*gate,
+        const float*kcache,const float*vcache,float*score_base,int score_stride,
+        int base,int rows,int qheads,int kvheads,int hd){
+    int j=threadIdx.x;int total=rows*qheads;
+    __shared__ float stage[ATTN_STAGE];
+    __shared__ float den_share;
+    float*score=score_base+(size_t)blockIdx.x*(size_t)score_stride;
+    for(int pair=blockIdx.x;pair<total;pair+=gridDim.x){
+        int row=pair/qheads,h=pair-row*qheads;
+        int hk=h/(qheads/kvheads),T=base+row+1,kvrows=kvheads*hd;
+        const float*qr=q+((size_t)row*qheads+h)*hd;
+        const float*gr=gate+((size_t)row*qheads+h)*hd;
+        float*cr=ctx+((size_t)row*qheads+h)*hd;
+        float qv=qr[j];
+        for(int t=0;t<T;t++){size_t off=(size_t)t*kvrows+(size_t)hk*hd;float p=qv*kcache[off+j];float sum=block_sum(p);if(j==0)score[t]=sum*rsqrtf((float)hd);__syncthreads();}
+        /* The softmax scan has to stay single-threaded and sequential: its max
+         * and its denominator are an ordered fp32 reduction, and reassociating
+         * them would change the result.  What it does not have to do is read
+         * every element from global memory one at a time.  Staging the scores
+         * through shared in chunks keeps the scan's order exactly as it was
+         * while the loads become coalesced and block-wide. */
+        float mx=0.f,den=0.f;
+        for(int c0=0;c0<T;c0+=ATTN_STAGE){
+            int cn=T-c0;if(cn>ATTN_STAGE)cn=ATTN_STAGE;
+            for(int i=j;i<cn;i+=blockDim.x)stage[i]=score[c0+i];
+            __syncthreads();
+            if(j==0)for(int i=0;i<cn;i++){float v=stage[i];mx=(c0==0&&i==0)?v:fmaxf(mx,v);}
+            __syncthreads();
+        }
+        for(int c0=0;c0<T;c0+=ATTN_STAGE){
+            int cn=T-c0;if(cn>ATTN_STAGE)cn=ATTN_STAGE;
+            for(int i=j;i<cn;i+=blockDim.x)stage[i]=score[c0+i];
+            __syncthreads();
+            if(j==0)for(int i=0;i<cn;i++){float v=expf(stage[i]-mx);stage[i]=v;den+=v;}
+            __syncthreads();
+            for(int i=j;i<cn;i+=blockDim.x)score[c0+i]=stage[i];
+            __syncthreads();
+        }
+        /* Elementwise, so this one may run wide: each score is divided by the
+         * same denominator regardless of who does the division. */
+        if(j==0)den_share=den;
+        __syncthreads();
+        float d=den_share;
+        for(int t=j;t<T;t+=blockDim.x)score[t]/=d;
+        __syncthreads();
+        float sum=0.f;for(int t=0;t<T;t++)sum+=score[t]*vcache[(size_t)t*kvrows+(size_t)hk*hd+j];float g=gr[j];cr[j]=sum/(1.f+expf(-g));
+        __syncthreads();
+    }
+}
+
+/* Per-row forms of the norm/RoPE kernels.  Body identical to the single-row
+ * versions; blockIdx.y selects the row and its position is base+row. */
+__global__ static void qnorm_rope_batch_kernel(float *q, float *gate,
+                                                const float *packed,
+                                                const float *weight, int heads,
+                                                int head_dim, int rotary_dim,
+                                                int base, float theta,
+                                                float eps){
+    int h=blockIdx.x,row=blockIdx.y,j=threadIdx.x;if(h>=heads||j>=head_dim)return;
+    int position=base+row;
+    const float*src=packed+(size_t)row*heads*2*head_dim+(size_t)h*2*head_dim;
+    float*qo=q+(size_t)row*heads*head_dim,*go=gate+(size_t)row*heads*head_dim;
+    float v=src[j];
+    float ms=block_sum(v*v);__shared__ float inv;if(j==0)inv=rsqrtf(ms/head_dim+eps);__syncthreads();
+    qo[(size_t)h*head_dim+j]=v*inv*(1.f+weight[j]);go[(size_t)h*head_dim+j]=src[head_dim+j];__syncthreads();
+    int half=rotary_dim/2;if(j<half){float angle=position*powf(theta,-2.f*j/rotary_dim),cs=cosf(angle),sn=sinf(angle);size_t off=(size_t)h*head_dim;float a=qo[off+j],b=qo[off+half+j];qo[off+j]=a*cs-b*sn;qo[off+half+j]=b*cs+a*sn;}
+}
+
+__global__ static void knorm_rope_batch_kernel(float *k,const float *weight,
+                                                int heads,int head_dim,
+                                                int rotary_dim,int base,
+                                                float theta,float eps){
+    int h=blockIdx.x,row=blockIdx.y,j=threadIdx.x;if(h>=heads||j>=head_dim)return;
+    int position=base+row;
+    float*kr=k+(size_t)row*heads*head_dim;size_t off=(size_t)h*head_dim;
+    float v=kr[off+j];float ms=block_sum(v*v);__shared__ float inv;if(j==0)inv=rsqrtf(ms/head_dim+eps);__syncthreads();
+    kr[off+j]=v*inv*(1.f+weight[j]);__syncthreads();
+    int half=rotary_dim/2;if(j<half){float angle=position*powf(theta,-2.f*j/rotary_dim),cs=cosf(angle),sn=sinf(angle);float a=kr[off+j],b=kr[off+half+j];kr[off+j]=a*cs-b*sn;kr[off+half+j]=b*cs+a*sn;}
 }
 
 static int ensure_cuda_buffer(void **ptr, size_t *capacity, size_t bytes,
@@ -1180,6 +1314,32 @@ static int ensure_cuda_buffer(void **ptr, size_t *capacity, size_t bytes,
     if (error != cudaSuccess) return fail_cuda(where, error);
     *capacity = bytes;
     return 0;
+}
+
+/* Pick score storage for one decode row.  Shared memory while it fits with a
+ * margin for block_sum's own 128 bytes, a global buffer past that.  The
+ * previous code always used shared and simply failed above 12,256 positions. */
+static int gqa_decode_launch(ColiCuda *ctx, float *out_ctx, const float *q,
+                             const float *gate, const float *k_cache,
+                             const float *v_cache, int position,
+                             int query_heads, int kv_heads, int head_dim) {
+    size_t need = (size_t)(position + 1) * sizeof(float);
+    size_t limit = ctx->shared_per_block > 1024
+                       ? (size_t)ctx->shared_per_block - 1024u
+                       : 0u;
+    if (need <= limit) {
+        gqa_decode_kernel<<<query_heads, head_dim, need, ctx->stream>>>(
+            out_ctx, q, gate, k_cache, v_cache, NULL, position, query_heads,
+            kv_heads, head_dim);
+        return launch_status("gqa_decode_kernel");
+    }
+    if (ensure_cuda_buffer((void **)&ctx->attn_score, &ctx->attn_score_cap,
+                           (size_t)query_heads * need, "attention scores"))
+        return -1;
+    gqa_decode_kernel<<<query_heads, head_dim, 0, ctx->stream>>>(
+        out_ctx, q, gate, k_cache, v_cache, ctx->attn_score, position,
+        query_heads, kv_heads, head_dim);
+    return launch_status("gqa_decode_kernel");
 }
 
 extern "C" int coli_cuda_rmsnorm_zero(ColiCuda *ctx, float *y, const float *x,
@@ -2168,9 +2328,184 @@ extern "C" int coli_cuda_gqa_decode_q4_f16(
     qnorm_rope_kernel<<<query_heads,head_dim,0,ctx->stream>>>(ctx->attn_q,ctx->attn_gate,ctx->attn_qp,q_norm,query_heads,head_dim,rotary_dim,position,theta,eps);
     knorm_rope_kernel<<<kv_heads,head_dim,0,ctx->stream>>>(ctx->attn_k,k_norm,kv_heads,head_dim,rotary_dim,position,theta,eps);
     error=cudaMemcpyAsync(k_cache+(size_t)position*kvrows,ctx->attn_k,(size_t)kvrows*4,cudaMemcpyDeviceToDevice,ctx->stream);if(error==cudaSuccess)error=cudaMemcpyAsync(v_cache+(size_t)position*kvrows,ctx->attn_v,(size_t)kvrows*4,cudaMemcpyDeviceToDevice,ctx->stream);if(error!=cudaSuccess)return fail_cuda("attention KV append",error);
-    gqa_decode_kernel<<<query_heads,head_dim,(size_t)(position+1)*4,ctx->stream>>>(ctx->attn_ctx,ctx->attn_q,ctx->attn_gate,k_cache,v_cache,position,query_heads,kv_heads,head_dim);
+    if(gqa_decode_launch(ctx,ctx->attn_ctx,ctx->attn_q,ctx->attn_gate,k_cache,v_cache,position,query_heads,kv_heads,head_dim))return -1;
     if(o_fmt==4){f32_to_f16_kernel<<<(ctxn+255)/256,256,0,ctx->stream>>>(ctx->attn_ctx16,ctx->attn_ctx,ctxn);q4_gemv_f16_kernel<<<(hidden+7)/8,256,0,ctx->stream>>>(ctx->attn_x,ctx->attn_ctx16,(const unsigned char*)o_q,o_s,hidden,ctxn,group_size,o_rb,o_ng);}else q8_gemv_kernel<<<(hidden+7)/8,256,0,ctx->stream>>>(ctx->attn_x,ctx->attn_ctx,(const signed char*)o_q,o_s,hidden,ctxn,o_rb);
     if(launch_status("GQA decode kernels"))return -1;error=cudaMemcpyAsync(out,ctx->attn_x,(size_t)hidden*4,cudaMemcpyDeviceToHost,ctx->stream);if(error!=cudaSuccess)return fail_cuda("attention output download",error);error=cudaStreamSynchronize(ctx->stream);return error==cudaSuccess?0:fail_cuda("attention synchronize",error);
+}
+
+/* Prefill a block of consecutive rows in one call.
+ *
+ * Replaces `for (t = 0; t < T; t++) coli_cuda_gqa_decode_q4_f16(..., t, ...)`.
+ * Batching is safe because row t writes K/V at position base+t and reads only
+ * positions <= base+t: the rows above it write strictly above, where it never
+ * reads.  So projecting and appending the whole block before the causal pass
+ * produces the same values the sequential loop produced.
+ *
+ * Rows are processed in tiles.  Tiling bounds the projection buffers (about
+ * 204 KB per row across qp/q/gate/ctx and the fp16 staging), and it is
+ * numerically inert: every row's arithmetic is independent of which tile it
+ * landed in, so the tile size changes footprint and nothing else.
+ */
+extern "C" int coli_cuda_gqa_prefill_q4_f16(
+    ColiCuda *ctx, float *out, const float *x, int rows, int base,
+    const unsigned char *q_q, const float *q_s, int q_rb, int q_ng,
+    const unsigned char *k_q, const float *k_s, int k_rb, int k_ng,
+    const unsigned char *v_q, const float *v_s, int v_rb, int v_ng,
+    const void *o_q, const float *o_s, int o_fmt, int o_rb, int o_ng,
+    const float *q_norm, const float *k_norm, float *k_cache,
+    float *v_cache, int max_seq, int hidden, int query_heads,
+    int kv_heads, int head_dim, int rotary_dim, int group_size,
+    float theta, float eps) {
+    if (!ctx || !out || !x || !q_q || !q_s || !k_q || !k_s || !v_q || !v_s ||
+        !o_q || !o_s || !q_norm || !k_norm || !k_cache || !v_cache ||
+        rows <= 0 || base < 0 || max_seq <= 0 || base + rows > max_seq ||
+        hidden <= 0 || query_heads <= 0 || kv_heads <= 0 || head_dim <= 0 ||
+        head_dim > 256 || query_heads % kv_heads || (o_fmt != 1 && o_fmt != 4))
+        return fail_arg("coli_cuda_gqa_prefill_q4_f16: invalid argument");
+
+    int qrows = query_heads * head_dim * 2;
+    int kvrows = kv_heads * head_dim;
+    int ctxn = query_heads * head_dim;
+
+    static int tile_rows = -1;
+    if (tile_rows < 0) {
+        const char *e = getenv("ATTN_PREFILL_TILE");
+        tile_rows = e ? atoi(e) : 512;
+        if (tile_rows < 1) tile_rows = 1;
+    }
+    int tile = rows < tile_rows ? rows : tile_rows;
+
+    /* Grid-stride pairs: scratch scales with resident blocks, not with rows. */
+    static int per_sm = -1;
+    if (per_sm < 0) {
+        const char *e = getenv("ATTN_PREFILL_BLOCKS_PER_SM");
+        per_sm = e ? atoi(e) : 16;
+        if (per_sm < 1) per_sm = 1;
+    }
+    int blocks = (ctx->sm_count > 0 ? ctx->sm_count : 32) * per_sm;
+    long long pairs = (long long)tile * query_heads;
+    if ((long long)blocks > pairs) blocks = (int)pairs;
+    if (blocks < 1) blocks = 1;
+
+#define PREFILL_RESERVE(member, cap, bytes, label) \
+    ensure_cuda_buffer((void **)&ctx->member, &ctx->cap, (bytes), (label))
+    if (PREFILL_RESERVE(attn_x, attn_x_cap,
+                        (size_t)tile * hidden * sizeof(float),
+                        "prefill attention input") ||
+        PREFILL_RESERVE(attn_x16, attn_x16_cap,
+                        (size_t)tile * hidden * sizeof(__half),
+                        "prefill attention fp16 input") ||
+        PREFILL_RESERVE(attn_qp, attn_qp_cap,
+                        (size_t)tile * qrows * sizeof(float),
+                        "prefill attention qp") ||
+        PREFILL_RESERVE(attn_q, attn_q_cap,
+                        (size_t)tile * ctxn * sizeof(float),
+                        "prefill attention q") ||
+        PREFILL_RESERVE(attn_gate, attn_gate_cap,
+                        (size_t)tile * ctxn * sizeof(float),
+                        "prefill attention gate") ||
+        PREFILL_RESERVE(attn_k, attn_k_cap,
+                        (size_t)tile * kvrows * sizeof(float),
+                        "prefill attention k") ||
+        PREFILL_RESERVE(attn_v, attn_v_cap,
+                        (size_t)tile * kvrows * sizeof(float),
+                        "prefill attention v") ||
+        PREFILL_RESERVE(attn_ctx, attn_ctx_cap,
+                        (size_t)tile * ctxn * sizeof(float),
+                        "prefill attention context") ||
+        PREFILL_RESERVE(attn_ctx16, attn_ctx16_cap,
+                        (size_t)tile * ctxn * sizeof(__half),
+                        "prefill attention fp16 context") ||
+        PREFILL_RESERVE(attn_score, attn_score_cap,
+                        (size_t)blocks * max_seq * sizeof(float),
+                        "prefill attention scores"))
+        return -1;
+#undef PREFILL_RESERVE
+
+    for (int start = 0; start < rows; start += tile) {
+        int n = rows - start;
+        if (n > tile) n = tile;
+        int row_base = base + start;
+        cudaError_t error = cudaMemcpyAsync(
+            ctx->attn_x, x + (size_t)start * hidden,
+            (size_t)n * hidden * sizeof(float), cudaMemcpyHostToDevice,
+            ctx->stream);
+        if (error != cudaSuccess)
+            return fail_cuda("prefill attention input upload", error);
+
+        int input_count = n * hidden;
+        f32_to_f16_kernel<<<(input_count + 255) / 256, 256, 0, ctx->stream>>>(
+            ctx->attn_x16, ctx->attn_x, input_count);
+
+        dim3 q_grid((qrows + 7) / 8, n);
+        dim3 kv_grid((kvrows + 7) / 8, n);
+        q4_gemm_f16_kernel<<<q_grid, 256, 0, ctx->stream>>>(
+            ctx->attn_qp, ctx->attn_x16, q_q, q_s, n, qrows, hidden,
+            group_size, q_rb, q_ng);
+        q4_gemm_f16_kernel<<<kv_grid, 256, 0, ctx->stream>>>(
+            ctx->attn_k, ctx->attn_x16, k_q, k_s, n, kvrows, hidden,
+            group_size, k_rb, k_ng);
+        q4_gemm_f16_kernel<<<kv_grid, 256, 0, ctx->stream>>>(
+            ctx->attn_v, ctx->attn_x16, v_q, v_s, n, kvrows, hidden,
+            group_size, v_rb, v_ng);
+
+        dim3 qn_grid(query_heads, n), kn_grid(kv_heads, n);
+        qnorm_rope_batch_kernel<<<qn_grid, head_dim, 0, ctx->stream>>>(
+            ctx->attn_q, ctx->attn_gate, ctx->attn_qp, q_norm, query_heads,
+            head_dim, rotary_dim, row_base, theta, eps);
+        knorm_rope_batch_kernel<<<kn_grid, head_dim, 0, ctx->stream>>>(
+            ctx->attn_k, k_norm, kv_heads, head_dim, rotary_dim, row_base,
+            theta, eps);
+
+        /* The destination span [row_base, row_base+n) is contiguous, so the
+         * whole tile's keys and values append with one copy each. */
+        error = cudaMemcpyAsync(k_cache + (size_t)row_base * kvrows,
+                                ctx->attn_k,
+                                (size_t)n * kvrows * sizeof(float),
+                                cudaMemcpyDeviceToDevice, ctx->stream);
+        if (error == cudaSuccess)
+            error = cudaMemcpyAsync(v_cache + (size_t)row_base * kvrows,
+                                    ctx->attn_v,
+                                    (size_t)n * kvrows * sizeof(float),
+                                    cudaMemcpyDeviceToDevice, ctx->stream);
+        if (error != cudaSuccess)
+            return fail_cuda("prefill attention KV append", error);
+
+        int use_blocks = blocks;
+        long long tile_pairs = (long long)n * query_heads;
+        if ((long long)use_blocks > tile_pairs) use_blocks = (int)tile_pairs;
+        gqa_prefill_kernel<<<use_blocks, head_dim, 0, ctx->stream>>>(
+            ctx->attn_ctx, ctx->attn_q, ctx->attn_gate, k_cache, v_cache,
+            ctx->attn_score, max_seq, row_base, n, query_heads, kv_heads,
+            head_dim);
+
+        dim3 out_grid((hidden + 7) / 8, n);
+        if (o_fmt == 4) {
+            int context_count = n * ctxn;
+            f32_to_f16_kernel<<<(context_count + 255) / 256, 256, 0,
+                                 ctx->stream>>>(ctx->attn_ctx16, ctx->attn_ctx,
+                                                context_count);
+            q4_gemm_f16_kernel<<<out_grid, 256, 0, ctx->stream>>>(
+                ctx->attn_x, ctx->attn_ctx16, (const unsigned char *)o_q, o_s,
+                n, hidden, ctxn, group_size, o_rb, o_ng);
+        } else {
+            q8_gemm_kernel<<<out_grid, 256, 0, ctx->stream>>>(
+                ctx->attn_x, ctx->attn_ctx, (const signed char *)o_q, o_s, n,
+                hidden, ctxn, o_rb);
+        }
+        if (launch_status("GQA prefill kernels")) return -1;
+        error = cudaMemcpyAsync(out + (size_t)start * hidden, ctx->attn_x,
+                                (size_t)n * hidden * sizeof(float),
+                                cudaMemcpyDeviceToHost, ctx->stream);
+        if (error != cudaSuccess)
+            return fail_cuda("prefill attention output download", error);
+        /* Tiles reuse the staging buffers, so each must land before the next
+         * overwrites them.  One synchronize per tile, not one per token. */
+        error = cudaStreamSynchronize(ctx->stream);
+        if (error != cudaSuccess)
+            return fail_cuda("prefill attention synchronize", error);
+    }
+    return 0;
 }
 
 static int gqa_slots_q4_f16_impl(
@@ -2272,9 +2607,9 @@ static int gqa_slots_q4_f16_impl(
                                     cudaMemcpyDeviceToDevice, ctx->stream);
         if (error != cudaSuccess)
             return fail_cuda("attention slots KV append", error);
-        gqa_decode_kernel<<<query_heads, head_dim,
-                            (size_t)(pos + 1) * sizeof(float), ctx->stream>>>(
-            cr, qr, gr, slot_k, slot_v, pos, query_heads, kv_heads, head_dim);
+        if (gqa_decode_launch(ctx, cr, qr, gr, slot_k, slot_v, pos,
+                              query_heads, kv_heads, head_dim))
+            return -1;
     }
     dim3 out_grid((hidden + 7) / 8, batch);
     if (o_fmt == 4) {

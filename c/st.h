@@ -24,6 +24,10 @@
  * (KB..pochi MB). Un file crafted che dichiara un hlen enorme causerebbe una
  * malloc gigante prima ancora di leggere: lo respingiamo. */
 #define ST_MAX_HEADER (512ll << 20)
+/* Tensor rank ceiling. Shapes are recorded, not just collapsed into numel: the
+ * GLM-5.3 loader needs rows/columns to interpret a flat int4 container, and the
+ * shape is in the header but nowhere else. */
+#define ST_MAX_RANK 8
 #define ST_MAX_SHARDS 4096
 
 typedef struct {
@@ -31,8 +35,10 @@ typedef struct {
     int     fd;
     int64_t off;       /* offset assoluto del dato dentro al file */
     int64_t nbytes;
-    int     dtype;     /* 0=BF16 1=F16 2=F32 */
+    int     dtype;     /* 0=BF16 1=F16 2=F32 3=U8/I8 4=I64 */
     int64_t numel;
+    int     rank;                    /* dimensions declared in the header */
+    int64_t shape[ST_MAX_RANK];      /* truncated at ST_MAX_RANK; rank stays exact */
 } st_tensor;
 
 typedef struct {
@@ -62,6 +68,10 @@ static int st_dtype_code(const char *s) {
     if (!strcmp(s, "F32"))  return 2;
     if (!strcmp(s, "U8"))   return 3;   /* dati quantizzati (int4 packed / int8) */
     if (!strcmp(s, "I8"))   return 3;
+    /* I64: index metadata stored verbatim (Qwen4-Exp PLE n-gram multipliers,
+     * head offsets and vocabulary sizes). Never decoded as float -- the
+     * multipliers reach ~2.4e13 and only survive as integers. */
+    if (!strcmp(s, "I64"))  return 4;
     fprintf(stderr, "unsupported dtype: %s\n", s); exit(1);
 }
 
@@ -240,8 +250,13 @@ static void st_init(shards *S, const char *snap_dir) {
                 fprintf(stderr, "%s: tensor '%s' data_offsets [%lld,%lld] out of file bounds (%lld)\n",
                         files[fi], name, (long long)a0, (long long)b0, (long long)fsz); exit(1); }
             int64_t numel = 1; for (int k = 0; k < shp->len; k++) numel *= (int64_t)shp->kids[k]->num;
+            if (shp->len > ST_MAX_RANK) {
+                fprintf(stderr, "%s: tensor '%s' has rank %d, above ST_MAX_RANK %d\n",
+                        files[fi], name, shp->len, ST_MAX_RANK); exit(1); }
             if (S->n == S->cap) { S->cap *= 2; S->t = realloc(S->t, S->cap*sizeof(st_tensor)); }
             st_tensor *t = &S->t[S->n++];
+            t->rank = shp->len;
+            for (int k = 0; k < shp->len; k++) t->shape[k] = (int64_t)shp->kids[k]->num;
             t->name = strdup(name); t->fd = fd; t->off = data_start + a0;
             t->nbytes = b0 - a0; t->dtype = st_dtype_code(dt->str); t->numel = numel;
         }
@@ -291,6 +306,7 @@ static int64_t st_read_f32(shards *S, const char *name, float *out, int drop) {
     void *raw = malloc(t->nbytes);
     if (!raw) { fprintf(stderr, "malloc %lld bytes for tensor %s failed\n", (long long)t->nbytes, name); exit(1); }
     st_pread_full(t->fd, raw, t->nbytes, t->off, "pread data");
+    if (t->dtype == 4) { fprintf(stderr, "tensor %s is I64; read it raw, not as f32\n", name); exit(1); }
     if (t->dtype == 2) {
         memcpy(out, raw, t->nbytes);
     } else if (t->dtype == 0) {
@@ -323,6 +339,25 @@ static void st_read_raw(shards *S, const char *name, void *out, int drop) {
         __atomic_fetch_add(&S->read_bytes, (uint64_t)t->nbytes, __ATOMIC_RELAXED);
     }
     if (drop) posix_fadvise(t->fd, t->off, t->nbytes, POSIX_FADV_DONTNEED);
+}
+
+/* legge un INTERVALLO di byte grezzi dentro un tensore (nessuna conversione).
+ * EN: raw byte range inside one tensor. Needed for row gathers out of quantized
+ * tables that are far too large to hold resident -- Qwen4-Exp's trigram table is
+ * 25 GiB across 128 shards and only 16 rows of it are touched per token, so the
+ * whole-tensor readers are the wrong shape. No O_DIRECT path: these reads are
+ * ~84 bytes and would round up to a 4 KiB aligned extent. */
+static void st_read_raw_range(shards *S, const char *name, int64_t byte_off,
+                              int64_t nbytes, void *out) {
+    st_tensor *t = st_find(S, name);
+    if (!t) { fprintf(stderr, "missing tensor: %s\n", name); exit(1); }
+    if (byte_off < 0 || nbytes < 0 || byte_off > t->nbytes - nbytes) {
+        fprintf(stderr, "tensor %s: range [%lld,+%lld) outside %lld bytes\n", name,
+                (long long)byte_off, (long long)nbytes, (long long)t->nbytes);
+        exit(1);
+    }
+    st_pread_full(t->fd, out, nbytes, t->off + byte_off, "pread raw range");
+    __atomic_fetch_add(&S->read_bytes, (uint64_t)nbytes, __ATOMIC_RELAXED);
 }
 
 typedef struct {
@@ -543,6 +578,7 @@ static void st_read_raw_batch(shards *S, const char **names, void **outs,
 static void st_read_slice_f32(shards *S, const char *name, int64_t elem_off, int64_t n_elems, float *out, int drop) {
     st_tensor *t = st_find(S, name);
     if (!t) { fprintf(stderr, "missing tensor: %s\n", name); exit(1); }
+    if (t->dtype == 4) { fprintf(stderr, "tensor %s is I64; read it raw, not as f32\n", name); exit(1); }
     int esz = (t->dtype == 2) ? 4 : 2;
     int64_t boff = t->off + elem_off * esz, nb = n_elems * esz;
     void *raw = malloc(nb);

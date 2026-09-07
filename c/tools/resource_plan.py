@@ -35,6 +35,202 @@ def _full_layer_count(config: Mapping[str, Any]) -> int:
     return layers // interval
 
 
+def _is_glm53(config: Mapping[str, Any]) -> bool:
+    """True for a GLM-5.3-Flash checkpoint.
+
+    The marker the converter stamps is checked first; the architecture string
+    and GLM's own expert field are accepted too, so a snapshot converted before
+    the marker existed still plans correctly.
+    """
+    if str(config.get("shiftwing_model_family", "")).startswith("glm"):
+        return True
+    architectures = config.get("architectures")
+    if isinstance(architectures, list) and any(
+        isinstance(name, str) and name.startswith("Glm5Next") for name in architectures
+    ):
+        return True
+    text = config.get("text_config", config)
+    return "n_routed_experts" in text and "kv_lora_rank" in text
+
+
+def plan_resources_glm53(
+    config: Mapping[str, Any],
+    *,
+    slots: int,
+    context: int,
+    kv_bytes: int,
+    cuda_expert_gib: float,
+    ram_cache_gib: float,
+    system_ram_gib: float,
+    gpu_gib: float,
+    disk_free_gib: float,
+    largest_source_shard_gib: float,
+    disk_reserve_gib: float,
+    runtime_headroom_gib: float,
+    snapshot_bytes: int = 0,
+    routed_bytes: int = 0,
+    resident_ram_bytes: int = 0,
+    group_size: int = 64,
+) -> dict[str, Any]:
+    """Resource plan for GLM-5.3-Flash.
+
+    The Qwen planner cannot be reused by renaming fields: GLM stores KV as an
+    MLA latent of kv_lora_rank per token per full layer, where Qwen stores
+    2 * kv_heads * head_dim. Using Qwen's formula here overstates the KV state
+    by more than an order of magnitude and would fail a machine that fits.
+
+    Container size is measured from the converted snapshot when one is given.
+    Predicting it would mean re-deriving every tensor shape the converter
+    writes, and the file sizes are already the ground truth the disk check is
+    about. The routed-expert share is computed analytically -- it is exact and
+    cheap -- so the resident part (which must fit in RAM) is total minus routed.
+    """
+    c = config.get("text_config", config)
+    h = int(c["hidden_size"])
+    layers = int(c["num_hidden_layers"])
+    experts = int(c["n_routed_experts"])
+    topk = int(c["num_experts_per_tok"])
+    moe_inter = int(c["moe_intermediate_size"])
+    dense_layers = int(c.get("first_k_dense_replace", 0))
+    # The MTP layer carries its own full set of routed experts and streams them
+    # like any other. Counting it as resident overstated the resident footprint
+    # by ~14 GiB on GLM-5.3-Flash, which under-budgeted the expert cache below
+    # topk and made every layer of every token split into two blocks.
+    mtp_layers = 1 if int(c.get("num_nextn_predict_layers", 0)) > 0 else 0
+    sparse_layers = layers - dense_layers + mtp_layers
+    kv_lora = int(c["kv_lora_rank"])
+    qk_rope = int(c.get("qk_rope_head_dim", 0))
+
+    types = c.get("layer_types")
+    if isinstance(types, list) and len(types) == layers:
+        full_layers = sum(value != "linear_attention" for value in types)
+    else:
+        full_layers = layers // 4
+    linear_layers = layers - full_layers
+
+    linear = c.get("linear_attn_config") or {}
+    kda_heads = int(linear.get("num_heads", c.get("num_attention_heads", 1)))
+    kda_dim = int(linear.get("head_dim", 128))
+    conv_k = int(linear.get("short_conv_kernel_size", 4))
+
+    if min(h, layers, experts, topk, moe_inter, kv_lora, kda_heads, kda_dim,
+           slots, context) <= 0:
+        raise ValueError("configuration and runtime dimensions must be positive")
+    if kv_bytes not in (2, 4):
+        raise ValueError("kv_bytes must be 2 or 4")
+
+    # One routed expert: gate and up are [moe_inter, h], down is [h, moe_inter].
+    routed_one = (
+        _qbytes(moe_inter, h, "int4g128", group_size) * 2
+        + _qbytes(h, moe_inter, "int4g128", group_size)
+    )
+    # Measured beats computed: the caller reads the routed total off the
+    # shard headers, which needs no assumption about which layers carry
+    # experts or how the converter packed them.
+    routed = (int(routed_bytes) if routed_bytes > 0
+              else sparse_layers * experts * routed_one)
+
+    output_bytes = int(snapshot_bytes) if snapshot_bytes > 0 else routed * 2
+    # Whatever is not a routed expert stays resident: dense core, shared
+    # experts, embeddings, norms, routers, the indexer.
+    dense_shared = max(output_bytes - routed, 0)
+    # What the container holds and what the process holds are different
+    # numbers: unquantised weights shrink when they are loaded. The caller
+    # measures the resident width when it can; the container size is the
+    # conservative fallback.
+    resident_ram = int(resident_ram_bytes) if resident_ram_bytes > 0 else dense_shared
+
+    # KDA carries a per-head recurrent state and a short-convolution window.
+    recurrent_per_slot = linear_layers * kda_heads * kda_dim * kda_dim * 4
+    conv_per_slot = linear_layers * 3 * kda_heads * kda_dim * conv_k * 4
+    last_hidden_per_slot = h * 4
+    # MLA: one latent per token per full layer, plus any rope carried alongside.
+    kv_per_token = full_layers * (kv_lora + qk_rope) * kv_bytes
+
+    fixed_per_slot = recurrent_per_slot + conv_per_slot + last_hidden_per_slot
+    fixed_state = slots * fixed_per_slot
+    kv_state = slots * context * kv_per_token
+    snapshot_per_slot_at_context = fixed_per_slot + context * kv_per_token
+    sequential_switch_bytes_per_token = 2 * snapshot_per_slot_at_context
+    runtime_state = fixed_state + kv_state
+
+    ram_cache_bytes = int(ram_cache_gib * GIB)
+    ram_required = (
+        resident_ram + ram_cache_bytes + runtime_state + int(runtime_headroom_gib * GIB)
+    )
+    # The CPU engine keeps no dense weights on the GPU; a CUDA build would add
+    # them, so the VRAM line stays the conservative one.
+    vram_required = int(cuda_expert_gib * GIB)
+    disk_required = (
+        output_bytes + int(largest_source_shard_gib * GIB) + int(disk_reserve_gib * GIB)
+    )
+    expert_cache_slots = int(cuda_expert_gib * GIB) // routed_one if routed_one else 0
+    ram_expert_slots_per_layer = (
+        ram_cache_bytes // (sparse_layers * routed_one) if routed_one else 0
+    )
+
+    # A per-layer cache smaller than topk cannot hold one token's experts, so
+    # the engine splits every layer into blocks and evicts entries it is about
+    # to need again. Measured at cap 6 against topk 8: the parallel read never
+    # went wider than six and the tail two evicted part of the block just read.
+    experts_per_layer = (ram_cache_bytes // (sparse_layers * routed_one)
+                         if routed_one and sparse_layers else 0)
+    checks = {
+        "disk": disk_free_gib <= 0 or disk_required <= disk_free_gib * GIB,
+        "ram": ram_required <= system_ram_gib * GIB,
+        "vram": gpu_gib <= 0 or vram_required <= gpu_gib * GIB,
+        "expert_cache_holds_topk": experts_per_layer >= topk,
+    }
+    return {
+        "family": "glm-5.3",
+        "architecture": {
+            "hidden": h,
+            "layers": layers,
+            "full_layers": full_layers,
+            "linear_layers": linear_layers,
+            "experts": experts,
+            "topk": topk,
+            "expert_layers": sparse_layers,
+        },
+        "container_bytes": {
+            "routed_experts": routed,
+            "shared_experts": 0,
+            "dense_core": dense_shared,
+            "resident_ram": resident_ram,
+            "mtp": 0,
+            "total": output_bytes,
+            "measured": bool(snapshot_bytes > 0),
+        },
+        "state_bytes": {
+            "recurrent_per_slot": recurrent_per_slot,
+            "conv_per_slot": conv_per_slot,
+            "last_hidden_per_slot": last_hidden_per_slot,
+            "kv_per_token_per_slot": kv_per_token,
+            "snapshot_per_slot_at_context": snapshot_per_slot_at_context,
+            "sequential_switch_bytes_per_token_per_active_slot": (
+                sequential_switch_bytes_per_token
+            ),
+            "fixed_all_slots": fixed_state,
+            "kv_all_slots": kv_state,
+            "total": runtime_state,
+        },
+        "tier_plan": {
+            "dense_shared_bytes": dense_shared,
+            "routed_expert_bytes": routed_one,
+            "expert_cache_slots": expert_cache_slots,
+            "ram_expert_slots_per_layer": ram_expert_slots_per_layer,
+            "experts_per_layer": experts_per_layer,
+            "topk": topk,
+        },
+        "requirements_bytes": {
+            "ram": ram_required,
+            "vram": vram_required,
+            "disk": disk_required,
+        },
+        "checks": checks,
+    }
+
+
 def plan_resources(
     config: Mapping[str, Any],
     *,
@@ -50,8 +246,29 @@ def plan_resources(
     disk_reserve_gib: float = 20.0,
     runtime_headroom_gib: float = 2.0,
     include_mtp: bool = True,
+    snapshot_bytes: int = 0,
+    routed_bytes: int = 0,
+    resident_ram_bytes: int = 0,
 ) -> dict[str, Any]:
     """Return conservative container and runtime resource estimates."""
+    if _is_glm53(config):
+        return plan_resources_glm53(
+            config,
+            slots=slots,
+            context=context,
+            kv_bytes=kv_bytes,
+            cuda_expert_gib=cuda_expert_gib,
+            ram_cache_gib=ram_cache_gib,
+            system_ram_gib=system_ram_gib,
+            gpu_gib=gpu_gib,
+            disk_free_gib=disk_free_gib,
+            largest_source_shard_gib=largest_source_shard_gib,
+            disk_reserve_gib=disk_reserve_gib,
+            runtime_headroom_gib=runtime_headroom_gib,
+            snapshot_bytes=snapshot_bytes,
+            routed_bytes=routed_bytes,
+            resident_ram_bytes=resident_ram_bytes,
+        )
     c = config.get("text_config", config)
     h = int(c["hidden_size"])
     layers = int(c["num_hidden_layers"])

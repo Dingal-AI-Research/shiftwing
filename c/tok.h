@@ -43,6 +43,7 @@ typedef struct {
     hmap vocab;          /* stringa byte-level -> id */
     hmap merges;         /* "left\0right" -> rank */
     int ignore_merges;   /* tokenizer.json model.ignore_merges */
+    int max_digit_run;   /* pre_tokenizer \p{N}{1,K}: cifre per pezzo (Qwen 1, GLM 3) */
     int use_nfc;         /* tokenizer.json normalizer.type == NFC */
     char **id2str; int *id_added; int n_ids;   /* id -> stringa; id_added=1 se added-token (output letterale) */
     int *id_special;                            /* 1 = added-token con "special":true nel tokenizer:
@@ -96,6 +97,44 @@ static char *tk_read_file(const char *path, long *out_n){
 }
 static int cmp_sp_len(const void *a, const void *b){ return ((const Special*)b)->len - ((const Special*)a)->len; }
 
+/* Legge K da "\p{N}{1,K}" nel pattern del pre-tokenizer. Il pre_tokenizer puo'
+ * essere una Sequence, quindi la ricerca e' ricorsiva. Senza pattern, o senza
+ * quantificatore, vale 1: e' quello che scrivono i tokenizer Qwen. */
+static int tk_digit_run_pattern(const char *pattern){
+    const char *hit=strstr(pattern,"\\p{N}{1,");
+    if(!hit) return 1;
+    int k=atoi(hit+8);
+    if(k<1) k=1;
+    if(k>64) k=64;                /* un quantificatore assurdo non alloca nulla qui */
+    return k;
+}
+
+static int tk_digit_run(jval *node){
+    if(!node) return 1;
+    if(node->t==J_OBJ){
+        jval *pattern=json_get(node,"pattern");
+        if(pattern && pattern->t==J_OBJ){
+            jval *regex=json_get(pattern,"Regex");
+            if(regex && regex->t==J_STR){
+                int k=tk_digit_run_pattern(regex->str);
+                if(k>1) return k;
+            }
+        }
+        for(int i=0;i<node->len;i++){
+            int k=tk_digit_run(node->kids[i]);
+            if(k>1) return k;
+        }
+        return 1;
+    }
+    if(node->t==J_ARR){
+        for(int i=0;i<node->len;i++){
+            int k=tk_digit_run(node->kids[i]);
+            if(k>1) return k;
+        }
+    }
+    return 1;
+}
+
 static void tok_load(Tok *T, const char *path){
     memset(T,0,sizeof(*T));
     tk_build_bytemap(T);
@@ -107,8 +146,17 @@ static void tok_load(Tok *T, const char *path){
     jval *ignore_merges=json_get(model,"ignore_merges");
     jval *added=json_get(root,"added_tokens");
     jval *normalizer=json_get(root,"normalizer");
+    jval *pretok=json_get(root,"pre_tokenizer");
     if(!vocab||!merges){ fprintf(stderr,"tokenizer.json: missing model.vocab/merges\n"); exit(1); }
     T->ignore_merges = ignore_merges && ignore_merges->t==J_BOOL && ignore_merges->boolean;
+    /* Quante cifre stanno in un pezzo. Qwen scrive \p{N}, cioe' una cifra per
+     * pezzo; GLM-5.3 scrive \p{N}{1,3}. La differenza non e' cosmetica: con la
+     * regola sbagliata "19" diventa "1"+"9" invece del token unico che il
+     * modello ha visto in addestramento, e ogni numero in un diff -- numeri di
+     * riga, limiti, offset -- arriva tokenizzato diversamente. Misurato: 6412
+     * casi su 10000 divergevano dall'oracolo HF prima di questa riga.
+     * Si legge il pattern invece di assumerlo, e in mancanza resta 1. */
+    T->max_digit_run = tk_digit_run(pretok);
     if(normalizer && normalizer->t==J_OBJ){
         jval *type=json_get(normalizer,"type");
         T->use_nfc = type && type->t==J_STR && !strcmp(type->str,"NFC");
@@ -229,8 +277,13 @@ static void pretok_chunk(Tok *T, const unsigned char *p, int a, int b, int *out,
                 if(is_L(cp[j])||is_M(cp[j])){ while(j<n && (is_L(cp[j])||is_M(cp[j]))) j++; i=j; bpe_piece(T,p,off[start],off[i],out,no,max); continue; }
             }
         }
-        /* 3) Qwen: \p{N} (one numeric codepoint per piece) */
-        if(is_N(c)){ i++; bpe_piece(T,p,off[start],off[i],out,no,max); continue; }
+        /* 3) \p{N}{1,K}: K cifre per pezzo, K letto dal tokenizer (Qwen 1, GLM 3) */
+        if(is_N(c)){
+            int run=T->max_digit_run>0?T->max_digit_run:1;
+            i++;
+            while(i<n && is_N(cp[i]) && i-start<run) i++;
+            bpe_piece(T,p,off[start],off[i],out,no,max); continue;
+        }
         /* 4) Qwen: ' ?[^\s\p{L}\p{M}\p{N}]+[\r\n]*' */
         {
             int j=i;

@@ -1,4 +1,4 @@
-# colib Research Log
+# Shiftwing Research Log
 
 This directory contains focused experimental reports that support the phase
 papers and gate decisions.
@@ -387,3 +387,204 @@ The eighth makes the Ornith35 launcher's int4 default immune to ambient
 low-bit research variables and records a fresh three-turn, 64-token
 directional measurement at 40.416843 token/s sustained with zero host-MoE
 fallback.
+
+## Phase 11 reports
+
+1. [DeepSeek-V4 pinned specification and storage preflight](phase11_preflight_01_deepseek_v4_spec_and_storage.md)
+2. [DeepSeek-V4 native loader, CUDA correctness, and serving metrics](phase11_preflight_02_native_loader_cuda_and_metrics.md)
+3. [Host-storage recovery and Ornith35 reconstruction record](phase11_experiment_03_storage_recovery.md)
+4. [Pinned source fetch completion](phase11_experiment_04_pinned_fetch_completion.md)
+5. [Fresh Ornith397 control and retirement record](phase11_experiment_05_ornith397_control_and_retirement.md)
+6. [Real conversion, resume, and native-byte audit](phase11_experiment_06_real_conversion_and_validation.md)
+7. [First real 43-layer CUDA forward](phase11_experiment_07_first_real_forward.md)
+8. [Cold/warm real-model profile](phase11_experiment_08_cold_warm_profile.md)
+9. [Pinned/direct matched A/B](phase11_experiment_09_pinned_direct_ab.md)
+
+The first preflight freezes the DeepSeek-V4-Flash-0731 source identity and
+inference-critical configuration, adds a secret-redacted storage/hardware
+gate, and implements native-byte aligned conversion with atomic resumability.
+Its fixture suite passes, while the real 48-shard inventory, engine,
+correctness, quality, paired-performance, and promotion gates remain open.
+
+The second preflight records the dtype/shape-aware native segment loader, the
+complete scalar expert oracle, the SM120 grouped FP4 expert path with the
+official route-before-`w2` quantization boundary, and authoritative
+`colib.metrics` web consumption. These are fixture-level correctness results;
+the real 43-layer path, tensor-core performance qualification, and promotion
+remain gated.
+
+The third report identifies Windows host-volume exhaustion as the cause of the
+interrupted source fetch, preserves exact Ornith35 source/manifests/hashes, and
+records deletion of only its regenerable weights. An ext4 trim plus direct
+`CompactVirtualDisk` call reclaims 53,822,357,504 host bytes without enabling
+WSL's unsafe sparse mode; Ornith397 remains available for its fresh control.
+
+The fourth report closes the real pinned-source sub-gate. A third hash-bound
+attempt resumes from 58/62 and commits all 48 shards; a separate full-file pass
+accepts 72,317 tensors, all 43 base expert layers, all three bundled DSpark
+expert layers, and 166,878,536,440 indexed payload bytes. Full conversion is
+not authorized at the resulting host free-space level; Ornith397 remains
+protected until its fresh control is recorded.
+
+The fifth report completes five process-fresh current-branch Ornith397
+controls on the exact historical four-prompt subset. All automatic CUDA,
+resident-graph, output, and telemetry gates pass; median sustained decode is
+0.824033698 token/s and median trial TTFT is 43.508444 seconds. It preserves
+the exact trial/controller hashes, 122 base-shard hashes, 480 q3-shard hashes,
+source identity, environment, and reconstruction commands in compact tracked
+artifacts. This is the Ornith side only; no DeepSeek paired speedup or
+promotion is claimed.
+
+The sixth report closes Gate 11.0 on the real pinned model. A deliberate
+nine-segment interruption resumes to all 91 segments, and a dependency-bound
+validator compares all 166,878,536,440 native payload bytes with the source
+while rehashing 72,317 records and 166,881,088,004 aligned segment bytes. It
+also corrects the official BF16 confidence-head contract and makes full
+descriptor validation mandatory before future real conversion writes. Live
+runtime, quality, paired-performance, and promotion gates remain open.
+
+The seventh report records the first manifest-bound forward through all 43
+base layers of the real converted checkpoint. The SM120 runtime returns finite
+logits after loading exactly 258 routed experts and attributes every dense,
+storage, and CUDA-upload counter. This closes only the narrow real-weight
+forward smoke: initialization takes 334.191103 seconds and cold decode takes
+118.610136 seconds (0.008431 tok/s), so the performance gate fails and the
+default remains unchanged. The next experiment must isolate the warm cached
+decode and profile host work between CUDA calls before mux or paired
+qualification claims.
+
+The eighth report retains the process for a second token and adds per-layer,
+per-kernel-family, storage, and cache telemetry. The resident token improves
+from 134.734045 to 84.532588 seconds, but changes 230 of 258 routed experts
+and reads another 3.075 GB. Dense CUDA projections account for only 1.913
+seconds. The evidence therefore rejects cache sizing alone and selects pinned
+upload staging plus persistent direct I/O as the next controlled optimization.
+
+The ninth report A/B tests that intervention on the identical two-token
+sequence. Pinned staging and direct/persistent I/O preserve exact tokens and
+logits, halve initialization, and improve the cold token, but the resident
+token regresses from 84.532588 to 96.703443 seconds. The combined path is
+therefore rejected for decode qualification; a short storage-mode benchmark
+and coalesced expert extents are required before another full-model run.
+
+## Phase 12 reports
+
+1. [Ornith397 reactivation preflight](phase12_preflight_01_ornith397_reactivation.md)
+2. [Expanded-q4 route-atlas candidate](phase12_experiment_02_expanded_q4_route_atlas.md)
+3. [LocalForge carry-forward](phase12_handoff_03_localforge_carry_forward.md)
+4. [Ordered grouped-prefill expert I/O](phase12_experiment_04_ordered_prefill_expert_io.md)
+5. [Paired AB/BA performance controller](phase12_preflight_05_paired_ab_controller.md)
+6. [Frozen expert-map cold-start preload](phase12_preflight_06_frozen_expert_map_preload.md)
+7. [Storage-bound optimization candidates](phase12_preflight_07_storage_bound_optimization_candidates.md)
+8. [Long-context ingestion](phase12_preflight_08_long_context_ingestion.md)
+9. [Prefill compute candidates for 10-16k context](phase12_preflight_09_prefill_compute_candidates.md)
+10. [8,451-token best-stack long-context qualification](phase12_experiment_10_long_context_best_stack.md)
+11. [Batched full-attention prefill](phase12_experiment_11_batched_prefill_attention.md)
+
+The first Phase-12 report records the owner's DeepSeek rejection, revalidates
+the compact Ornith397 reconstruction bundle, and starts the exact pinned,
+shard-resumable reconstruction. LocalForge remains documentation-only
+carryover and is not modified.
+
+The second report records the first RTX 5070 Ti optimization candidate.
+Routed experts remain q3 on NVMe and in RAM, but atlas-selected VRAM copies
+expand to the faster q4 CUDA representation. Focused Python and SM120 CUDA
+correctness tests pass; the preregistered five-pair real-model comparison
+waits for byte-exact reconstruction.
+
+The third report fixes the future LocalForge integration contract without
+changing any LocalForge source, configuration, or deployment. It names the
+model identity, streaming metrics event, context and sampling defaults,
+session/cancellation requirements, and prompt-probe boundary that must be
+revalidated after Ornith performance qualification.
+
+The fourth report records a second reversible RTX 5070 Ti candidate. Grouped
+prefill preserves expert-id order and CPU q3 math while submitting up to four
+consecutive cold experts to the persistent ring together. A tiny exact-output
+control keeps 44 hits, 30 misses, and 300 reads unchanged while reducing ring
+submissions from 50 to 41. The default remains one expert per submission; the
+five-pair real Ornith397 TTFT protocol waits for reconstruction and cannot
+inherit the route-atlas result.
+
+The fifth report adds the controller the preregistered five-pair protocol
+requires and that the repository did not have. Pairs alternate AB/BA, optional
+priming trials absorb cold-cache warm-up, every artifact is hash-verified and
+resumable, and promotion needs identical outputs plus a 95% decode lower bound
+above 1.0 and a TTFT upper bound below 1.0. Seventeen focused tests pass and
+the extractor reproduces the preserved control aggregates exactly; no
+real-model result is claimed.
+
+The sixth report records the owner's cold-start preload design and measures
+what it can deliver. The cache holds 12.85% of experts covering 51.8% of
+routing mass, so preloading 80% of experts is not physically possible and the
+achievable target is filling every cache slot with the hottest experts. Once
+warm, cache contents are already within ~1.5 points of a perfect same-size
+selection, so the win is cold start rather than throughput: the 5.22-point
+first-trial gap. The engine's heat map, which previously never survived a run
+because `SIGTERM` skips `atexit`, now checkpoints on turn boundaries and can be
+frozen as a read-only benchmark input.
+
+The seventh report measures where decode time actually goes and proposes two
+candidates against it. Expert disk I/O is 70.2% of decode, 1,195 MB per token
+at an effective 1.40 GB/s with 5.11 MB per miss, so removing all disk time
+would still leave a 2.77 tok/s ceiling. Candidate 4 asks whether the read path
+leaves throughput unused and is gated on an O_DIRECT sweep before any work.
+Candidate 5 demotes the rarely-routed tail to 2-bit to cut bytes per miss by a
+third, at a quality cost that must clear the teacher-forcing and perplexity
+gates. A hardware note records that the board has two DIMM slots, both
+occupied, and what cache capacity each upgrade would buy.
+
+The eighth report addresses the owner's intent to load 10,000-16,000 tokens on
+the first request, which changes the dominant cost. A 38-token turn touches
+2,684 distinct experts, 8.7% of the total, but a 10k prompt saturates the
+expert set, so prefill must read nearly the whole 157 GB sidecar: about 137 GB
+of misses, a floor of roughly 98 seconds at the measured 1.40 GB/s. Expert-major
+grouped prefill turns out to be on by default already. The report adds prefix KV
+caching as candidate 6, rescopes the ordered-prefill flag to long context, and
+notes that the frozen preload helps far less here because prefill needs every
+expert regardless of heat.
+
+The ninth report measures the 10-16k reviewer target and plans against it. Time
+to first token is 11.2 minutes at 2,335 tokens and 33.0 minutes at 8,451, with
+16k projecting past an hour, so the gap to a 10-minute budget is 4x to 7x.
+Prefill is 91% compute: cold-expert matmul on the host is 14.0 minutes, the 45
+linear-attention layers 9.0, the 15 full-attention layers 6.8, and disk only
+3.0 and flat past ~2k tokens. It records the split timers and recorded CUDA
+flags that make the three candidates testable, including why environment
+variables could not work, and withdraws an attention fix that would have moved
+work off the GPU.
+
+The tenth report qualifies the stacked long-context configuration on the frozen
+8,451-token fixture. Time to first token falls from 32m57.830s to 19m19.300s,
+41.3853% lower, with byte-identical output and the load pipeline hiding 94.91%
+of producer load time behind consumer compute. It is a single stacked arm
+against a preserved baseline, not a factorial attribution, and it misses the
+strict 18-minute threshold by 79.299940 seconds.
+
+The eleventh report reopens the attention candidate the ninth had closed.
+Prefill was calling the single-token decode path once per position, launching 32
+blocks on a 70-multiprocessor device at about 0.1% of roofline. Batching the
+rows without touching the arithmetic cuts full attention 9.709x on the real
+model, from 421.850426 to 43.450325 seconds, and lowers TTFT 33.75% from
+19m19.300s to 12m48.086s with byte-identical output. Attention is the only stage
+that moves materially, making it a cleaner attribution than the stacked
+best-stack arm. It also finds that the attention score buffer overflowed the
+48 KB shared-memory cap at position 12,256, which disabled CUDA for the whole
+run and made the 10-16k target workload unservable. The first full-model attempt
+was a negative result in which the new code never executed; it is preserved and
+reported.
+
+## GLM-5.3-Flash
+
+1. [Engine qualification and LocalForge wiring](glm53_flash_engine_qualification.md)
+
+The deep review lane moves off Ornith-397B, which was proven correct on the
+review task and then measured at 139 minutes for a single 16K review. The GLM
+engine is checked against a fixture from HuggingFace's own `Glm5NextTextModel`
+and keeps its tokens exact at int4 -- the property Qwen3.8-Flash-Next lacked --
+and the converter's on-disk format, the failure point of the Qwen attempt, is
+checked rather than assumed. Four faults were found on the way, three of them
+in wiring rather than in the model: no build rule, a link that survived only
+because the compiler deleted the call, a settings normaliser that silently
+discarded every colib lane but Ornith, and an engine budget knob whose name
+differs per engine. Speed on the real checkpoint is still unmeasured.

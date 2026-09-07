@@ -89,13 +89,19 @@ TEST_BINS = tests/test_json$(EXE) tests/test_st$(EXE) tests/test_st_pread$(EXE) 
             tests/test_decode_batch$(EXE) tests/test_compat_direct$(EXE) \
             tests/test_deltanet$(EXE) tests/test_gqa_rope$(EXE) tests/test_router$(EXE) \
             tests/test_quant_matmul$(EXE) tests/test_gdn_chunk$(EXE) tests/test_gdn_slots$(EXE) \
-            tests/test_attn_slots$(EXE) tests/test_hybrid_slots$(EXE)
+            tests/test_attn_slots$(EXE) tests/test_attn_prefill$(EXE) \
+            tests/test_hybrid_slots$(EXE) tests/test_hyper_connection$(EXE) \
+            tests/test_ple_ngram$(EXE) tests/test_qsa_indexer$(EXE) \
+            tests/test_qwen4_exp_config$(EXE) tests/test_ple_layer$(EXE) \
+            tests/test_resident_qwen4_exp$(EXE)
 TEST_BINS += tests/test_resident_model$(EXE) tests/test_prefill_pipeline$(EXE)
+TEST_BINS += tests/test_tok_digit_run$(EXE)
 
-all: qwen$(EXE)
+all: qwen$(EXE) glm53$(EXE)
 
 ifneq ($(EXE),)
 qwen: qwen$(EXE)
+glm53: glm53$(EXE)
 endif
 
 # Config stamp: make tracks file timestamps, not flag changes; record the
@@ -110,6 +116,13 @@ endif
 qwen$(EXE): qwen.c st.h uring.h json.h tok.h tok_unicode.h tok_nfc.h compat.h grammar.h tier.h decode_batch.h serve_mux.h serve_scheduler.h $(CUDA_OBJ) .build-config
 	$(CC) $(CFLAGS) qwen.c $(CUDA_OBJ) -o qwen$(EXE) $(LDFLAGS)
 
+# GLM-5.3-Flash engine. Separate binary, not linked into qwen: the two engines
+# have their own Cfg/Layer/forward and only share the leaf headers. Keeping them
+# apart means GLM work cannot destabilise the lane that is serving reviews.
+glm53$(EXE): glm53.c st.h json.h tok.h tok_unicode_o200k.h compat.h quant.h cli_args.h \
+             glm53_compat.h hyper_connections.h delta_attention.h sparse_index.h vision_tower.h .build-config
+	$(CC) $(CFLAGS) glm53.c -o glm53$(EXE) $(LDFLAGS)
+
 backend_cuda.o: backend_cuda.cu backend_cuda.h .build-config
 	@command -v "$(NVCC)" >/dev/null 2>&1 || { echo "nvcc not found: set CUDA_HOME or NVCC" >&2; exit 1; }
 	"$(NVCC)" $(NVCCFLAGS) -c backend_cuda.cu -o $@
@@ -120,9 +133,10 @@ tests/test_backend_cuda$(EXE): tests/test_backend_cuda.c backend_cuda.o backend_
 tests/test_qwen_session_cuda$(EXE): tests/test_qwen_session.c qwen.c serve_mux.h serve_scheduler.h backend_cuda.o backend_cuda.h
 	$(CC) $(CFLAGS) $< backend_cuda.o -o $@ $(LDFLAGS)
 
-test-cuda: tests/test_backend_cuda$(EXE) tests/test_qwen_session_cuda$(EXE)
+test-cuda: tests/test_backend_cuda$(EXE) tests/test_qwen_session_cuda$(EXE) tests/test_attn_prefill_cuda$(EXE)
 	./tests/test_backend_cuda$(EXE)
 	SESSION_CUDA=1 ./tests/test_qwen_session_cuda$(EXE)
+	./tests/test_attn_prefill_cuda$(EXE)
 
 iobench$(EXE): iobench.c compat.h
 	$(CC) $(CFLAGS) iobench.c -o iobench$(EXE) $(LDFLAGS)
@@ -172,6 +186,24 @@ tests/test_gqa_rope$(EXE): tests/test_gqa_rope.c tests/fixture_util.h qwen.c
 tests/test_router$(EXE): tests/test_router.c tests/fixture_util.h qwen.c
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
+tests/test_hyper_connection$(EXE): tests/test_hyper_connection.c tests/fixture_util.h qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_ple_ngram$(EXE): tests/test_ple_ngram.c tests/fixture_util.h qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_qsa_indexer$(EXE): tests/test_qsa_indexer.c tests/fixture_util.h qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_qwen4_exp_config$(EXE): tests/test_qwen4_exp_config.c qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_ple_layer$(EXE): tests/test_ple_layer.c tests/fixture_util.h qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_resident_qwen4_exp$(EXE): tests/test_resident_qwen4_exp.c qwen.c serve_mux.h serve_scheduler.h
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
 tests/test_quant_matmul$(EXE): tests/test_quant_matmul.c qwen.c
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
@@ -183,6 +215,12 @@ tests/test_gdn_slots$(EXE): tests/test_gdn_slots.c qwen.c
 
 tests/test_attn_slots$(EXE): tests/test_attn_slots.c qwen.c
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_attn_prefill$(EXE): tests/test_attn_prefill.c qwen.c
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_attn_prefill_cuda$(EXE): tests/test_attn_prefill.c qwen.c backend_cuda.o backend_cuda.h
+	$(CC) $(CFLAGS) $< backend_cuda.o -o $@ $(LDFLAGS)
 
 tests/test_hybrid_slots$(EXE): tests/test_hybrid_slots.c qwen.c
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
@@ -202,11 +240,18 @@ tests/bench_layer_stack$(EXE): tests/bench_layer_stack.c qwen.c
 tests/bench_tier_io$(EXE): tests/bench_tier_io.c st.h uring.h json.h compat.h
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
+tests/bench_gqa_prefill$(EXE): tests/bench_gqa_prefill.c backend_cuda.o backend_cuda.h
+	$(CC) $(CFLAGS) $< backend_cuda.o -o $@ $(LDFLAGS)
+
 bench-qmat: tests/bench_qmat$(EXE)
 	./tests/bench_qmat$(EXE)
 
 bench-stack: tests/bench_layer_stack$(EXE)
 	./tests/bench_layer_stack$(EXE)
+
+# Needs CUDA=1: measures the full-attention prefill path at Ornith397 shapes.
+bench-gqa-prefill: tests/bench_gqa_prefill$(EXE)
+	./tests/bench_gqa_prefill$(EXE) $(T)
 
 bench-tier-io: tests/bench_tier_io$(EXE)
 	@test -n "$(SNAP)" || { echo "set SNAP=<converted snapshot>" >&2; exit 1; }
@@ -214,6 +259,9 @@ bench-tier-io: tests/bench_tier_io$(EXE)
 
 # tokenizer parity harness (Phase 1 gate): ./tests/test_tok tokenizer.json < cases
 tests/test_tok$(EXE): tests/test_tok.c tok.h tok_unicode.h tok_nfc.h
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+
+tests/test_tok_digit_run$(EXE): tests/test_tok_digit_run.c tok.h tok_unicode.h tok_nfc.h json.h
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
 test-c: $(TEST_BINS)
@@ -228,6 +276,34 @@ test-web: qwen$(EXE) web
 
 test-tokenizer: tests/test_tok$(EXE)
 	$(PYTHON) tests/test_tok_qwen.py --binary ./tests/test_tok$(EXE)
+
+# GLM-5.3 against the HuggingFace tiny oracle. The fixture is generated from
+# transformers' own Glm5NextTextModel, so this checks the engine against an
+# independent implementation rather than against itself. f32 proves the port;
+# int8/int4 measure what quantisation costs, and the tokens must stay exact at
+# every precision. Skips cleanly when the fixture has not been generated.
+GLM53_FIXTURE ?= glm53_tiny
+
+$(GLM53_FIXTURE)/ref.json:
+	$(PYTHON) tools/make_glm53_tiny.py --output $(GLM53_FIXTURE)
+
+# The converted fixture: quantised experts, so it streams and exercises the
+# expert cache. The f32 fixture keeps its experts resident and never reaches
+# that code at all.
+GLM53_CONVERTED ?= glm53_tiny_i4
+
+$(GLM53_CONVERTED)/model.safetensors: $(GLM53_FIXTURE)/ref.json
+	$(PYTHON) tools/convert_glm53.py --indir $(GLM53_FIXTURE) \
+	    --outdir $(GLM53_CONVERTED) --keep-source --min-free-c-gb 1
+	cp $(GLM53_FIXTURE)/config.json $(GLM53_FIXTURE)/tokenizer.json \
+	   $(GLM53_FIXTURE)/ref.json $(GLM53_CONVERTED)/
+
+test-glm53: glm53$(EXE) $(GLM53_FIXTURE)/ref.json $(GLM53_CONVERTED)/model.safetensors
+	$(PYTHON) tools/test_glm53_tiny.py --binary ./glm53$(EXE) --fixture $(GLM53_FIXTURE) --bits 32
+	$(PYTHON) tools/test_glm53_tiny.py --binary ./glm53$(EXE) --fixture $(GLM53_FIXTURE) --bits 8
+	$(PYTHON) tools/test_glm53_tiny.py --binary ./glm53$(EXE) --fixture $(GLM53_FIXTURE) --bits 4
+	$(PYTHON) tools/test_glm53_tiny.py --binary ./glm53$(EXE) --fixture $(GLM53_CONVERTED) --bits 32 --logit-tolerance 0.5
+	$(PYTHON) tools/test_glm53_cache.py --binary ./glm53$(EXE) --fixture $(GLM53_CONVERTED)
 
 test-docs:
 	$(PYTHON) tools/check_docs.py --root ..
@@ -252,7 +328,8 @@ check:
 	$(CHECK_CUDA_RUN)
 
 clean:
-	rm -f qwen$(EXE) iobench$(EXE) backend_cuda.o .build-config $(TEST_BINS) tests/test_tok$(EXE) tests/test_backend_cuda$(EXE) tests/test_qwen_session_cuda$(EXE) tests/bench_qmat$(EXE) tests/bench_layer_stack$(EXE)
+	rm -rf $(GLM53_CONVERTED)
+	rm -f qwen$(EXE) glm53$(EXE) iobench$(EXE) backend_cuda.o .build-config $(TEST_BINS) tests/test_tok$(EXE) tests/test_backend_cuda$(EXE) tests/test_qwen_session_cuda$(EXE) tests/test_attn_prefill_cuda$(EXE) tests/bench_qmat$(EXE) tests/bench_layer_stack$(EXE) tests/bench_gqa_prefill$(EXE)
 
 web:
 	cd ../web && npm ci && npm run build
@@ -266,4 +343,4 @@ install: qwen$(EXE) web
 	$(INSTALL) -m 644 tools/*.py $(DESTDIR)$(LIBEXECDIR)/tools/
 	cp -R ../web/dist/. $(DESTDIR)$(LIBEXECDIR)/web/dist/
 
-.PHONY: all qwen web test-c test-python test-web test-tokenizer test-docs test-source-package test-cuda test check bench-qmat bench-stack clean install
+.PHONY: all qwen glm53 web test-glm53 test-c test-python test-web test-tokenizer test-docs test-source-package test-cuda test check bench-qmat bench-stack bench-gqa-prefill clean install

@@ -1,0 +1,82 @@
+{
+  "schema": "colib.deepseek-v4.real-forward-smoke.v1",
+  "recorded_at": "2026-08-17T14:40:22+01:00",
+  "acceptance": {
+    "correctness_smoke": "pass",
+    "performance_gate": "fail",
+    "promotion_authorized": false,
+    "reason": "Cold initialization and decode are materially slower than the fresh Ornith397 control; warm-path profiling and real-model quality remain open."
+  },
+  "source": {
+    "repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+    "model_manifest_sha256": "468d29fd3262af88ec4c31ef29a94e62631387475917ec7bdb4da9d0441e4d86",
+    "records": 72317,
+    "segments": 91,
+    "base_layers": 43,
+    "dspark_layers": 3
+  },
+  "repository": {
+    "commit": "35d9ab86fa2b8f8acbf56c8438413dfb08f2a2a7",
+    "branch": "prefill-throughput-and-serve-fixes",
+    "worktree_clean": false
+  },
+  "build": {
+    "command": "make -C c CUDA=1 CUDA_ARCH=native deepseek_v4 test-cuda",
+    "binary_sha256": "19666f1188aeb498b0619c8dcdddcefd5db9d216ed670d007902818749c00b46",
+    "entrypoint_sha256": "3786a9aa4a225800a4ec16513d7f5d15136b3048e34d8896f49562cd811ee599",
+    "runtime_sha256": "72ee9cc05c61ca302cbba738f338dd5663b24cdc05db32530d10efc4f31800a9",
+    "dense_sha256": "62276d5ea3bad1cc73251d8078af0a37b78dee20fffd1f041be7a229e3e64ca3",
+    "tier_sha256": "69faa60f6bfdd23744ee091e6c735b892ee47a18adb8beff821de1f9c4e26083",
+    "cuda_source_sha256": "c460f682044bd85682a4efe277365583f40bae0c1fe8956689ff569d7f333304",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "cuda_toolkit": "12.9"
+  },
+  "hardware": {
+    "host": "AMD Ryzen 7 7700X",
+    "ram_gib": 29.4,
+    "gpu": "NVIDIA GeForce RTX 5070 Ti",
+    "gpu_sm": 120,
+    "gpu_memory_mib": 16303,
+    "driver": "591.86",
+    "environment": "WSL2 Linux 6.6.87.2-microsoft-standard-WSL2"
+  },
+  "command": "SNAP=/home/dinga/Projects/colib/c/deepseek-v4-flash-0731 CTX=16384 DSV4_SMOKE_CONTEXT=128 DSV4_SMOKE_TOKEN=0 COLI_CUDA=1 RAM_GB=6 CUDA_EXPERT_GB=4 c/deepseek_v4",
+  "environment": {
+    "CTX": 16384,
+    "DSV4_SMOKE_CONTEXT": 128,
+    "DSV4_SMOKE_TOKEN": 0,
+    "COLI_CUDA": 1,
+    "RAM_GB": 6,
+    "CUDA_EXPERT_GB": 4,
+    "DSPARK": "auto"
+  },
+  "result": {
+    "status": "pass",
+    "input_token": 0,
+    "top_token": 5,
+    "top_logit": 16.258379,
+    "context": 128,
+    "init_seconds": 334.191103,
+    "decode_seconds": 118.610136,
+    "tokens_per_second": 0.008431,
+    "read_bytes": 12295250140,
+    "dense_payload_bytes": 8845959388,
+    "expert_capacity_per_layer": 10,
+    "cpu_cache_hits": 0,
+    "cpu_cache_misses": 258,
+    "cuda_enabled": true,
+    "cuda_dense_calls": 667,
+    "cuda_expert_hits": 0,
+    "cuda_expert_misses": 258,
+    "cuda_upload_bytes": 12297913712,
+    "oom": false
+  },
+  "controls": {
+    "cpu_native_suite": "pass",
+    "cuda_native_suite": "pass",
+    "load_only_contract": "pass",
+    "fresh_ornith397_median_tokens_per_second": 0.8240336977370674,
+    "fresh_ornith397_median_trial_ttft_seconds": 43.50844407749992
+  }
+}

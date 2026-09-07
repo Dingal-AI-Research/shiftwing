@@ -42,6 +42,12 @@ def _runtime_env(args: argparse.Namespace) -> dict[str, str]:
         }
     )
     env["CTX"] = str(args.context)
+    # Same number, in the name each engine reads. qwen takes CTX; glm53 reads
+    # GLM53_MAXT for its KV slot depth and otherwise silently uses 8192, so a
+    # lane asking for 16k would quietly get half of it and truncate the diff it
+    # was given. Setting both keeps one source of truth; an engine that does not
+    # know a name ignores it.
+    env["GLM53_MAXT"] = str(args.context)
     if getattr(args, "session_dir", None):
         env["SESSION_DIR"] = str(Path(args.session_dir).expanduser().resolve())
     if getattr(args, "cuda", False):
@@ -61,6 +67,10 @@ def _runtime_env(args: argparse.Namespace) -> dict[str, str]:
         env["Q3_NATIVE"] = "1"
     if getattr(args, "ram_gb", None) is not None:
         env["RAM_GB"] = str(args.ram_gb)
+        # glm53 calls the same budget GLM53_EXPERT_GB. Left unset it sizes
+        # itself from MemAvailable, which is a reasonable default but ignores
+        # the budget the caller actually asked for.
+        env["GLM53_EXPERT_GB"] = str(args.ram_gb)
     if getattr(args, "cuda_expert_gb", None) is not None:
         env["CUDA_EXPERT_GB"] = str(args.cuda_expert_gb)
     if getattr(args, "q3_route_atlas", False):

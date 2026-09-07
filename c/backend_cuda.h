@@ -15,6 +15,8 @@ int coli_cuda_create(ColiCuda **out, int device);
 void coli_cuda_destroy(ColiCuda *ctx);
 const char *coli_cuda_device_name(const ColiCuda *ctx);
 int coli_cuda_compute_capability(const ColiCuda *ctx, int *major, int *minor);
+int coli_cuda_device_limits(const ColiCuda *ctx, int *sm_count,
+                            int *shared_per_block);
 int coli_cuda_async_alloc_enabled(const ColiCuda *ctx);
 int coli_cuda_memory_info(ColiCuda *ctx, size_t *free_bytes,
                           size_t *total_bytes);
@@ -195,6 +197,18 @@ int coli_cuda_gqa_decode_q4_f16(
     const void *o_q, const float *o_s, int o_fmt, int o_rb, int o_ng,
     const float *q_norm, const float *k_norm, float *k_cache,
     float *v_cache, int position, int hidden, int query_heads,
+    int kv_heads, int head_dim, int rotary_dim, int group_size,
+    float theta, float eps);
+/* Batched prefill: `rows` consecutive positions starting at `base`, in one
+ * call instead of one call per token. Bit-identical to the per-token loop. */
+int coli_cuda_gqa_prefill_q4_f16(
+    ColiCuda *ctx, float *out, const float *x, int rows, int base,
+    const unsigned char *q_q, const float *q_s, int q_rb, int q_ng,
+    const unsigned char *k_q, const float *k_s, int k_rb, int k_ng,
+    const unsigned char *v_q, const float *v_s, int v_rb, int v_ng,
+    const void *o_q, const float *o_s, int o_fmt, int o_rb, int o_ng,
+    const float *q_norm, const float *k_norm, float *k_cache,
+    float *v_cache, int max_seq, int hidden, int query_heads,
     int kv_heads, int head_dim, int rotary_dim, int group_size,
     float theta, float eps);
 int coli_cuda_gqa_slots_q4_f16(

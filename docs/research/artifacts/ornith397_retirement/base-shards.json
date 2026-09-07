@@ -1,0 +1,878 @@
+{
+  "conversion_state_sha256": "cf00084d2e534bed7f1fa8eb5de5fef5fd4dcc857737cfd6a78fa81f397ed67a",
+  "quantization_sha256": "b0623a5f83d3890cbb095bbec25f0aeaec62edbc804fae918a2051189d1933a2",
+  "recorded_at": "2026-08-16T19:42:12.021838+00:00",
+  "schema": "colib.ornith397-base-shards.v1",
+  "shards": {
+    "model-00001-of-00122.safetensors": {
+      "data_bytes": 1103825927,
+      "file_size": 1103829815,
+      "output": "model-00001-of-00122.safetensors",
+      "sha256": "beb6a1f75e3fd02cbeccac0490f739f2b13f60edd49c0c13a14570c1ff85707c",
+      "tensor_count": 30
+    },
+    "model-00002-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282120296,
+      "output": "model-00002-of-00122.safetensors",
+      "sha256": "ab816d4ec9014d1a85521aab4f850b51907088116e8dbfbc5b1f08bdf53e16bc",
+      "tensor_count": 3072
+    },
+    "model-00003-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226793358,
+      "output": "model-00003-of-00122.safetensors",
+      "sha256": "0307fbed6f29a661226ad2a284aff099ffa9607be66568fc1136b43814775f6e",
+      "tensor_count": 1564
+    },
+    "model-00004-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282120296,
+      "output": "model-00004-of-00122.safetensors",
+      "sha256": "864ae3b5d76a42d0581299f6b605ddfae5015cb304de23ec8766dcbf37655536",
+      "tensor_count": 3072
+    },
+    "model-00005-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226793358,
+      "output": "model-00005-of-00122.safetensors",
+      "sha256": "7e0234d99aa520f04a9d50b5b15936627818f5601bd8fddfcf8f1dae9932848a",
+      "tensor_count": 1564
+    },
+    "model-00006-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282120296,
+      "output": "model-00006-of-00122.safetensors",
+      "sha256": "5edff0f3ee8b43ca7e32999c259371b2712774f6bcd1c48980619ac49734d614",
+      "tensor_count": 3072
+    },
+    "model-00007-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233560791,
+      "output": "model-00007-of-00122.safetensors",
+      "sha256": "065e894f501a64dee8dec9ad4dd0a1904df9d84eabfacc6aba3344b97fb47cb7",
+      "tensor_count": 1563
+    },
+    "model-00008-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282120296,
+      "output": "model-00008-of-00122.safetensors",
+      "sha256": "ff659dad8ff0c1db91c0026bd9c53101b66a7333fe32a575d5d53a5c5d67d375",
+      "tensor_count": 3072
+    },
+    "model-00009-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226793358,
+      "output": "model-00009-of-00122.safetensors",
+      "sha256": "f2616b03496380aff417de4daf76c5a959e2bced9b9f3895eb437290ab914e33",
+      "tensor_count": 1564
+    },
+    "model-00010-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282120296,
+      "output": "model-00010-of-00122.safetensors",
+      "sha256": "8f165e3bd85c582332bd764df93a4e6d7dbb480addfa5810d464c6540b29da95",
+      "tensor_count": 3072
+    },
+    "model-00011-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226793358,
+      "output": "model-00011-of-00122.safetensors",
+      "sha256": "893c20c46237110ee1fc0fa441080b62023914494eb4354c8a44e273e55ced9d",
+      "tensor_count": 1564
+    },
+    "model-00012-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282120296,
+      "output": "model-00012-of-00122.safetensors",
+      "sha256": "4021b47f9f444947fd50c738c39f47a6d33b559a8f9cfe63a1be5f784ad9832e",
+      "tensor_count": 3072
+    },
+    "model-00013-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226793358,
+      "output": "model-00013-of-00122.safetensors",
+      "sha256": "df9f71d2cc78fef1176035f5dc84f05a35e8e63a10068050c07297643edd6bfe",
+      "tensor_count": 1564
+    },
+    "model-00014-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282120296,
+      "output": "model-00014-of-00122.safetensors",
+      "sha256": "2b5c9d611fb418b11b2a488a3dac38a2c1b117fad47a006219553a36f34c9bf9",
+      "tensor_count": 3072
+    },
+    "model-00015-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233560791,
+      "output": "model-00015-of-00122.safetensors",
+      "sha256": "5f53b5d79cbb87b174212d12bba943b2de6c06e4c28afe461145b445bb1ce0d4",
+      "tensor_count": 1563
+    },
+    "model-00016-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282120296,
+      "output": "model-00016-of-00122.safetensors",
+      "sha256": "3b3c2ae9044fb1a6d3edce2d123e37aa0e2f97981dda59d99d61426e66fea39d",
+      "tensor_count": 3072
+    },
+    "model-00017-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226793358,
+      "output": "model-00017-of-00122.safetensors",
+      "sha256": "8ce90536556d204c6e6be9156f79bf0c05d876a93cfc34c31040755c9499f376",
+      "tensor_count": 1564
+    },
+    "model-00018-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282120296,
+      "output": "model-00018-of-00122.safetensors",
+      "sha256": "37648bc2f4ed67f29b1889468ceef4fdfd3aa50196b8e12b6103669a5b38496c",
+      "tensor_count": 3072
+    },
+    "model-00019-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226793358,
+      "output": "model-00019-of-00122.safetensors",
+      "sha256": "eba795d1aa1ea465044e909d6220f5bf9661897962ba7c3337d5e235efb58895",
+      "tensor_count": 1564
+    },
+    "model-00020-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282120296,
+      "output": "model-00020-of-00122.safetensors",
+      "sha256": "e3bb1b5ee5c3a92f6fd291159776484cb9271be34cf1e42928cc6661cc86dae7",
+      "tensor_count": 3072
+    },
+    "model-00021-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226793662,
+      "output": "model-00021-of-00122.safetensors",
+      "sha256": "4e83438ff2a42eed6b4e927d2c029f58fec59ef7b6b2c09a4016dcf4771654bd",
+      "tensor_count": 1564
+    },
+    "model-00022-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00022-of-00122.safetensors",
+      "sha256": "998f6f3d21f6fedb108aeb9772c667f4f99e77d741fae73c5e99115ae2ac4253",
+      "tensor_count": 3072
+    },
+    "model-00023-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00023-of-00122.safetensors",
+      "sha256": "57b70faba1406cbddcdcae301feaf022e19e910fa35718c02cfa08fe461aafe3",
+      "tensor_count": 1563
+    },
+    "model-00024-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00024-of-00122.safetensors",
+      "sha256": "d32ab770597fc5db04c8c600a82da163aa4b48ffa767f95d3b0722db54728c25",
+      "tensor_count": 3072
+    },
+    "model-00025-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00025-of-00122.safetensors",
+      "sha256": "cc13f0ac11e903ac29fe14174f4b52d3552d867f5846c0d5916e2409e4c82797",
+      "tensor_count": 1564
+    },
+    "model-00026-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00026-of-00122.safetensors",
+      "sha256": "e8da6d6c966c9295d94d0eaca40a1b900879f4b38b02da24c75699978b8ca3a0",
+      "tensor_count": 3072
+    },
+    "model-00027-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00027-of-00122.safetensors",
+      "sha256": "f25c9a1c1d4bd31d89319ca48516acbf83dc2e76c48f2573e697c0cc8d9068d9",
+      "tensor_count": 1564
+    },
+    "model-00028-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00028-of-00122.safetensors",
+      "sha256": "fd82130f6f76e9d454b44d9add2ce04c8c541f02d3ef9c0b1f51e1c18b027285",
+      "tensor_count": 3072
+    },
+    "model-00029-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00029-of-00122.safetensors",
+      "sha256": "a828828fdca20881286691c56f8611cc9f601530945e192967807838a67b23be",
+      "tensor_count": 1564
+    },
+    "model-00030-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00030-of-00122.safetensors",
+      "sha256": "b386f60d6af2fccc228cf16bc217bf38ca0a07275e35031c889ef3ae9912a875",
+      "tensor_count": 3072
+    },
+    "model-00031-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00031-of-00122.safetensors",
+      "sha256": "609f7a1f576664fd5735758047cc5ede2cbd55d00d084e2b14b4f46ba2196575",
+      "tensor_count": 1563
+    },
+    "model-00032-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00032-of-00122.safetensors",
+      "sha256": "8c212df0a10d7b74b01c50440c7df38279265151e9fb8ab2da760088939cd089",
+      "tensor_count": 3072
+    },
+    "model-00033-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00033-of-00122.safetensors",
+      "sha256": "791633d11cd6e31cb6b68c413f0cbb2c618283016b449a7c60736de9c1eb7782",
+      "tensor_count": 1564
+    },
+    "model-00034-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00034-of-00122.safetensors",
+      "sha256": "4af5fa61168c84dcdb4c5a326a04eb47d396129fdb3d5635b4affe2ac451bd6a",
+      "tensor_count": 3072
+    },
+    "model-00035-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00035-of-00122.safetensors",
+      "sha256": "fe78ce81af9ec100d1a509b7547a86163aacdfc877073c7311267cbe72a05b6d",
+      "tensor_count": 1564
+    },
+    "model-00036-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00036-of-00122.safetensors",
+      "sha256": "59e082c2ecc59c25df90218820a2b836c6d52cf34678f22f022bcb32823b8c36",
+      "tensor_count": 3072
+    },
+    "model-00037-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00037-of-00122.safetensors",
+      "sha256": "b92b2551b49f42bd0b506b0e989be159691a885fd4d8c7bc7b6e9089289ea013",
+      "tensor_count": 1564
+    },
+    "model-00038-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00038-of-00122.safetensors",
+      "sha256": "8d484e856ca901cf8c5268aa3d5d526911833e1910b467462ddf9d2f5e38c787",
+      "tensor_count": 3072
+    },
+    "model-00039-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00039-of-00122.safetensors",
+      "sha256": "6e26fe3363a50836587baa28ab9a9e883992727c090807444252b915ff312e04",
+      "tensor_count": 1563
+    },
+    "model-00040-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00040-of-00122.safetensors",
+      "sha256": "aaebe1c2320ff3aef152a4dcfed33300ea02ad6560da9b0c0caf3f4360bba3c6",
+      "tensor_count": 3072
+    },
+    "model-00041-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00041-of-00122.safetensors",
+      "sha256": "d712fd05f8ef0637c8d4329750f04f13542484bc5c02d1961d3fed8e05ab2579",
+      "tensor_count": 1564
+    },
+    "model-00042-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00042-of-00122.safetensors",
+      "sha256": "22e4ccf5f29ee8464b6b10cee6c17a041c62c2056f97edbcf6a6d258cae1577c",
+      "tensor_count": 3072
+    },
+    "model-00043-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00043-of-00122.safetensors",
+      "sha256": "2e53f7974cc3d91bbc9c171fb489acfbe36fcdf7684f0f4dd9cc6e3b9191e6d8",
+      "tensor_count": 1564
+    },
+    "model-00044-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00044-of-00122.safetensors",
+      "sha256": "c2e282e44bbe9f2d030468434ab37d93c08228b632d05063204d3b009fc1d3ed",
+      "tensor_count": 3072
+    },
+    "model-00045-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00045-of-00122.safetensors",
+      "sha256": "a5bed6d2c536d2acb3859565790d157a37a43d1d1f6162abd9ebed6d3ab9d36a",
+      "tensor_count": 1564
+    },
+    "model-00046-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00046-of-00122.safetensors",
+      "sha256": "8e191acec00e39916c7b904ba9ebeaabce71c00f4b92ca60b33cebe7b98fffd6",
+      "tensor_count": 3072
+    },
+    "model-00047-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00047-of-00122.safetensors",
+      "sha256": "5bc338aafd570f34a0568388363435518f7b1874b5368f94c5f4200c9200699d",
+      "tensor_count": 1563
+    },
+    "model-00048-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00048-of-00122.safetensors",
+      "sha256": "49daba2398720f192adfab948522763e3d4d4e0072d8a440a373785ea14ef088",
+      "tensor_count": 3072
+    },
+    "model-00049-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00049-of-00122.safetensors",
+      "sha256": "7cd1a1e4b1bcba14dc34fdc1c70edb3e6d7d214e4252ab0951d797385d877055",
+      "tensor_count": 1564
+    },
+    "model-00050-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00050-of-00122.safetensors",
+      "sha256": "d775251b729ef1a536e324e2d27080b1201b32491d34e382b6d4941626f5fe3e",
+      "tensor_count": 3072
+    },
+    "model-00051-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00051-of-00122.safetensors",
+      "sha256": "08248cd5680fb27bfc0f2084d717f39ec54ce914177dc3427ee2646781f91900",
+      "tensor_count": 1564
+    },
+    "model-00052-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00052-of-00122.safetensors",
+      "sha256": "c1df92ade9c4ce6dee5243deeb72e29d676079b36804fa1992a0c15cf4b3eb89",
+      "tensor_count": 3072
+    },
+    "model-00053-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00053-of-00122.safetensors",
+      "sha256": "d1b7964d806a9e7ea559e0f1fb1ea30128f44b86ffea3b43413fdfe4242b1762",
+      "tensor_count": 1564
+    },
+    "model-00054-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00054-of-00122.safetensors",
+      "sha256": "d76e7e41102b8627d883cf7eba0f49d7dd39ca9f9a9b65ecedd7199ff1e58cbd",
+      "tensor_count": 3072
+    },
+    "model-00055-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00055-of-00122.safetensors",
+      "sha256": "91f069e94cf217440f1c833263eb74da7f9c093aa2fb315992f8e3535bbc1259",
+      "tensor_count": 1563
+    },
+    "model-00056-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00056-of-00122.safetensors",
+      "sha256": "df185b8e3a1740f7c06a16c11fc867b297ca930a17b0cf4a07db8203bd0f0919",
+      "tensor_count": 3072
+    },
+    "model-00057-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00057-of-00122.safetensors",
+      "sha256": "c60709d7b794bb005afa9d885d6d4098db88533ac82c1e64192cd515f3d19b37",
+      "tensor_count": 1564
+    },
+    "model-00058-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00058-of-00122.safetensors",
+      "sha256": "784495031216c8462936ca5981eb482250efad52c269489fb317e6ffd90ce129",
+      "tensor_count": 3072
+    },
+    "model-00059-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00059-of-00122.safetensors",
+      "sha256": "32366ac80458e83854c0bd09420d85acdc9142a2598259e119c9eb898c0f885b",
+      "tensor_count": 1564
+    },
+    "model-00060-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00060-of-00122.safetensors",
+      "sha256": "8a397b6b919dc66418cef802b15e2e2626abdaec0c7639064287e2a4627143ee",
+      "tensor_count": 3072
+    },
+    "model-00061-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00061-of-00122.safetensors",
+      "sha256": "f54d4fdb45d3b035aaf547db5bb35eb713e7472976fb0babaea054edc3c8fbfc",
+      "tensor_count": 1564
+    },
+    "model-00062-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00062-of-00122.safetensors",
+      "sha256": "64252e8f25c71e32107c6eadec71466e06df6f930496f1414c794dd3bb204c2c",
+      "tensor_count": 3072
+    },
+    "model-00063-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00063-of-00122.safetensors",
+      "sha256": "575d08a2c5e65915d7d1824215da6d4adf74fbbe731fb4965ed7a45d1e1b4e8f",
+      "tensor_count": 1563
+    },
+    "model-00064-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00064-of-00122.safetensors",
+      "sha256": "b3dc806436034c8b86dacfff74e353833a6b2a80476c06a561073b04ae4b0a4f",
+      "tensor_count": 3072
+    },
+    "model-00065-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00065-of-00122.safetensors",
+      "sha256": "b7b986c6e19c40b2a0b9436d7cda084508595f80774bcdfcdcca9102793dbd01",
+      "tensor_count": 1564
+    },
+    "model-00066-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00066-of-00122.safetensors",
+      "sha256": "8f0011e56294039cb44b2d58a2162e15349c936323d24ca561ed77ca02c16508",
+      "tensor_count": 3072
+    },
+    "model-00067-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00067-of-00122.safetensors",
+      "sha256": "63a2b1262ea56eb52d4f707aededa3e8a75b818ecc9fa5977eb8401436ed5854",
+      "tensor_count": 1564
+    },
+    "model-00068-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00068-of-00122.safetensors",
+      "sha256": "cb9fc900f2751db684bb1d4904360adf9cba46139326dc10ae121ecac892d512",
+      "tensor_count": 3072
+    },
+    "model-00069-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00069-of-00122.safetensors",
+      "sha256": "5e3b332cdb7dca3816a34b2b6a9263adfc1cc8d4785c7ee0dfd5ad1fabd117c4",
+      "tensor_count": 1564
+    },
+    "model-00070-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00070-of-00122.safetensors",
+      "sha256": "fe74abeb2658151e60935fc12a0c46b97d2d965376cde93768e368dd059a06af",
+      "tensor_count": 3072
+    },
+    "model-00071-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00071-of-00122.safetensors",
+      "sha256": "608cb79c8a41880f212cdf41565b79a514b54d9542eb555ac7284e1a0531c1bf",
+      "tensor_count": 1563
+    },
+    "model-00072-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00072-of-00122.safetensors",
+      "sha256": "fe4b2db033ce5a4c4df199275f9ac884c482244d5ac98af4d064213105de5f7e",
+      "tensor_count": 3072
+    },
+    "model-00073-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00073-of-00122.safetensors",
+      "sha256": "d5e35b0e25f424d18b518762d81af4b969922af9f893fc2c828660f927a805e8",
+      "tensor_count": 1564
+    },
+    "model-00074-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00074-of-00122.safetensors",
+      "sha256": "1107a3d4e5a1824cdd92cf43584ae4a52b212f17a1b81b29b55dcccf487a9495",
+      "tensor_count": 3072
+    },
+    "model-00075-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00075-of-00122.safetensors",
+      "sha256": "c0a340fa207fb1094e82db016e308e955bdf1ec28ab926eaa705bd5c0856d252",
+      "tensor_count": 1564
+    },
+    "model-00076-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00076-of-00122.safetensors",
+      "sha256": "d685d2a0fa338f643578cfec4a5b45a90d0d771c072c40a6f109d9571d24e046",
+      "tensor_count": 3072
+    },
+    "model-00077-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00077-of-00122.safetensors",
+      "sha256": "926d535775b58460b3432f6c2014a272e6062c7a4287d69da5d9a8b9b5cbb6ae",
+      "tensor_count": 1564
+    },
+    "model-00078-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00078-of-00122.safetensors",
+      "sha256": "42e1af43b18252ad99f893dedfd1ccea1f042765eca274a0d921530660b59ce6",
+      "tensor_count": 3072
+    },
+    "model-00079-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00079-of-00122.safetensors",
+      "sha256": "6286630c0b05fa0291cc2a98140c2ce1feb4af70b51d90900907d43285e84af7",
+      "tensor_count": 1563
+    },
+    "model-00080-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00080-of-00122.safetensors",
+      "sha256": "605bc553b540a659ab212269ed3f590a5b11cc61c89efa9682ef377357a2a55e",
+      "tensor_count": 3072
+    },
+    "model-00081-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00081-of-00122.safetensors",
+      "sha256": "afc3446850f20f9c2b721e46bb054efd6624b34a250dd09f4a59af03077680dc",
+      "tensor_count": 1564
+    },
+    "model-00082-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00082-of-00122.safetensors",
+      "sha256": "3e76c6eee9d39958cafa0f07a27fb13a08940089268cc66e6069ae8ff1762d26",
+      "tensor_count": 3072
+    },
+    "model-00083-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00083-of-00122.safetensors",
+      "sha256": "17e730a46a46ee1e6b75af20d74e7a1c03420170b7e01bd5fd4e9e6de2a8a9b3",
+      "tensor_count": 1564
+    },
+    "model-00084-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00084-of-00122.safetensors",
+      "sha256": "4474de6ee7301f08a9f9d311f1de17c0b099fb432f77a4e63d1901a4c81a9b5b",
+      "tensor_count": 3072
+    },
+    "model-00085-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00085-of-00122.safetensors",
+      "sha256": "b3f39b7a3ccf841c83e73b0b282354cca0eda1ed8e612e0518d8d24f5e62fa80",
+      "tensor_count": 1564
+    },
+    "model-00086-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00086-of-00122.safetensors",
+      "sha256": "4be336418109756cbdba436820227d09afa0edd3474aa1062f9f216016203bc6",
+      "tensor_count": 3072
+    },
+    "model-00087-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00087-of-00122.safetensors",
+      "sha256": "9340039c5ff6b2a8c41dcc86244eadf30f10eca2a4c09e0ccd4c4e10876204c5",
+      "tensor_count": 1563
+    },
+    "model-00088-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00088-of-00122.safetensors",
+      "sha256": "c99a7ce964d20ef00f376fd3fbbccc6856f5343050334f1cc3cc7373d8b0e327",
+      "tensor_count": 3072
+    },
+    "model-00089-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00089-of-00122.safetensors",
+      "sha256": "fe8d6a29bacbcafd2d6123a01249051bb6f1aae448ac640d75c9e3ecbb2e6aaf",
+      "tensor_count": 1564
+    },
+    "model-00090-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00090-of-00122.safetensors",
+      "sha256": "de563a6606b2d6d6d17b758aa99a3fcedf9933928af82fff03046b5c763538f7",
+      "tensor_count": 3072
+    },
+    "model-00091-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00091-of-00122.safetensors",
+      "sha256": "0275cfd636d5c25fb99ec2d09bcff34957b47ba2483bc03e39a433c8373f8e03",
+      "tensor_count": 1564
+    },
+    "model-00092-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00092-of-00122.safetensors",
+      "sha256": "1c68f4eb197ecb6731c7c3bfc6a5b87d08d2cc9b29734b9910a8a329c0fa3905",
+      "tensor_count": 3072
+    },
+    "model-00093-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00093-of-00122.safetensors",
+      "sha256": "1251cc30ac0cc7f865533b9febec8a2b3ce0caec8a6abc9461c1e761079c520d",
+      "tensor_count": 1564
+    },
+    "model-00094-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00094-of-00122.safetensors",
+      "sha256": "7c526107eb905a2ba0ee604429754a82d3ae1ea2a5c8bbcce257081a94607538",
+      "tensor_count": 3072
+    },
+    "model-00095-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00095-of-00122.safetensors",
+      "sha256": "25491640f826887de72f530124166ea46f807cf26f5a33103a45d81521dfde6c",
+      "tensor_count": 1563
+    },
+    "model-00096-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00096-of-00122.safetensors",
+      "sha256": "f30deb6b6afc24c807a128dd8c025cee6a87d79b4fea643325c936de47d3ec8b",
+      "tensor_count": 3072
+    },
+    "model-00097-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00097-of-00122.safetensors",
+      "sha256": "5d27c0c3543c64805ff212f6df0d81230335b57da1ddb32e528b2190b8f09d48",
+      "tensor_count": 1564
+    },
+    "model-00098-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00098-of-00122.safetensors",
+      "sha256": "573aef967336d3b00a0a4475de17a33934ea3544f3e2e9840ba201e36d4c96c5",
+      "tensor_count": 3072
+    },
+    "model-00099-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00099-of-00122.safetensors",
+      "sha256": "b2ddd774df6d672944255dd67ff6c37fd9acf60c6dbb8448f2170421451195f9",
+      "tensor_count": 1564
+    },
+    "model-00100-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00100-of-00122.safetensors",
+      "sha256": "6153d7ab7b6b5875188211c7b6eac7013266107a2fa4b2e0b27768b1410afd4b",
+      "tensor_count": 3072
+    },
+    "model-00101-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00101-of-00122.safetensors",
+      "sha256": "d5b93ba97057c4e01d0378f3bd6f467deaa3afcf2ccabc7bb14c09883d932dd1",
+      "tensor_count": 1564
+    },
+    "model-00102-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00102-of-00122.safetensors",
+      "sha256": "b1545a5bff171d5beca13866e044801bed4185eae36b3481086aabe3cf693cad",
+      "tensor_count": 3072
+    },
+    "model-00103-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00103-of-00122.safetensors",
+      "sha256": "01c1f73ca7ffef3020f478780cc0e9563aa840535f35496f7704c94537ae5337",
+      "tensor_count": 1563
+    },
+    "model-00104-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00104-of-00122.safetensors",
+      "sha256": "9b0a648029de4b5b68dbdefae690521261db1af6f0fc04e4a72612507742a459",
+      "tensor_count": 3072
+    },
+    "model-00105-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00105-of-00122.safetensors",
+      "sha256": "b8b7da76624f3e3788d25000d040b0892fd48c9adbc1518cdd77b53c7b4bcefc",
+      "tensor_count": 1564
+    },
+    "model-00106-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00106-of-00122.safetensors",
+      "sha256": "8a069672f545846191e472303ca3d9ba2758c46a2118e9cbbed6dce3c887eedc",
+      "tensor_count": 3072
+    },
+    "model-00107-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00107-of-00122.safetensors",
+      "sha256": "25794c1817ce141a3ff1ab66653622aeadb41b2f23ce1a98165f96768d65267f",
+      "tensor_count": 1564
+    },
+    "model-00108-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00108-of-00122.safetensors",
+      "sha256": "55a8b5704d37625a7427aa4bba3ca27e203fbf5207b5ffa8e82d348aa07533c8",
+      "tensor_count": 3072
+    },
+    "model-00109-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00109-of-00122.safetensors",
+      "sha256": "1135ccdd0d2946c4d1a4ff18b650d18ed8b49dd55c9ea517b0ac4b4927bc029a",
+      "tensor_count": 1564
+    },
+    "model-00110-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00110-of-00122.safetensors",
+      "sha256": "a6ccb4ba3015b14a69e69cabaa8d42f9c7fc58d73237113900da39817ae50926",
+      "tensor_count": 3072
+    },
+    "model-00111-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00111-of-00122.safetensors",
+      "sha256": "89a73888df5e8052e3d0c563c696928e2529fcbfc0b9e5e81075dfa0443ab963",
+      "tensor_count": 1563
+    },
+    "model-00112-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00112-of-00122.safetensors",
+      "sha256": "8ea0f77ffac6110bbde5e2841bb03bc39098ab2e1c5a4fe442656872f407303b",
+      "tensor_count": 3072
+    },
+    "model-00113-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00113-of-00122.safetensors",
+      "sha256": "0a51d502c612e856df5749a929c0701236b8bcc368713ea523351e0a65031c77",
+      "tensor_count": 1564
+    },
+    "model-00114-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00114-of-00122.safetensors",
+      "sha256": "9da516a4998dd6c8697e0ed19daed10c16aa5811163b203e98db65032c34582b",
+      "tensor_count": 3072
+    },
+    "model-00115-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00115-of-00122.safetensors",
+      "sha256": "819ab23d5389e593d200e2ef9028aa584cadf8a293afa0f8992d4ad2399f6ec7",
+      "tensor_count": 1564
+    },
+    "model-00116-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00116-of-00122.safetensors",
+      "sha256": "a5b85062b73aeac389baef9509c56d8ec90e7c4ec3bfcac60cbada8442c3d144",
+      "tensor_count": 3072
+    },
+    "model-00117-of-00122.safetensors": {
+      "data_bytes": 1226581510,
+      "file_size": 1226794926,
+      "output": "model-00117-of-00122.safetensors",
+      "sha256": "755818bde5b338367713dd8b30876d46f1bbdfcd6bfc6e0b972ebc5e0f462c40",
+      "tensor_count": 1564
+    },
+    "model-00118-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00118-of-00122.safetensors",
+      "sha256": "78094d32873bea5fd5c25f99127a575f13d25c4c4ce91fdef3d4c9c69c5c6903",
+      "tensor_count": 3072
+    },
+    "model-00119-of-00122.safetensors": {
+      "data_bytes": 1233349127,
+      "file_size": 1233562359,
+      "output": "model-00119-of-00122.safetensors",
+      "sha256": "6f7bd067f68e55ac69b0b905b97c6cc5422a12882fd4164c5c797295e4a4da97",
+      "tensor_count": 1563
+    },
+    "model-00120-of-00122.safetensors": {
+      "data_bytes": 2281702400,
+      "file_size": 2282123368,
+      "output": "model-00120-of-00122.safetensors",
+      "sha256": "6497aaabf48a14b627c8775a5ff810b8354448df12764fc878bf298685b2d6bd",
+      "tensor_count": 3072
+    },
+    "model-00121-of-00122.safetensors": {
+      "data_bytes": 1140867584,
+      "file_size": 1141077352,
+      "output": "model-00121-of-00122.safetensors",
+      "sha256": "41fe2d488dcbfc905bbe6864773a098d954d32fbe67d646b8df28dabf6c200d9",
+      "tensor_count": 1537
+    },
+    "model-00122-of-00122.safetensors": {
+      "data_bytes": 1018128385,
+      "file_size": 1018128753,
+      "output": "model-00122-of-00122.safetensors",
+      "sha256": "40691b0de74e22332afbaecc42268fb836fee3d3997c71c6b5f031d09d79c87b",
+      "tensor_count": 4
+    }
+  },
+  "signature": {
+    "group_size": 128,
+    "include_mtp": false,
+    "io_bits": 8,
+    "shared_bits": 8,
+    "source": "hf://deepreinforce-ai/Ornith-1.0-397B-FP8@8b61f97a8512d9d01bff1a9625c9a16730e115bb",
+    "source_fingerprint": "4b1c5ab0824e25b3768e3c6df8392394194fce86c4e9f4f3da24e3134ccf4c94",
+    "xbits": "int4g128"
+  },
+  "totals": {
+    "data_bytes": 212634789241,
+    "file_bytes": 212672804033,
+    "logical_tensor_count": 93078,
+    "output_shards": 122,
+    "tensor_count": 278152
+  }
+}

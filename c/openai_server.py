@@ -314,7 +314,7 @@ def _unclosed_tail(reply, tools):
     return inner if inner.strip() in declared else None
 
 
-def parse_tool_calls(reply, tools=None):
+def parse_glm_tool_calls(reply, tools=None):
     """Return (content, tool_calls). Strict GLM parse; optional de-mangler (COLI_TOOL_SALVAGE=1)
     rescues malformed int4 output by mapping a lone payload onto the tool's primary parameter."""
     param_order = _tool_param_order(tools)
@@ -376,7 +376,7 @@ def parse_tool_calls(reply, tools=None):
     return text.strip(), calls
 
 
-def render_chat(messages, enable_thinking=False, reasoning_effort=None, tools=None,
+def render_glm_chat(messages, enable_thinking=False, reasoning_effort=None, tools=None,
                 tool_choice=None):
     """Render the text-only subset of the official GLM-5.2 chat template."""
     if not isinstance(messages, list) or not messages:
@@ -455,10 +455,13 @@ def render_chat(messages, enable_thinking=False, reasoning_effort=None, tools=No
 
 
 # ---- Qwen3.5 text chat and Qwen3-XML tools -----------------------------------------------
-# The functions above are the vendored GLM protocol implementation. Keep them in the
-# adaptation history for now, but bind the public names to the official Qwen3.5 text
-# contract below. Once the HTTP surface has passed its real-model gate the dead GLM
-# renderer/parser can be removed mechanically.
+# The functions above are the vendored GLM protocol implementation. They were dead code
+# while the deep lane ran on Ornith, shadowed by the Qwen definitions that follow. They
+# are live again for the GLM-5.3-Flash lane and are now reached by name rather than by
+# definition order: render_model_chat and parse_model_tool_calls dispatch on the family
+# the converter stamped into config.json. GLM-5.3's chat_template.jinja is [gMASK]<sop>
+# with <|system|>/<|user|>/<|assistant|> and contains no <|im_start|> at all, so serving
+# GLM through the Qwen renderer sends control tokens the model was never trained on.
 
 _QWEN_TOOL_CALL_RE = re.compile(
     r"<tool_call>\s*<function=([A-Za-z_][A-Za-z0-9_.:-]*)>\s*"
@@ -527,9 +530,10 @@ def split_assistant_reply(reply, assume_reasoning=False):
     return reasoning.strip(), body.strip()
 
 
-def parse_assistant_reply(reply, tools=None, assume_reasoning=False):
+def parse_assistant_reply(reply, tools=None, assume_reasoning=False, family=None):
     reasoning, body = split_assistant_reply(reply, assume_reasoning)
-    content, calls = parse_tool_calls(body, tools) if tools else (body, [])
+    content, calls = (parse_model_tool_calls(family, body, tools) if tools
+                      else (body, []))
     return reasoning, content, calls
 
 
@@ -702,6 +706,18 @@ def render_chat(messages, enable_thinking=False, reasoning_effort=None, tools=No
     return "".join(prompt)
 
 
+def parse_model_tool_calls(family, reply, tools=None):
+    """Parse tool calls in the dialect the family emits.
+
+    GLM writes <arg_key>/<arg_value> boxes; Qwen writes Qwen3-XML. Reading one
+    with the other's parser silently yields zero calls rather than an error,
+    so the family decides.
+    """
+    if isinstance(family, str) and family.startswith("glm"):
+        return parse_glm_tool_calls(reply, tools)
+    return parse_tool_calls(reply, tools)
+
+
 def snapshot_model_family(snapshot):
     """Return the converter's explicit family marker, defaulting to Qwen."""
     if snapshot is None:
@@ -719,6 +735,9 @@ def render_model_chat(snapshot, family, messages, enable_thinking=False,
                       reasoning_effort=None, tools=None, tool_choice=None,
                       cache_prefix_compatible=True):
     """Dispatch chat rendering by the converted snapshot's explicit family."""
+    if isinstance(family, str) and family.startswith("glm"):
+        return render_glm_chat(messages, enable_thinking, reasoning_effort,
+                               tools, tool_choice)
     if family != "ornith-1.0":
         return render_chat(
             messages,
@@ -1959,7 +1978,8 @@ class APIHandler(BaseHTTPRequestHandler):
                 length_finish = "length" if stats["length_limited"] else "stop"
                 if chat:
                     reasoning, content, calls = parse_assistant_reply(
-                        text, tools, assume_reasoning=thinking
+                        text, tools, assume_reasoning=thinking,
+                        family=self.server.model_family
                     )
                     message = {"role": "assistant", "content": content or None, "refusal": None}
                     if reasoning:
@@ -2157,7 +2177,8 @@ class APIHandler(BaseHTTPRequestHandler):
                 if not sp["tool"] and sp["buf"]:
                     emit(sp["buf"])                     # no tool call happened: flush held tail
                 _reasoning, _content, calls = parse_assistant_reply(
-                    "".join(raw), tools, assume_reasoning=thinking
+                    "".join(raw), tools, assume_reasoning=thinking,
+                    family=self.server.model_family
                 )
                 for i, tc in enumerate(calls):
                     event([{"index": 0, "delta": {"tool_calls": [{"index": i, "id": tc["id"],
@@ -2321,7 +2342,8 @@ class APIHandler(BaseHTTPRequestHandler):
             """Split a finished reply into Anthropic content blocks + stop_reason."""
             calls = []
             if tools:
-                text, calls = parse_tool_calls(text, tools)
+                text, calls = parse_model_tool_calls(
+                    self.server.model_family, text, tools)
             content = []
             if text:
                 content.append({"type": "text", "text": text})

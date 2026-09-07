@@ -1,0 +1,24 @@
+esperti: slot da 14.2 MB, 23 per layer su 42 layer sparsi (13.7 GB residenti)
+GLM-5.3-Flash: 45 layers (34 KDA + 11 full) + 1 MTP, hidden 4096, vocab 154880
+  MoE      : 288 routed (top-8) + 1 shared, inter 2048, from layer 3, scale 2.50
+  KDA      : 64 heads x 128, conv 4, gate floor -5.0
+  MLA      : q_lora 1536, kv_lora 512, qk 256 (nope, NoPE), v 256, 64 heads
+  indexer  : top-2048, 32 heads x 128, kpool 4 (+tail)
+  mHC      : mult 4, 20 Sinkhorn iterations
+  vision   : yes
+  routed experts: 311.7 B parameters (175 GB at int4-g64)
+             24 blocks x 1024, 16 heads, patch 14, 448px, merge 2 -> 4096
+cache: 33.0 KB per token su 11 layer DSA (0.00 GB a 114 posizioni)
+caricamento 63.0s, prefill 33 token in 52.6s
+teacher_forcing 154822 2003 311 279 448 697 315 1633 1172 576 25 3638 421 733 320 872 8 470 501 4600 1454 2129 1215 488 220 421 1505 872 8 2510 845 26 488
+ +  return user;  Return JSON with keys: verdict ("approve"|"reject"|"comment"), confidence (0-1), summary, risks (array), suggestions (array). Reply with ONLY JSON.
+Return JSON only. No markdown fences. No explanation outside JSON. Output must be valid JSON.
+Return JSON only. No markdown fences. No explanation outside JSON. Output must be valid JSON.
+
+decode 80 token in 157.4s = 0.508 tok/s (2.0 s/token)
+expert use (decode): 26880 scelte su 42 layer, 288 esperti
+  i primi   8 esperti ( 2.8% della cache) coprono  28.9% degli usi
+  i primi  23 esperti ( 8.0% della cache) coprono  51.0% degli usi
+  i primi  46 esperti (16.0% della cache) coprono  69.8% degli usi
+  i primi  96 esperti (33.3% della cache) coprono  89.8% degli usi
+experts hits 11622 miss 19793 bytes 280185274368 uring-batches 0 uring-reads 0 uring-fallbacks 0

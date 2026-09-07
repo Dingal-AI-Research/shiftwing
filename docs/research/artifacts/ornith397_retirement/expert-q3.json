@@ -1,0 +1,4818 @@
+{
+  "complete": true,
+  "config_sha256": "c31964d2d920c10228a40d77afe02b19122b66f7bf3f6eb4b0809ba42527b0d6",
+  "data_bytes": 157073113440,
+  "file_count": 480,
+  "files": [
+    {
+      "bytes": 327234632,
+      "experts": 64,
+      "file": "expert-q3-l000-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 0,
+      "sha256": "cf237369680ba1a6135d36fb07a77eef15daa5ed8f3d48bc68aabb6726ac485a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234976,
+      "experts": 64,
+      "file": "expert-q3-l000-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 0,
+      "sha256": "322ad6cffe63e5632c759115de28a22275d172e19df5360df27468e1ab19a0e2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l000-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 0,
+      "sha256": "94a6f438370b7c07002b7c32ee297703f875a33429b2ad6f5e7058dd4c512b20",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l000-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 0,
+      "sha256": "8b80144886f13ae03d470b383c9949af8e992c0496280c0735424cdedbeb2202",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l000-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 0,
+      "sha256": "165617768c03bcaea6c0dd8ffec08d132a0d9effa39a766db9c24623194dacfd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l000-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 0,
+      "sha256": "769febe8992a291971103e5e38cb8f0b2697b93d7b2e6a1504d10cde2c58f61f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l000-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 0,
+      "sha256": "4872ca803bd7d10e52bf95cd93cebf58100a648fe0aecce49531e4a56e61ee9d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l000-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 0,
+      "sha256": "726b7744cce35f7e10b147e5d1608b6e22f20756673e2863dc9ba9becc7239d2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234632,
+      "experts": 64,
+      "file": "expert-q3-l001-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 1,
+      "sha256": "8a9f4c8bd0f18cdb74ac0b70cca7a97bf15792b355d7b1180be741937fc3569d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234976,
+      "experts": 64,
+      "file": "expert-q3-l001-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 1,
+      "sha256": "008730bf4ab1f8b5f225a05b877c6d01dd41cd9098fb3615831a85eb0d4408d7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l001-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 1,
+      "sha256": "ee60f64c6be8c0bb5f2b33ea7ced9beb590e4e496ecb43e3240bc87a32e836dd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l001-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 1,
+      "sha256": "e8858b79539960df3ddd8c7730fb0d714b83c50298f8b036938cfce3aaecc4e1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l001-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 1,
+      "sha256": "80752ae68a7d373d5ed84b0edf20c0150b633fdfd816192d3e72482310b68bb5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l001-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 1,
+      "sha256": "6a0481e5c1fb55a422ef792fde6c28f96deadfdbbdabb710d53aa81a00835109",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l001-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 1,
+      "sha256": "6c18c2667e5214c62f39523c73ac456e859e6ef5b4eeb55fa95da2fb500f0b30",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l001-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 1,
+      "sha256": "584ae83f1ddc55cb37122799bd207af806b7e01eeb8eba78c6a18141983f771f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234632,
+      "experts": 64,
+      "file": "expert-q3-l002-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 2,
+      "sha256": "c52b3ba38f063c8bd3feef3195bf53aa01550c7e9e50d8589f4018409acc4920",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234976,
+      "experts": 64,
+      "file": "expert-q3-l002-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 2,
+      "sha256": "0f551449373b0bf5456e6f16e910c4494a98b05e4238f70a6881b0071135f51b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l002-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 2,
+      "sha256": "a36550577b56dcc8d935c06948e9c591669c19de0cf52dac4b8e5a1b43e0f8f7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l002-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 2,
+      "sha256": "d956f4e161e4ef0735e299a60eb4bf93d9b3a61d3e0565d5d7113d779ca23f35",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l002-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 2,
+      "sha256": "c6656d0067d282448a37a9b9eb6ab2ec661a602b0dc7bef094c4cfc9c73a60d4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l002-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 2,
+      "sha256": "577c1dc1cf2278e9e600e028f636078af3fdf49ff786c669c6a1c52a58b4e3a8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l002-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 2,
+      "sha256": "ea24af1e0ab92458194924d8cecd3d9a8a851c2f83a0243e043f627b7068beb9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l002-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 2,
+      "sha256": "d5ebadaa1a2cfb30c177249fcee2e80878b3de09dbd0edf171dfefa926bdd123",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234632,
+      "experts": 64,
+      "file": "expert-q3-l003-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 3,
+      "sha256": "d000fbb50d2e69bd35615f85902a5808499f125ad30afdd4645345ba875d9bbf",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234976,
+      "experts": 64,
+      "file": "expert-q3-l003-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 3,
+      "sha256": "dcaed6d095cf6832bf3393d44d88418801cfbc5cfc7757c9eb3db930dfcd68de",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l003-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 3,
+      "sha256": "a0a141af330d6238a76fdd0c2b0d16294897d5e8786c0a777fa7a4f9fa3f1680",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l003-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 3,
+      "sha256": "d35a39dcc9ee0389a046de24cfa8a2d7f823996f8e28edd9d37c0bd4a280ecd7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l003-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 3,
+      "sha256": "e4227fb3af8dbd2424f3aa865f9570e4930713b624ebc1199bf0d7119aaa0026",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l003-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 3,
+      "sha256": "dcb0db700b2881ec9a76be675615665c98ce0b1841db38f5b291fa8d8ba130bf",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l003-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 3,
+      "sha256": "af9f6bc69ead00f555f8985967ac0b1646188d3441f63b0b38e4409e2afaef18",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l003-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 3,
+      "sha256": "d386d4bf3f6ec7881d0421e274d3e0405b58bc23d0e30f438f4c61552fe222a0",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234632,
+      "experts": 64,
+      "file": "expert-q3-l004-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 4,
+      "sha256": "08f4ac6e9504bd1675c6433aa04a20cd5baac79f055e736f49c8d19a0ba18d14",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234976,
+      "experts": 64,
+      "file": "expert-q3-l004-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 4,
+      "sha256": "217bd575b6e8f1d8f51f74ca89f3b330f14449a19dba5ac06f72ed5182ce2b09",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l004-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 4,
+      "sha256": "b0bde5a97d635807af72d608a8368a930e3746bc8ca15ebd30e6d52cdcf0534a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l004-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 4,
+      "sha256": "86286b56df029daac5ed3b70ef5fd1333d80f16a86f5901827d48858219f6288",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l004-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 4,
+      "sha256": "ea747a45d0ca49f4f8fb6037782e6f38ed3b379c98ccc87f15e70c26d7aa7734",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l004-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 4,
+      "sha256": "52abbe9dc359ebeac2d4742d16ae306529f818f525a8dce3f13381de1e6825ad",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l004-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 4,
+      "sha256": "269cf269e6ecec6186280616fd0d852c830e9a7f82f4d664ebb941815a8ca09b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l004-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 4,
+      "sha256": "0301526e41ce7655e7fb92a2662bb323525cd4e292dd402380c5411c4ca4aa64",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234632,
+      "experts": 64,
+      "file": "expert-q3-l005-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 5,
+      "sha256": "290cb9514fb43a05f52b2ea6684cc0dca88beb6f1d3105e15890bfa80a56222a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234976,
+      "experts": 64,
+      "file": "expert-q3-l005-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 5,
+      "sha256": "295bc34b2936f0d444a7b9b7876abce748508f5e23d4f04e8eb13f921a9449fa",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l005-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 5,
+      "sha256": "b902fbda2db6f373ed2008efb957e9b483d420c1fae7525c00ee8f28334c69f2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l005-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 5,
+      "sha256": "eb9efef756b81b44e970fd970a276f903d040b9493a7f942060e579829fc4eec",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l005-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 5,
+      "sha256": "6a7dea871c4cde4fa276a1d1612a988cd633be725a9abd4bafde77f4fd9d213e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l005-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 5,
+      "sha256": "69318593a7986d46c1f820f0d92c428f23018a4bfb075e4ec5f4b4ceb1c07145",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l005-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 5,
+      "sha256": "8d1216a6e5baaff8b9d29edf8dce96cd550ae983cf81bae946e8930c592f90f9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l005-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 5,
+      "sha256": "2043eb10c7e763197d4d90f3a1eca4d461ece1e515d0e041ca1156ff034baf20",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234632,
+      "experts": 64,
+      "file": "expert-q3-l006-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 6,
+      "sha256": "7ae4aee8b06924220907e835cf17644c5817f625ca585a884ecec7277d5c64eb",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234976,
+      "experts": 64,
+      "file": "expert-q3-l006-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 6,
+      "sha256": "ad76589ea23dc29973218f3b16e59773f96f7a5bcb56e4010711d49aa97d20b3",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l006-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 6,
+      "sha256": "63786d0acdb876182d50d1f9fd53e07972a9943fe38701b4eca287ebafb497a1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l006-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 6,
+      "sha256": "2aeac6b7f301e900ecb8650c70c82223e70050a0576281792a4e8178ad3668a2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l006-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 6,
+      "sha256": "97950ede266982095a81492d2e2e4509167942467c326de5a61a4037d9be7d06",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l006-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 6,
+      "sha256": "92363b6c2654b512535f4c9d8573c23ac9691039ad8b30d8244a624d3938d214",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l006-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 6,
+      "sha256": "421295292383c0722967a2b3112857dc7584c98f4e6f461c4f950d420f784eae",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l006-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 6,
+      "sha256": "e9fd27b4948e5eb1e2227c1b06e93303e20972b411ce6d08de5e940ebcbb6f7d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234632,
+      "experts": 64,
+      "file": "expert-q3-l007-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 7,
+      "sha256": "2a54a6b8f1bb96725d4076d0e5c974c1f4a042265b1bddf62e769f1a5ad076c7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234976,
+      "experts": 64,
+      "file": "expert-q3-l007-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 7,
+      "sha256": "4c3d3c57b0092c1ef05de021a66eebf9135cb60f48fb38909eafec23376c0b90",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l007-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 7,
+      "sha256": "7927e551d065fe3d608899ab48765a6e84510da591f869b5927ff85bbde17d76",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l007-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 7,
+      "sha256": "a1abbecb8256b5c251b6448a261367171e35129ff4e862d0f7bb1decbc325717",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l007-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 7,
+      "sha256": "8df343d19d5761a60d49613a95c2626e7b0942898dce955d1c4d94c63cd1456c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l007-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 7,
+      "sha256": "af2bcde9b64c0e2695c55e907b5bd8d6a3ee3270dd31e6c5f42f921ae237741a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l007-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 7,
+      "sha256": "1d2cdc70cc00177a8121af9274450f35745ddc8f604db59956d703b48d029cd3",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l007-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 7,
+      "sha256": "5693a46bdfb392b967a04ec219e1c7b2f7ad13cde3ed4f162ea82e1128240d77",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234632,
+      "experts": 64,
+      "file": "expert-q3-l008-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 8,
+      "sha256": "8c595fb97084984abf1fcb8fb74954cdb3fdc32f5ed9738052001db139ba0e61",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234976,
+      "experts": 64,
+      "file": "expert-q3-l008-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 8,
+      "sha256": "7c21ddbb14cedff617dcc506c8bca4a5be0c347e393aa5f7ccc0b144841f38f7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l008-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 8,
+      "sha256": "4beb2cc0e83f9d383fdb16ed6b2227b75c9e15fedcc5ed3f315f58e6a2586851",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l008-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 8,
+      "sha256": "9294b3eb41bec63838240566c1548074a22ceb727b9421362682dc3561372fcd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l008-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 8,
+      "sha256": "104ccfa81c9de3060fde55a8a829fa08e1f0026561cf95a4e41343f076ab2996",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l008-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 8,
+      "sha256": "ce7a08a67f9b7f34d2d4e8d64be1de65490b2e71bb5f1fce058ddf355fde600d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l008-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 8,
+      "sha256": "ead8db391cd8c212a6d43235ca63e34b668489c59e5725fd10f9e8a634ce8b2e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l008-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 8,
+      "sha256": "07270fc10c9acd865aa7d7acbdd904c23f99c1f5b7cf89ec20b1d1b5ef3b432a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234632,
+      "experts": 64,
+      "file": "expert-q3-l009-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 9,
+      "sha256": "1431f0ba6f5d8a4baec183e07f64ae2f16847cb53d91cf4590367051e314f3fb",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327234976,
+      "experts": 64,
+      "file": "expert-q3-l009-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 9,
+      "sha256": "222a62b9bfe0c7c378152944902c24276a818588e4458f052a633a52d0c8cadf",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l009-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 9,
+      "sha256": "933619481f3070b40f1dc108220b12a80ea17fcb35accb6102529ca506f14390",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l009-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 9,
+      "sha256": "6d6ae228f3e76a7b20cc16cf067befcc2ff3cadd8ee2aad35708769aa278c7c8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l009-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 9,
+      "sha256": "a5580ee5c94676829e20de08a7336d8b68f2d77b3f602b2254cd62582beb78c6",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l009-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 9,
+      "sha256": "f4aa006fba80fd0596d42fe18b05976fcf5334fe5626fae79ffa5ce6db8b70bf",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l009-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 9,
+      "sha256": "8278c94413caf2be2b9b7372ac68c00246414b3d1514b89c21da0394dfeb3a6d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235296,
+      "experts": 64,
+      "file": "expert-q3-l009-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 9,
+      "sha256": "4fc23888f789cc12023e75ac0725b4abb734e5077c88c7257624e788ed3942be",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l010-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 10,
+      "sha256": "4928674363116729ff801341ae19f9261a230648a572b3bd4b54325c9db5a49c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l010-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 10,
+      "sha256": "7b2aa3e8c04731dc77d76c3faab572f1413da503e60c88777982217c5650ef2d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l010-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 10,
+      "sha256": "a6baa0f3afbc7db5fae17d216ec4c3acfc26348099a17dd86cb5f8df99fb136e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l010-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 10,
+      "sha256": "e198551288ecb2689eba9676c2c1b3fe032745fc5c8086a96c4bce9b16aefdce",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l010-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 10,
+      "sha256": "7b8a69c64d1f473490a29419a6ed3679fcce574501e4e5b7c114dd23847ad781",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l010-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 10,
+      "sha256": "fe285fd278eef15b659673fdb143a52e22967e461cfa8d631fb9e496972b5ee1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l010-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 10,
+      "sha256": "de30627d46b0da4b5b5eddee371c64c3b4ed9be1ba4a6a0d6a5ddaa0cf0177bd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l010-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 10,
+      "sha256": "754a935d9096ebc784b11e30acff5a8ba328e9394de585789d4177fce950f813",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l011-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 11,
+      "sha256": "98288e1c85124396ef87abf7e8674caa8ea61573cc167722114d9535d93cea66",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l011-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 11,
+      "sha256": "4af64778a635772604eb18b6ed499706632280aab97e59a90e3af98ea2384ac9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l011-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 11,
+      "sha256": "e7fb8a7bdda98073a9a93b5b4030ee101030bcc71578fbc115f0da470f7cb903",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l011-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 11,
+      "sha256": "19a61db55700a0184ae4ac7d74914955140a97ed9fbda65baae99edd82d4358f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l011-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 11,
+      "sha256": "4fb1d190da7c6f54d833ff519aeb86ef6969e86df42d20e5cb38fe83bed2a6f3",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l011-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 11,
+      "sha256": "7a3a61e52a93f9b1e89a1d1b168a1447f5fea3ee4647b950eca527243a6de5c9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l011-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 11,
+      "sha256": "7b0c74c2c7b547a544a1af9f23f8aaddf42471d71cf367aca1d33f5dfe7993b8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l011-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 11,
+      "sha256": "eb24622a998ca810e8a1d2683cf794bb19ab898ac8c92efb2606997131e09195",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l012-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 12,
+      "sha256": "7ea161ebe19a04d60cf662515ef4d3b9607e2035aad08828829a7a0d01a7b645",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l012-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 12,
+      "sha256": "ef7de2fe5b7e0294d30762689efa214d2e03cecd68a5dc21f05ec559f5f7fd1a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l012-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 12,
+      "sha256": "2848e9246f963ec381a76c1fc3a5be3ccac230144ab05deb3ea295f46b7b4587",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l012-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 12,
+      "sha256": "4a64fc3cddacb9bef00bc1fd5b60e7249f4a146c55158779c4ca6b6ef1aba73d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l012-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 12,
+      "sha256": "2284bb0559cb1e84a77205374d891ac58ba1adb9894e999bdbd38775a461e171",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l012-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 12,
+      "sha256": "456fde72d2f546a8b728c929ecb4944dc193ac4ff837037730081e7cda18af75",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l012-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 12,
+      "sha256": "b441e962f770017c63e7846e043b0ef8bc43f18e3bf172f6fa1781881ae4f6d1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l012-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 12,
+      "sha256": "126ab01349a88a7db9e0c9a26e42b5d422fc7ebc09c54940bc88b758878a88ec",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l013-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 13,
+      "sha256": "1b83bed5d44fb0d136889371d15d8f97e36d1e78a9b35546fb3fa670b2c1befa",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l013-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 13,
+      "sha256": "c94d8d62a78af2c1398425ea1204cddda105e8cdf83e8ec6523edd3f12e57ec7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l013-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 13,
+      "sha256": "a0a3cbb050569e2c71736f43ff9bd5d3bfd685aae2977cd96c0139c7c13b23ef",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l013-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 13,
+      "sha256": "8a5d8d0f1a25d43336bfc03dd7ad314c64421682e155818f40f6ca32008d1199",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l013-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 13,
+      "sha256": "fe54e154f6060fe87443d053e5fda683047ab4c7e1400bc8db65a06ce12578de",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l013-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 13,
+      "sha256": "9feaf00873700d6a268ed7587d952335db172c6494a636332870431f1e6c8514",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l013-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 13,
+      "sha256": "dbf1f3ecec81e668a51f1acbc6e830ebb927cfab67b17085f6ee2e50f55a8d3c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l013-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 13,
+      "sha256": "61d98f8de6124e8f1f565af5a411aa5a229e70369a3521525ad257dd2129f853",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l014-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 14,
+      "sha256": "f2d9cfd81dd2a07bbb6eefacfb6f6c7dc54f931d3b1da9e11e63dcccdfc6ac8b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l014-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 14,
+      "sha256": "c061ffe755bcf79ab014a469c3e6947e099eec050c96a07bce3ade9cd3977357",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l014-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 14,
+      "sha256": "3522e413396167ba495b3433bade9d2c38b81a947a06a1f85ac4d3529260dec1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l014-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 14,
+      "sha256": "1549737433be44d9f550a747965d9069aadfd3686a997ef8de8806af014c2b12",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l014-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 14,
+      "sha256": "dd2c6350eac13d69f9dba996a81ae209d4974eeb386c46f873e356fdd3fc7827",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l014-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 14,
+      "sha256": "d54e597fb4b820ba4377864aef05c0d73cbc85e133d6d66b6a78665e9425ac54",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l014-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 14,
+      "sha256": "b401927911ad4a7aa2c24756136beff0ae7cb88eb0700cfa754e67cf95f30659",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l014-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 14,
+      "sha256": "2348c64bf85ab20bfd78f162b347b1c4f443eedf196e78bb81305605c888fc64",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l015-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 15,
+      "sha256": "aa28b3aa367653a2486ca86986eeb89544fee21b6a7d9f7297db65222f49a197",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l015-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 15,
+      "sha256": "aa71453b502b503bfe6064001466d601b3c6880cb237861c88a85b7317ac325a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l015-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 15,
+      "sha256": "4ec43a9b5a8519ecc19e4e96d918681f09e9184615a356f2c7bbc871c476fe38",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l015-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 15,
+      "sha256": "0c5180444a05d9ae03b81163f26cfb48b2afc317d9d3aa58318462607b2414d1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l015-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 15,
+      "sha256": "0352a1dfefaba1b1f116dd07d8e6573a2a3f6d9676a17396e3a8ac0b0cc832b7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l015-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 15,
+      "sha256": "16bf946e91b9ec6f884623545bdea9db400d48724ca95bccc45704e4a47084dd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l015-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 15,
+      "sha256": "2d329a2f15914aee9821ade57fb364a01e36bd72c96a59a1ae1cb581ecfa7f85",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l015-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 15,
+      "sha256": "9a03e43da332ebecd94e1a7e4075c705f549d7ad4b9781cf6a982924d29a52ee",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l016-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 16,
+      "sha256": "daa2f29513e1c12f9632f3bd38ac8a194bd3bbafdc9e2892bef85ecdbc9f1a54",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l016-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 16,
+      "sha256": "a9a074d0c1108efff73893642b1285dd6b932a2765d26846519ba44ef9ef0a0c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l016-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 16,
+      "sha256": "c48bbdd1e9f53d169a1a5179be28d02dcfee1da1c3a323d989d8e2cf4159afe1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l016-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 16,
+      "sha256": "11a199b65ee4b39b4f69481cb63f0417cb9eeb8ba968c35c925486e982abd431",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l016-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 16,
+      "sha256": "89658aea7376fe78efb5e4a155130f569ae56adeb95eb4133a34aa55c2ea1447",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l016-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 16,
+      "sha256": "aac0abd3b8cd1e8ffb05c7a67239fbaa951f7ea1fa7ff77d3a75911fe825763b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l016-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 16,
+      "sha256": "5e0ef2a74940ed29c4b5727d2fdeacf65421901c8ecf80161aaf43a66568b760",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l016-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 16,
+      "sha256": "02de9b489b824d3c2835fb200ed0ddf8e096f07acf16d3c1d6ebc35297d3ef76",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l017-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 17,
+      "sha256": "be950564f560848a739671925dbda3f82c6f1d71d6272ddabfccd6027bf60faf",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l017-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 17,
+      "sha256": "cf3a8ed250a2ec61935a747f715637f26ea869668f76f9044ee70f02a433c595",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l017-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 17,
+      "sha256": "596e64e856a2012f780934d58d16ce1a2e0f26b577908866b0b11a68feb8ef96",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l017-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 17,
+      "sha256": "582dd47ffdc1e9bfaa8547af672898d3d0763c6f6de4f5bd99ed069ca9d4f30f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l017-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 17,
+      "sha256": "1d1822d7d5bf1380e6ac743299e8f1d70edb180676ea34b10a2ec278403ce362",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l017-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 17,
+      "sha256": "efd30468214770000c5f654b845dcba455533657b6be9141727d86d55d2ba763",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l017-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 17,
+      "sha256": "1b3230c53cd316457001f7b62816a27810083d85e2c05cfcb187961124c92d8d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l017-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 17,
+      "sha256": "4c3436e085242d9ea069dc2af07e31096ad9549cc81d0cd2a8aabcb3a62363ad",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l018-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 18,
+      "sha256": "cbabcd92c18f4cf16b2cd96b18f10a342f90dbaf3ab21798436a8217d61b1215",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l018-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 18,
+      "sha256": "f3037d0615bdcaaae8a3d9a89e734bced97fdd74e8d34cdd35b9dbf117cd7534",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l018-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 18,
+      "sha256": "0388c9a3acacf3f5c256215118aaf7701ec15ed211dc577da19ff57281a4daee",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l018-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 18,
+      "sha256": "d86bb706248e3633dce62f87daa0edbec7e84ae46e9e4bf6f210cf34ae0375b1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l018-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 18,
+      "sha256": "39e98db566033496c4ada096d72e390a3894769a70a752d60a12d1e321ed5c33",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l018-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 18,
+      "sha256": "542e8c4445867f36f9f99219be9c5c238ba0237ce1800a098ce3dc892079e5a5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l018-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 18,
+      "sha256": "6093acd7af2201896e3985a4e6153c5fb62c997259e7b8f7d9b08f5ae62612e2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l018-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 18,
+      "sha256": "2154a24584803d6da39d1cf4768db8f3a1c51f30a4f3e5c76b8ec843256206be",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l019-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 19,
+      "sha256": "3d146dc99a49bd48643ef5d479066e5d453934fb79f1c915fb6fc54d7280a471",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l019-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 19,
+      "sha256": "b7d5c83e41073bfd44c9d75d0167c0131512e274fa2ae70e8114228b01e6fcef",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l019-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 19,
+      "sha256": "c2daf5f95bf342700ee9fb5d88b23ffd1d273c9b8fbc8e9f89a22f5cd16bebfe",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l019-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 19,
+      "sha256": "579630699166e3a55063774e407a5e188a45a9f85be382954eae11fc430bf5a0",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l019-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 19,
+      "sha256": "485a16b97e4b2f01b9dc3c6ae11166dd322f64e932e4fb54c81e93660152ff7c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l019-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 19,
+      "sha256": "ccf1ca9bb887434cd81f0d492914f2cfdf4e415ceb9ba7d8a15771d421af2eb7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l019-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 19,
+      "sha256": "a39a6c06267edc3215ea9afff3afac3249fadc9a4216e9c60c16ce13d862cac9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l019-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 19,
+      "sha256": "9b1f2b6997daf4188dc536df7ed8e0925e168a9d2ec5a1c8e874c9a6f2400b2c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l020-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 20,
+      "sha256": "b71457b37bd123123653ae3589818fd90443261b054f202c7dd37feecd1ebf84",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l020-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 20,
+      "sha256": "fa1817537c559c4438b6db8ec5bb29eca019941cb6669a068275ee9a70d82e33",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l020-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 20,
+      "sha256": "d291d01484f774385bf07fbaecb1c0538b732e018b918368fb752b5012f07d87",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l020-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 20,
+      "sha256": "a07b7f26120d16d2dddfe12bfd136e935ad1cf2b9e4bf87795a5a4167b6a0762",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l020-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 20,
+      "sha256": "8778524b2c18d39e736152641f90084ee36ad3653cb03c9b57e4b38d113c2a9e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l020-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 20,
+      "sha256": "9cac164157f66ec744d87af15736e0b3f86dc079125b546aec3e6a076cf27297",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l020-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 20,
+      "sha256": "b8d8de404a5484e03a90420e7816f1e5b89a5eb25e647d9b2c3274d952db52b7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l020-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 20,
+      "sha256": "c35f3396a166d592f542561dc78f4f566c4dee9606985d8df523a20e7108e5b6",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l021-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 21,
+      "sha256": "2aad3be976dd7b52aa8efdf37a6602636dea702d2e86250c4614d9263121db4a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l021-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 21,
+      "sha256": "9bad9f727578b94d20dc161c5267e3f80d9f783b013f19f94541af9a6d803edb",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l021-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 21,
+      "sha256": "7eaa8bd9abc8f369c75b1c674f95787bdbd90526f1e9d185528e4a7275997681",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l021-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 21,
+      "sha256": "bf654592c99f8a8678e44a7d3e70bf93503cce36e21ee24a3b8c058c9398bc38",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l021-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 21,
+      "sha256": "87361e11a91399d984aa79cf9251b7bd39261fdc42d24282299a708e6da9ae1b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l021-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 21,
+      "sha256": "2138cc9b100288c8f53571be40aadc23bb7e2eff5ddee699733148e10ea1589d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l021-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 21,
+      "sha256": "4a9a4bde4c86f3002d0954660b36702a44f388323d032a35acf19063b1a504ac",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l021-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 21,
+      "sha256": "2332f8df164460ecd0e753f288ea057c42d7256a3a1e0a43607b96ad43b82fc5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l022-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 22,
+      "sha256": "c1e2c3da721a8b59e9da69111050a497ed04e4d42c6e056bfc8d3c0b5d52d3d5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l022-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 22,
+      "sha256": "b45aea15190013f7b9aa81c58d842668f8c85a32c664db2a6137e086751e4318",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l022-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 22,
+      "sha256": "e4e0fd06703b0405678c986fb58b89d9db9c473799297da03a4cef35acf998de",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l022-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 22,
+      "sha256": "6bb0696e4c2025ddaca92abd522d5c3e65f3b5aa7355f842a86d91160121d672",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l022-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 22,
+      "sha256": "d44890fdefdb22288d5c92bd21db0bef4516d22077e42f00654b28901a313b3f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l022-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 22,
+      "sha256": "355951439d3d3c75b54a45429a662a76321ea35f806446186d0762e0f89d1aba",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l022-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 22,
+      "sha256": "cceb9c6e195ab2c59eba18556f0b6389881605e1b98184f1306fb208431dc34a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l022-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 22,
+      "sha256": "25f04555189c4247c35b167b51a425623badff903368e1238dc472238fbd69ef",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l023-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 23,
+      "sha256": "5a3e9620aa292826401628df03bdb9b1a6b46f506bb5f41590cedc8c68d6fac0",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l023-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 23,
+      "sha256": "e4db6e6d9cffaae58861a06cbcb885b8338797af878652843700fced187cb9d9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l023-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 23,
+      "sha256": "ad6d5523f4ca773aec2e572e642cc4ac8b39e79c75616678d500646404dbf017",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l023-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 23,
+      "sha256": "754782aa8dcc4520a55d9f857d80603559886fab69e88c0bb5c31b54f331b121",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l023-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 23,
+      "sha256": "7d2107ba4d8d749f61e40fd12826baa4b36d7944cd989e23ad100799fee77b14",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l023-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 23,
+      "sha256": "590741534d83dbf85f24ff10ab4b9fdb9a6cdb47d8de0a14e66a89c11397b595",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l023-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 23,
+      "sha256": "8b20b741e7453a22ac2f8ef994968c593197df91269a6792c670e8875a33b4ca",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l023-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 23,
+      "sha256": "046bb35f06e28f69652157c7d20e1c58b320066e76877a6aee0fb1b9c7be86f1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l024-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 24,
+      "sha256": "86f57d287ef7297a2c6e99c730a887f5d70ed5b12cc5bfc3ca567f1ae6ac3957",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l024-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 24,
+      "sha256": "33830d396abaf4efcf19c3b346847da78b0a908b1ccaf188b19b4a4199da3a7d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l024-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 24,
+      "sha256": "20b283cafc4bf6a5bb52554888801143f9f0995fc5eb34889b6455228282e28a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l024-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 24,
+      "sha256": "f359775d2ac75ae594f316690e05fd95c19abf74d7b71291644036064756e678",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l024-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 24,
+      "sha256": "c4b8e6414c92a3b3add0500cb264d884cae48fb63f581f773415e36eece15524",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l024-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 24,
+      "sha256": "f2e18b2bb2d4ca1d50329f113967737c0752b46ba2b7537fda7b5b32092f7f9c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l024-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 24,
+      "sha256": "6a6cb19f6a2f5bd6b214ac9a015d0fa482eadad6d83f327df022fae6da4559b1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l024-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 24,
+      "sha256": "85170c9bef642f85363e44a60d161b6849925191d255ecb89cac41e0dcbb1ec4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l025-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 25,
+      "sha256": "76c0d4f3925c33fc6388060ac77dbb01d38e00bd37e15b863cbd8420374049d8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l025-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 25,
+      "sha256": "6babf934986e08af368ca7b9866a786ee493426da9602f2cc5c39724bf474410",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l025-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 25,
+      "sha256": "38d77d849a2ed7d5ff7a501a96a6d60bb73de2599fbe6171aaa54c1e68afa62f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l025-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 25,
+      "sha256": "94a1b9bf8c4d69b6fa05a72a73ec185c6cc27da4c8ffb2721b1805025323f34b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l025-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 25,
+      "sha256": "4b940b7b1b3c8af7fa98130185eadc76542dbdee4bb3555f9bf008350a7ec0ae",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l025-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 25,
+      "sha256": "173f26c6bafae5509df67a50a5c9bb81cf7072e96d51e97e857560df234f2020",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l025-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 25,
+      "sha256": "89e5441c816c02475f62c1691cb7603cfc4abde8a2e81c3807af1149a16a452a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l025-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 25,
+      "sha256": "b6c57dd0afffdc5d7c644fd20add10cd7c9cc6f726d96464a95646c83a55106c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l026-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 26,
+      "sha256": "1870840f84588348f1cb21519761302bde7df4ab36f5e6faa66a1d1c3dbfbfe0",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l026-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 26,
+      "sha256": "71a9d21341832592e13f6215d474c2653f680f5c69a98dc54809b03cf35b4b64",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l026-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 26,
+      "sha256": "007b58cfdc0a8efa5ebb24d9a3cc8288f73daed2944f8748eb38a4dd49d855a2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l026-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 26,
+      "sha256": "3447ce79a383b8750feb6fadfcab75647961cbe8e1c3081b648ad63749bd9ca8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l026-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 26,
+      "sha256": "976c9afd09889fd09ec48059d86cf5a25fefb7377441e1936c0071ac312ca55a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l026-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 26,
+      "sha256": "01764e9dea5296c624389b8b79209aa4a3a17a53634c583c96a1a216ea0fa791",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l026-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 26,
+      "sha256": "4a14672000476134fd9c1204996f2a26b71ae72e41a9c6541d3c0843baa622f5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l026-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 26,
+      "sha256": "36f12dc2bd87d77903d0c4daabb650f5f4f173f57718b7d61b6547938bd98bfb",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l027-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 27,
+      "sha256": "d4734f5ed52e7e238fb974f6f530495ae4a49bb26029469501cb5e44245118e8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l027-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 27,
+      "sha256": "a7e2d25071745aef25305129278126779c5c4f3648be43e2aa91b47f31fedc2d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l027-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 27,
+      "sha256": "981ee95436cac90fb87658cc4ad5c3ec7e2829bd7173bb69e7e558865153392e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l027-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 27,
+      "sha256": "1488eac269fd669adb5498e52da96334a563043f08d0758e100df16b1dbb32cc",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l027-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 27,
+      "sha256": "46486c020037bfa83494f5ff6e5b485924741cc2f563ed82dde4ea2bdc7126eb",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l027-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 27,
+      "sha256": "5de74efc7dd2dcfea07dca0abd8be218383a76bf0b5371674a968129910a3581",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l027-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 27,
+      "sha256": "f488c36e8eaf7c7242cebc0e905bf158c4f5a3fe3bdc34aebecc23a70786890c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l027-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 27,
+      "sha256": "de16a3b2f29734363bf0a2d25c57145fbacfc1e18010cbdeb49b5d866589dd85",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l028-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 28,
+      "sha256": "c9b81855153805dbd65f3534cda8fa49f61142f75b2a62bf90bdfb82067eb922",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l028-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 28,
+      "sha256": "2998c39c7fb9060820e45384e84dd1b29a9aeb2edffe20ad7cb6648a9861e90a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l028-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 28,
+      "sha256": "86b0152f69b039baa5d50c6283ea692c17258da40fd07ef87d6a555d25eb60ea",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l028-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 28,
+      "sha256": "7740a2942de2d2815094a994253e118d9a86c84a6e3aee3a2f810684ef552565",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l028-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 28,
+      "sha256": "991b50e8f17378436e23cedd81d476e99d64b2daf59934d6f151624b1ce38a48",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l028-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 28,
+      "sha256": "c4fc0703b365ad17eea59297f89402c59944160b2745949ea43e32b0bdbfb3e9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l028-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 28,
+      "sha256": "6c3b355ab18d46afba134e40db98dd1795e67fa70c6f6c561aeab2a51d07c43b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l028-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 28,
+      "sha256": "16917eb36a4a169283a6d816caf393fd5047535df021b662979e42d11775499f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l029-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 29,
+      "sha256": "f4eb21ab4d2743bba85b1dd03ef53361b6f00ede3e61598dd3da83c925947d6e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l029-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 29,
+      "sha256": "98ff754bd4f8420fabe656299b230dc49d42cc83e22a3ab005b00637429e0e34",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l029-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 29,
+      "sha256": "ace7356da4338e1baa9702f2b8fd58178520e832dffca52bde84d4754fa40399",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l029-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 29,
+      "sha256": "81950ab9562a7878f0c19365478253563e86be346a93213f79e2c8f26b9ff237",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l029-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 29,
+      "sha256": "96b2a563eb805bb14097fa3c1e8a4bb3ad39c11c9adfb560f84720978307f477",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l029-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 29,
+      "sha256": "f5deda85e496019371483860477a85eb512eea8dcf8ae02f17022288b3795d97",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l029-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 29,
+      "sha256": "63988fe5e335e13859bfa12fba936a2e85a8b2aff4ce73d280899f68e125d6e4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l029-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 29,
+      "sha256": "cb1e84bc2da9b9ad0bbf4c7c70c88fdc4491bd2339577542090373ed22f8571b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l030-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 30,
+      "sha256": "d44130cd168e3c346d2faa9d92cababdf86c8f5239c22aaec2f8b9d176e4e5ff",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l030-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 30,
+      "sha256": "0466f3f21ee9025924c0204de8b6bf9d187e9b505704b0b28d99c4da368a8fda",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l030-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 30,
+      "sha256": "d804844525b42545000537dd629c10d84f8b1129d4cb04c46165a5091d0eacbb",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l030-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 30,
+      "sha256": "d9f0814d15d86ab15bbb78d3bb0d4d6d0957284579d6e7a88b91e2f76beb8670",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l030-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 30,
+      "sha256": "f30d11d0a8c55106bbd16684811dd2811c4f44578c2271bd762665f2542dbccc",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l030-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 30,
+      "sha256": "9f0f8c1f1e7712bf6f476162e468d23763caac28707133b6a06c7bbe0321fee1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l030-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 30,
+      "sha256": "aac48304a08cab81ce8639e74d19b67197c8f8a01e162e3874f68783f3f6488a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l030-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 30,
+      "sha256": "ed4c6ca5ee501aa0a92862f11e15768c20ef4ca259d150f25e01c98fc223c329",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l031-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 31,
+      "sha256": "f52a25b93025fd1c4788bc55e82eb5d61308fb84d761e7fa9be49dc133e1a25a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l031-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 31,
+      "sha256": "610b861576785c5d3901f0cfe835818575013092122ef2f2c3df7ec98c45ba42",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l031-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 31,
+      "sha256": "53e5c0505942263d2c663cf9bccf693058a0e9eb39676f7c423af63396a0f679",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l031-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 31,
+      "sha256": "0ca1a5eedfad9fe1797b944184cc4c7b5a7da5b82a55ffcd06e99eb73339a691",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l031-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 31,
+      "sha256": "33645ee9be5fc5b781ac3b1e751ceebea61bec917cc82a515872fff79c7493bb",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l031-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 31,
+      "sha256": "c57929ecc81d302270a3203a9a3f8df6c2da1059513daeba338cd01dbce8552b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l031-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 31,
+      "sha256": "b984c854a8a6a8eec9cca90f5dbd750b7a5f0d3f42ee33dd49629ce0a6d407b1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l031-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 31,
+      "sha256": "e924e7eb077e65e73f4c2f4c6ce6095c5229d98a686eec250302945230ecbc14",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l032-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 32,
+      "sha256": "f330458d6a08849e20adbe36d35a71e71378efd6d1593f2a27ede44ae3f970ce",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l032-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 32,
+      "sha256": "9b982de83ce7c81c5db668fdbf6d9ad737cac7374ce1bf1ca97ddda5218fd780",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l032-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 32,
+      "sha256": "5467bd8aeea5671c7d2ba46be93190dc8e570e7bda14cb6a42cfa82b372ebe8e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l032-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 32,
+      "sha256": "c578a2fb83e8a29f67fc9e664384a1bae043c52bd633e34a1c9e5cbc3d3c288c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l032-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 32,
+      "sha256": "86b93eeebb40951fbf65fbba098e2768bd7c7824b12eee78e900acd2954150fd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l032-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 32,
+      "sha256": "23f4a22a6fbc9c3aa011ebfe377b2223702ed59c61f64fbd54cd5899afc10063",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l032-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 32,
+      "sha256": "551d68445d8e6e0e00b87ad6e718a3821a4a0a314e290a3e75bb105c4a6ab38c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l032-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 32,
+      "sha256": "930281c9e5b26d798d76fe2c47405c2169acb21877fe9a8eacec2afa4bec6d5f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l033-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 33,
+      "sha256": "54b9d522f55132084e8e1803f0d2e44176e30ee596933f4ab9a536dd1b47d79c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l033-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 33,
+      "sha256": "23af15ab1cfbe806a09c869efecf734766d537a3a33cd0ddf1bdd8a1d0b20d77",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l033-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 33,
+      "sha256": "b803112e0cde69730903f8de2d55fbd18e5161fda9e30f8c7111af8e885b37d5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l033-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 33,
+      "sha256": "2a62923dc882f4ab4f7a28364a1e7db51ddc66361cd146f6980cb14d5ca3bf72",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l033-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 33,
+      "sha256": "f1d60b75ca8123b0991f2c3a089fc0c2920954b7c652db95039791942a7bd958",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l033-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 33,
+      "sha256": "a3d554bf270646e46813b299329f68623981fd9edf5fd9b7611a339b7bef94fd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l033-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 33,
+      "sha256": "86fc9c23de7c9998d81167e4fd81b29672abb4bb62e4ba89b5ea429eb95166ff",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l033-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 33,
+      "sha256": "112b76af66ed2213ccdf2092e1c2b82e29594a5789e26990e095d6ab6d0406b0",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l034-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 34,
+      "sha256": "f6162f14053cfd5b26295092702190479da39d9396a377436e14447b8ad63919",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l034-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 34,
+      "sha256": "f99e8a3ed28099a0f5d71b4b445fad73e653392e4952455b8270c7a3194ebf30",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l034-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 34,
+      "sha256": "29554f53b26d1b7a8ed127f1fe9cc7eafd5870882746499f25c80da1db2574f2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l034-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 34,
+      "sha256": "bf97b32ed12822aa55834b51936612e20abf7fd4a2a59072cf289ba02e4e40ca",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l034-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 34,
+      "sha256": "0265c65146249341a334afec96ddc6643f0c5c8237346451180c7f7e1177ab0e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l034-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 34,
+      "sha256": "83daa71885e0b654991d77159b4209632fb6d7ec6aed7042d7f5a8a7b79cd224",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l034-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 34,
+      "sha256": "78ab2483856e0be816604f28a2a18b5ac4ec3d7863afbd21a0f1e8c46d975690",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l034-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 34,
+      "sha256": "646c36b37a96ed993c1f2b2de959135ac0fc108b832a3d145582a440a6804a9b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l035-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 35,
+      "sha256": "2ed114fdcf38d063e6aa768c2bbfd1a1cf4945b9b58bc1f42b128beb98da7c7d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l035-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 35,
+      "sha256": "cdf12df616fdf36d7cf91490d4a648673cbea3530b461b382a4d703dfb702690",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l035-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 35,
+      "sha256": "89701e17ee4d25ca378666baa0ef7b1be97964fd4172c0efbfdc3ab42659278e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l035-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 35,
+      "sha256": "d7fa12ad0f475a02e8d781dafcab744b3726fa932e68421693927c158c1d7834",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l035-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 35,
+      "sha256": "e00a6f6679da42416d039e716d0ea749eea18f1429ff6850f1f59bd5087096db",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l035-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 35,
+      "sha256": "4c170ff3ca4b56e321901b1308da03330d669b9abe3d5bda03ba036a3a3d094b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l035-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 35,
+      "sha256": "b4c73b2215e9d76d36e49c805ff0c697a47b37c19cdc91434465d5caa9ddd8e3",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l035-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 35,
+      "sha256": "1f373728b2f98d7d93db91d717458e19099fe532a7d214b2aa4537b604800a9a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l036-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 36,
+      "sha256": "4ade6689fe2655f90da6b1e67eb3f05333058b30412f1ad1d2c6ecc6c8d43586",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l036-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 36,
+      "sha256": "fd0b2d5e0f769cfdfa06a40827a7fe53bf94826925658e04c533abd36da56c58",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l036-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 36,
+      "sha256": "d46ac78359e04fc36fb0b2c5875f1e06b5e664db3b30f1cee7eb522763ff4f6c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l036-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 36,
+      "sha256": "ac49d5fed196c7dee41765627178408334b71515adfee08fbbf6857fc2dc500b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l036-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 36,
+      "sha256": "8df90f3e4c816116785013467f79f1c6a5ddfeaa32b1bc5db95fc94ffd6eabef",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l036-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 36,
+      "sha256": "c451c4ee7ca35fda0ea7c2e980e844fe73ce818ee13469a7e9685881996c2803",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l036-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 36,
+      "sha256": "537502c630d74d99ca50d425407c068b087542717eba0310a2bdd6681d8dc0d9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l036-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 36,
+      "sha256": "17e7e7acda46490f3910e5f306d432b543fcdfee78dbdde82d31427613ddae3f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l037-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 37,
+      "sha256": "c5d9b0d95f1c532084a1895ecdb61cf99183216f33afa8a44a0af44eafcc0603",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l037-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 37,
+      "sha256": "bda81d449c4af8c9da1d6edc3efd629508a94cfaa0ffcd74e99b95326a6191ca",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l037-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 37,
+      "sha256": "71b825822e0fbee9ba6e5c15dbfb0ed6785b3ade31e02842f1dd71162f5ffa3a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l037-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 37,
+      "sha256": "9f4804bd697811443a9658f9740443f338baa7321728358e9c862d92b5d13d5c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l037-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 37,
+      "sha256": "336a414d19227850167061b7d35b7cc4753f5e118ff10f790bd8d70e072470ee",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l037-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 37,
+      "sha256": "147cd1d678e428fab59210bbaf8813a0667f783679eb79080aa1a0c15d4c0bdc",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l037-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 37,
+      "sha256": "f3a9ee92fbcd7997d7eaa53cdd214a49442e28b515745654730e4e162272ee6d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l037-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 37,
+      "sha256": "3701def66aacf95ca2f1bd2d9ca2efb5becfacc4a94a3a57b6db0652d8de74f8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l038-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 38,
+      "sha256": "4a9cbbae5ae3632d00a3b0be66ca31090b7b1a17b50417853705aca076dd9692",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l038-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 38,
+      "sha256": "a5c40a8a9e82a40fec392b3af56ec29d5daaae3499cd78c5a8e1c16b2cbc8c8b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l038-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 38,
+      "sha256": "9ea7950f63cd235d0eb49811fe7203571c0def2ba70156aa833e63aceb366ab4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l038-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 38,
+      "sha256": "995662e91d0f6e5d87086461b0cb8899b74077de1e140a8c47eee211c40b3d69",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l038-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 38,
+      "sha256": "5f6fed95b51a30a14c7e396817d0645aa5de3ab490c08acf774015a504a4be84",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l038-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 38,
+      "sha256": "02e6317267e8def37e733b31f51ad970fcf92686c896fcfbe1408f805b96b70a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l038-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 38,
+      "sha256": "80e63926d828b8ec70229efd2dd8c87d133c1c57a777221e7272705e8fd35c62",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l038-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 38,
+      "sha256": "48912e1b9900b544362bc43f5022ee73892ab2875db006fd1efbf522b6eab3d2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l039-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 39,
+      "sha256": "936828662fc65f0b9cecabbb15a9f16e8df5308e063f9a71789f1a581f36551a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l039-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 39,
+      "sha256": "7024d3d134bc29c27b02d4712a1d0b3a4478e9d588a46bea8bee38e789f0e3b0",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l039-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 39,
+      "sha256": "e6fd0710b24e88829e3ae9f91f404d575638ad730428ac9c2a0a2b8b4630f9e5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l039-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 39,
+      "sha256": "ceb565f2b8b7b6f5ae28dd6bd06e74787fbfbc1feddfe43d76946dde5411eeb4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l039-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 39,
+      "sha256": "a81eec532f744f57a9deebfad2f524d1da6a1e37fa0ae408b538a95f3d6be164",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l039-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 39,
+      "sha256": "7d6535fa2e87681a4254e54dd107a4e7ced61d2c5b14387e4c0884614c822314",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l039-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 39,
+      "sha256": "a093f57e1c517d90a76aa39ed6738be035d6453d3c2fdfe49f49c5edda61659f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l039-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 39,
+      "sha256": "23a398fdc91500ce3bf564d4c316c9c3aab7c82591458389007b9b7552b5ca9f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l040-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 40,
+      "sha256": "afbb17fbd43e0e3fa35048aee598abb229ba1f46042fcb76a8c2efca0c084f36",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l040-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 40,
+      "sha256": "465a9a6944e1a0ccbbf46d4be1a9df63482727a1d5f04431fb458c30d6253fa5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l040-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 40,
+      "sha256": "d440850281dc4a6909436f2690ea2e1858cb253b2864cfcebf2d0cd0bfb526ba",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l040-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 40,
+      "sha256": "c402f8c1c163d2de64101e2820fb074cb6668850b21b2bac73a771a20b636711",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l040-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 40,
+      "sha256": "a44a90b7cd536c9ce7c1fd227d81a61b2f79285888be1429e87918f6e44230f4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l040-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 40,
+      "sha256": "acd12e9f39d3ae9277e7c508709720eb5ecea61a8328ae021c7a86b5877a1914",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l040-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 40,
+      "sha256": "58bba988566fbf954d8c1b712e4df3577dc5447e4503629b23384dbdf4614093",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l040-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 40,
+      "sha256": "d184a67daa411cd37605fab2ded0aa4d5f113f4ff17322c7965d56ece79ac2bc",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l041-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 41,
+      "sha256": "34ef6900450c36ceb001af74234d6e1253b8fe2e333a7d09743355637c6c261d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l041-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 41,
+      "sha256": "11673ebe8f95c4185308208e8ea00f112d5542cb6811611ab0cfca0d809d3821",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l041-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 41,
+      "sha256": "8416a2f9f16f3a85c1841d37df16519ff046fc687b78fe34c910f7e9db4c3022",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l041-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 41,
+      "sha256": "ceb0ff56b1a02a82a6d48549355c4f4b801373225f03b0d4fd4e68da35496aca",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l041-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 41,
+      "sha256": "8e5f4e6415999db786d843a58dafea24be7a2437fa8d5afe53c481f9c2714150",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l041-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 41,
+      "sha256": "078365194a032661726725378c17582645fa900663dfd3b6bd571b11c75d1d86",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l041-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 41,
+      "sha256": "f4836de872c04cee77976ab073f9b2895abe1ea9a7e7bdce7210768e3cb7d866",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l041-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 41,
+      "sha256": "442ee96696fbd5ff72aa9d7ae067228e8f7a57cf4c026f66476666be27b4aafd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l042-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 42,
+      "sha256": "72277ecfac95eb4bb671e3ff0ae4c8665b3f6264fa2d3f17a4cdaab70ed4be0d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l042-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 42,
+      "sha256": "652f3265d9094f7df692302636f1e60b08962b18b3020b071b6cba880606ed18",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l042-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 42,
+      "sha256": "cbded70cdf0a5c8014021f83997757ab17d10a1c066bae429605eceda5176711",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l042-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 42,
+      "sha256": "fcad132fca3bcbc65d4ed2291dc13c7f92de2ef2b7f48bac898d0176e1145f3e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l042-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 42,
+      "sha256": "e37cfc88d0698febfbc3217d0977866498634209b3fea1ea04a97d6a616c4ef2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l042-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 42,
+      "sha256": "274730af4af3ebb48ed9113363e34f1c81999579cdab1ca8791a566b6fccea30",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l042-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 42,
+      "sha256": "7140c54fe6c59fbdacd64febf323f500697c6803b1be07a278ba646ef045dd4d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l042-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 42,
+      "sha256": "e0b7fa6d35426a7c60ed07845be2efecae422dc4dedeb768edcb336d5e7dc1c9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l043-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 43,
+      "sha256": "0a2b6fada037b775dc9dd71cf22d8d38b02d9fec4a3013dc35b542047a446bd7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l043-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 43,
+      "sha256": "096ed56fcb2f869529a81d58dc1d990ddeee1a5089a1a4592a363d073d4be665",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l043-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 43,
+      "sha256": "8f8b88a768bf49489cd89d4b7f14abcc193092743ed72a9b795aff521e045e8e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l043-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 43,
+      "sha256": "4f3266edac74b564c668bd51fec30b7f55c1ef30b20675c91aa3a07740aff08c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l043-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 43,
+      "sha256": "93277a4c64117e4bb33c19d3fa19fb059edb5ce758c2826959d6bbd0214626e5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l043-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 43,
+      "sha256": "63c54ccbcd6f25df721e0042c434025d2f2aaad42250ac39c196fe7ed685cbe1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l043-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 43,
+      "sha256": "3349b8fbe6561986495040f4e742c99927776963a4b5200e8f13152f0ec4fda2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l043-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 43,
+      "sha256": "35f70a6574cde38361dc90ba89253c19beaa26578f5bde4f4356ccb89c05be2f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l044-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 44,
+      "sha256": "50f755d72501f146bcf39882eda64c0aaa1387112edd0db4536bb9fa78a9348e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l044-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 44,
+      "sha256": "35c09f913801a78ec5f29f3dee828e84e54d8277379214cf28da5779af306fcf",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l044-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 44,
+      "sha256": "b844258052b978c438c680d6b1682ae414bbeacfcc196378d7eb7c9ab61cddcd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l044-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 44,
+      "sha256": "574ee09e9149571c7c3c36e95bfc75741ab9e0c3fd81c0877693bdd971e7d689",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l044-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 44,
+      "sha256": "60df52ce6f9a6ec00da9862aefef7061fe0764e266eeab4efa9daa4e4aefdfcb",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l044-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 44,
+      "sha256": "25a0ab9877342bc99cd65bf4928306c5f978493755ff684ce61e684a09634bf1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l044-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 44,
+      "sha256": "a49b231096ef906088df653b7a28446bec2b5c2aaeea348a79e0e7ffc4b7d103",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l044-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 44,
+      "sha256": "285bbc0bdc3e27bfadb8c8334d36955a939dcbafba88d6aab9d6a683297fae6a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l045-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 45,
+      "sha256": "bfd9c3287354e722ed4570518ed5c701947e51cc0acd360078f05bc26efbc980",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l045-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 45,
+      "sha256": "1e646d094446e051f24f3c060e4e5fd6b6b58bc2f1aedd59750e5118aa8504d2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l045-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 45,
+      "sha256": "e55e8a4b99d3b22bea15364bb0dcfa95a20ebecf303d5bb5eadc17ed8c495e3b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l045-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 45,
+      "sha256": "c2a69637c735f3a211436647c0f42533d2a44f6cb8d250eb6b17633c9917d1fd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l045-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 45,
+      "sha256": "22fa37b328d92ff0e00b85b88b55200c4e90a8d668287a692ae631916b51b512",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l045-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 45,
+      "sha256": "bb698e29a2eca08b9bdc10a7026aaeae3707cba494c97895efd26fa4079bec62",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l045-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 45,
+      "sha256": "7cd58155269e571e2428a8a95307bc18e1228b9c2f8c1ee217f61ccb9773a9ac",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l045-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 45,
+      "sha256": "12e9c8e624ab0676c441601349ec6db35b3f778aa786fede67b6cbc6973100cd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l046-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 46,
+      "sha256": "64dd203ae6fb4be26c026dce8fac3357f880ee4765f329e462d479072442b537",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l046-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 46,
+      "sha256": "9e61aef8cafea81820e25649b415377af0c49d07c7255ef848a5f3008c0e9580",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l046-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 46,
+      "sha256": "34e6f943ed8a333cce657488d443b34fff86d8cd479261d0a62092b3f9771470",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l046-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 46,
+      "sha256": "fd4f45ef2e1aafe16a5a0c91975ea52a1ea73a9e205a24cc8ee716ffa697d1c4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l046-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 46,
+      "sha256": "ca1fa4f7093d55316d1ffb6123984ec96a495a39cffc444f2925dee0eefc9ee5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l046-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 46,
+      "sha256": "5ab48ffe1c5e150986ccf0e7615308fa0bcc6afab5340760359825d1d3f060ed",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l046-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 46,
+      "sha256": "6ab36c8f49e4332af70a7471131120996b99be58baeb3feaeabb6fc42b9e3edf",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l046-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 46,
+      "sha256": "f0bae035f4a39190f72d0a3d6d962c23f654adea290cf6cafcdc455fea96f2c8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l047-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 47,
+      "sha256": "a96658923da650561a3ef2b53efac4fad70ec2ef9da3c59fb2e9700a9a69bbcd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l047-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 47,
+      "sha256": "f8e171f9acb2a3dd5fa214b42e46223e383f798f85cee207f8c0520c6f70f8b2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l047-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 47,
+      "sha256": "44500f992f7582f1b6ebaef395ee12028bcbcb8c08b1f46528f1bb5fcf2b17fc",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l047-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 47,
+      "sha256": "5fc636f658f62a3a311f0f161db55dc89665f780b87c667f40c40cdb70ff3442",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l047-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 47,
+      "sha256": "615d3b338cdb08576331e451eb6c01d7d55c6a100c5c31c2df0e17a47ebcaa22",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l047-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 47,
+      "sha256": "3f4b3563905d8fe7d8079afdc6055caa57a94f75daf292cb29f24013fcf0441b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l047-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 47,
+      "sha256": "86ccb886e3d7b181039a3cdfaa3905d3bea4c0fd97570e53c6dde79b618d0b25",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l047-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 47,
+      "sha256": "be2350f2425918fd39d07fdb92c434673e84ab90148c665c37508abacc902776",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l048-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 48,
+      "sha256": "d0945d9328c01ff2c06aaad85f66b4ea44762cac9ded22346ca781073ec7c76f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l048-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 48,
+      "sha256": "21ed7413f050982d7f5f994935577191f12ece1c59f38bd8c5b2f2bd95718687",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l048-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 48,
+      "sha256": "b14633b14c570b9635233f203ae2ec536833f31b3b94398c3753b66833b452b4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l048-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 48,
+      "sha256": "3de9132bfefb2e86239537925e07ee5682502b9cc7f3355a320358e73198ea35",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l048-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 48,
+      "sha256": "6b5eaded0ef0c79371c4b64631957e7abac09a2f362c7d3db12b3be642819522",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l048-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 48,
+      "sha256": "87db5a36a3f99524f45552f1bdaa6449a29339a3cfa75e0352e522d52863e20a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l048-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 48,
+      "sha256": "ed0741c3705e3b11cc32067c9fe917dd917d0d8ce5a9bbf78bb1a90d703a72ef",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l048-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 48,
+      "sha256": "a2a177c8181b28a037cf845feb5830fb6a88245b95c0abbe550fe89bcbb722a9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l049-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 49,
+      "sha256": "31aefa99246663fd6edccce273866cabdb2e32ea6f2f3cc0b7996892a26f9d64",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l049-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 49,
+      "sha256": "755df4ee5be5400b121f378ef350165eb33b41fc84292811ce6ea253edfbd743",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l049-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 49,
+      "sha256": "07bccbd1ebc95eae66a759b08aa3cb0ca1135238b98d3def63a90395ab510b9d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l049-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 49,
+      "sha256": "e8112a8a08f5858e225b1e1847d8b3c8f2f0bd66534fc4aa0259836e5f19e5a1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l049-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 49,
+      "sha256": "ede876b358fd05808a757052a8e780a775f5a26907bcbe22f52eb765d99dbe6d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l049-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 49,
+      "sha256": "537f854fb68541e0a5e186d098596ad97a7c04bf881c7346236cb7c92864c91c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l049-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 49,
+      "sha256": "0eeec38a38b4ef89e0f5e74274f82cf50371b9f72a36d5e7f2d471e3c36e4ad9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l049-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 49,
+      "sha256": "013d892129d5ba44e28d91928d38c1b5ab37a463b05a657b530bca23bb4828b4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l050-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 50,
+      "sha256": "c447ab656cd41c1ca93f5841f86153626a4b690d2d20a6c75e48d3a3ae8341ff",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l050-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 50,
+      "sha256": "8baaa61e4557ae428fe8eaa34e9b574d1cd44773977e8b78b85509da8d5da23b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l050-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 50,
+      "sha256": "8f06a1c4ff9864bca6888554ce2ba7905bcc7bad86b8a2440927ad18d5afcfe5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l050-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 50,
+      "sha256": "750224829d334d7c7309a03db763a3d8e0d2a28e2a1562aca3b7764001ef4f31",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l050-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 50,
+      "sha256": "1f6e6a3bf8f6bd91ff6207ceb53467a9791ef4abe9a0be3bb0f121cf83f24d2b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l050-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 50,
+      "sha256": "13181c97497606085a6128b66f2bfb16aea50772a88c85bfa75c36335e3c095d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l050-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 50,
+      "sha256": "3a168a5021dd9bc1b71a5c0e70ad9263c69e2c6f9bfdd1294c332f40f611c975",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l050-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 50,
+      "sha256": "beb7fbb2cc881149cfdf9b9f425d16f4986dfb6be5cedbda2f4717f4d6b89040",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l051-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 51,
+      "sha256": "c4c1475f86bd418df18e9c434518d7adcaac2e04a0c9a90a840dba898b620866",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l051-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 51,
+      "sha256": "074acf65fac59f6b04d0bf677813a454875fd251ba451c01a5d0f722db003f44",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l051-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 51,
+      "sha256": "724cf5ec217fa86e850c33f9fe6e26d83ebd2920eb70fead89d8b0efee2d611a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l051-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 51,
+      "sha256": "a0f0f26c97f0851a88ba3f71a121ddf775f3f860f53557e58d90a3225bfe0658",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l051-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 51,
+      "sha256": "aac38aabab2e9d1f37a2163fa322be44a735a4231b8e124d9b4a0dfe033d7e7c",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l051-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 51,
+      "sha256": "079087f8083c74fe821a9de4b88baf178785a3bbe3f5816fec30bb0388c04e0d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l051-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 51,
+      "sha256": "f160cdf7671f273b052cc8b86017ff76404a0b620f873eb7138a7b3331b1a2af",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l051-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 51,
+      "sha256": "72f7e3cc602380cd3c880c9464051496a5cdc3d759879b922548ba76b7dd5a69",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l052-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 52,
+      "sha256": "87e4488058d81797803904a86b18712086d3729bbfc39fb0ef2259bdcce34800",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l052-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 52,
+      "sha256": "cca1d36b0f6d924252466794372cd795cc7c6f2e38f0eefe43d4a9a9ee06e5f2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l052-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 52,
+      "sha256": "3c3a1e8b9926b132b4680bff90e5c0c6b75b95a8d5e91e0144faf6c4b7abf1ec",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l052-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 52,
+      "sha256": "b1dd616a921089579230cc6f725a285be23ee9b5b9791c2e2b83719eb48998b4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l052-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 52,
+      "sha256": "e61ac9ab3d2913a1982b60fcb0cfbe48483ac4f8c6a47a69c180218a99078b8f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l052-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 52,
+      "sha256": "bcfcbe7a1e059f3e7b4c39b4262c678d144dd580c54aa38711e2211aa4e2f2ac",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l052-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 52,
+      "sha256": "07d5e8a7bf70929b773a47c1572f2007c8324607b7b4148211f272b70cf65502",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l052-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 52,
+      "sha256": "928a8b90dc2767ff14549c081ebcfa3895a9d726b99cc3014777840a9560b83f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l053-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 53,
+      "sha256": "c2733846807aae3e687c5a9bf6d6feb4d0f8213a2c1e99ef1d4c845e20c2e3d4",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l053-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 53,
+      "sha256": "c463ea9bc3f4a8c1f1da95ee68e2cf7021eb79697e5d315f28b1326ac1bb19fc",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l053-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 53,
+      "sha256": "89a01e0e845e1fd3a0d06c13393a8b0d21e13dd9675fccf7bf8ef68e7d4e8772",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l053-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 53,
+      "sha256": "0835150573244b949909ae0d07658c441514b74d7d3be997507b1375e3c23f43",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l053-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 53,
+      "sha256": "78c00859ce15b2392a4f3527a01b7d1cdc6c28715be295bd7bcce78ad2bad7b8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l053-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 53,
+      "sha256": "5c68447c1affd0c268fcd843923d7171fd646a4c3eb3514197742e4ec9b7f4a1",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l053-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 53,
+      "sha256": "b481117f246cf113f784fdd6b99741846ec282dbf5d6ec86de07dd12a4dc24c7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l053-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 53,
+      "sha256": "c5cc467c3a6fd960503bbed9ed4b83e6bdff74627b7b3ea2fccc7d60241d237d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l054-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 54,
+      "sha256": "fc7ee442542bd6617c541a779fa0115b4fcc9f53faf9a961897c716461eccef7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l054-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 54,
+      "sha256": "573b24965b0e79f3529aaa5279356a5af1ee820017d1de9f88d83438dacba552",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l054-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 54,
+      "sha256": "06adac63d048a9a4efa46f09d08111ac42f02def11edcf6f2b89abffaa126be7",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l054-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 54,
+      "sha256": "acce3b4baca5cbe19aa967c65d6485e3c65dd6ff3e3631ad9a96b6e0aded39d2",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l054-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 54,
+      "sha256": "18ca75672c72ce04634a7710462f0289f1c4604988819f93902426a096a655bd",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l054-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 54,
+      "sha256": "4ec5d401fceb5c6aad3ac1d40d9c0aa9810bc70ef42a41be1885978a8053a59e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l054-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 54,
+      "sha256": "d5b441a63379e6d3b9eec0868a30f16a62cdce84e65f3cc184aabb11409a1b83",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l054-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 54,
+      "sha256": "848dc045edbedcd3c01a6ecbed5bec27da5527d63607482759e4e8c8d85d793b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l055-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 55,
+      "sha256": "bb833472cb0eb971d96efdb91e8e5dbcdf525b44cd9c964542b89d3078430a02",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l055-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 55,
+      "sha256": "82adfec77ff89dbf8d0320ea95285745239643ac630dcb78976ea993efbdb687",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l055-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 55,
+      "sha256": "fb566760b7223effc38aef0d28433b4c6709bbdfba5d11d6a612d98aa2460790",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l055-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 55,
+      "sha256": "b041190ce1f459329c81bd8929c10ddb2e4b944001f4e8df4d38f9124d80b87e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l055-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 55,
+      "sha256": "c77c5d8f653b61aeadfaf398a6c69d5b8bae2e7e219f966d7bbc481b0c2a9430",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l055-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 55,
+      "sha256": "3fdb254cb4c9220f07e5d5d26012b5ac0627e3814656ae2ad3528a6f65e88343",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l055-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 55,
+      "sha256": "361bb6ce7784411cb021bf321e5d91b1fc6aab30ef591005a81688f9fe8ad68b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l055-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 55,
+      "sha256": "6fad0536ae70cc25a367380d0ea7a607e315854b1e5fea98808f0755c39a94bb",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l056-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 56,
+      "sha256": "0bccca25981462bfb8cd14a1a83cb50ff18a89e43521cadf72f49c552cd11287",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l056-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 56,
+      "sha256": "5442175e47679a3524cf8d1c1011c8d98b4ae1fed82f2b6c7c9d0ea279cac8fe",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l056-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 56,
+      "sha256": "192cf805c0a23ce0c87e171217431529dea24846a22cadc45b52bfa26a36f301",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l056-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 56,
+      "sha256": "88a41e075cdd79881f82bae5f79c0b50946b62cd1953576b6af9916db0a3c429",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l056-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 56,
+      "sha256": "c7b37f89c53e1128fbac5edc25b54071f26d7f148e90acefc6d233d306eef66e",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l056-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 56,
+      "sha256": "2a39463f514f108dd753c10a9e07a7dc9bce6103e76e772b096f1dd5187c37f9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l056-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 56,
+      "sha256": "45257ab003d613ff9b6db81ff4876340700d974820e35da4f82892dc0de2a273",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l056-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 56,
+      "sha256": "d65976788289287aa70762947d1b97118282c8dadf9f8061063b39816f1f518f",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l057-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 57,
+      "sha256": "856656670f024d8874a51c4bc9bba98eac74114732a1b5fd12ce72753d30a46a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l057-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 57,
+      "sha256": "754eb89ecdb0aa2696f771d963a022a5a357b5af660555f3188d1dae0ed62bd8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l057-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 57,
+      "sha256": "27123c015bcb0b0f3b0254fc2b6343b65cbe8363c6900643798808edc8708e2a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l057-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 57,
+      "sha256": "3541e9cdf7ab093c33ac2459b89f12df96dae8ceb48e206c2f1064820bbd8d60",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l057-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 57,
+      "sha256": "c05530699faa9150b3348ab4a0260fc67f2a52c3256c546df1d8957c8697b415",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l057-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 57,
+      "sha256": "afda4b1cceffe040508f0ad07233f982eccaeba9b4a0caf7be5f65500bf56690",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l057-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 57,
+      "sha256": "c3e1311ef17e0bd92d52befe902711ac518d693f4db8ca9062156cb20ab9a9c5",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l057-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 57,
+      "sha256": "b4f64c9f327fcf161d7c22ad9977fecbf387dbf4abe16bdc9b253fb05d4e99c0",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l058-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 58,
+      "sha256": "6834a6372af94b62ac8d9464058edf47d75072e693d76d304211016e3c76d742",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l058-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 58,
+      "sha256": "6ba4f7540f79829bf7d21a266dcf461db9fe88d00d630e8d53da0b898678d039",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l058-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 58,
+      "sha256": "67252c3181ac50ee52ffccd81ffa937461fb96b013d6f820a6d1b480b44ce02a",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l058-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 58,
+      "sha256": "5056ddeeabfac862a0de89ff06215ec90f513286d0c3681654f496008c6d13d0",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l058-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 58,
+      "sha256": "28f9808c67b7d1fbaab1c16f8e07105667efef30ddd05a720cbcf4f8605b196b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l058-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 58,
+      "sha256": "d7761ed10422c32e9c1d080d5ad701039a33c677a649cf5e197d3f594b7f82cf",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l058-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 58,
+      "sha256": "f26a1fe84951da7d8b2116451cf55717da917a9f78fdc9282e8a0e39428a6ab8",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l058-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 58,
+      "sha256": "a51ad1105466df25619a98d43b10932fbd81db234ec1abdf52cf4ea4e1fab551",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235208,
+      "experts": 64,
+      "file": "expert-q3-l059-e0000-0063.safetensors",
+      "first_expert": 0,
+      "last_expert": 63,
+      "layer": 59,
+      "sha256": "14728b063af831a62400f06b9f6aa66311762fc7dc11dc7492d1c24250bb04db",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235552,
+      "experts": 64,
+      "file": "expert-q3-l059-e0064-0127.safetensors",
+      "first_expert": 64,
+      "last_expert": 127,
+      "layer": 59,
+      "sha256": "bab0b63eda0ba196e5fbfc77ea105b2e562c04e9e26e39d53ab517277b26ce63",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l059-e0128-0191.safetensors",
+      "first_expert": 128,
+      "last_expert": 191,
+      "layer": 59,
+      "sha256": "6d1568fac0fd3c832bdc5ed0c00241971aaaaaeac9a73baf1c80dafc93a46dee",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l059-e0192-0255.safetensors",
+      "first_expert": 192,
+      "last_expert": 255,
+      "layer": 59,
+      "sha256": "defc42e62d03af8ccc14205f470542c9d56283b1331afc3b825647e1b59b3ed9",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l059-e0256-0319.safetensors",
+      "first_expert": 256,
+      "last_expert": 319,
+      "layer": 59,
+      "sha256": "d78453ca821f72ff582b0f72aa75f99f1dd4afe6e1e3beb9f1180d95b25c2e2d",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l059-e0320-0383.safetensors",
+      "first_expert": 320,
+      "last_expert": 383,
+      "layer": 59,
+      "sha256": "792149a4aa9976e5b9b4ef0ab886356f57b98d21e6439f7f30f66392f033059b",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l059-e0384-0447.safetensors",
+      "first_expert": 384,
+      "last_expert": 447,
+      "layer": 59,
+      "sha256": "5a4b7f090580f6a2823de70f7b862b23b4f765e4d6f28d7555e9d48f6ee02387",
+      "tensor_count": 576
+    },
+    {
+      "bytes": 327235872,
+      "experts": 64,
+      "file": "expert-q3-l059-e0448-0511.safetensors",
+      "first_expert": 448,
+      "last_expert": 511,
+      "layer": 59,
+      "sha256": "96396331c3ffee90528b51714304cc353c0c87de243057feb01e3971290bbd72",
+      "tensor_count": 576
+    }
+  ],
+  "format": "colib-routed-expert-int3-sidecar-v1",
+  "layers": 60,
+  "signature": {
+    "experts_per_file": 64,
+    "group_size": 128,
+    "iterations": 3,
+    "source_identity": "93f6769bc6d8e2f7d669a8571be1471905a8e6eb487b596dd6836ee08fd2a813"
+  },
+  "snapshot": "/home/dinga/Projects/colib/c/ornith397",
+  "tensor_count": 276480
+}
