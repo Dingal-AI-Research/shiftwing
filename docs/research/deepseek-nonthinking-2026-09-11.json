@@ -1,0 +1,14 @@
+{
+  "scope": "nonthinking probe on the 2048-token case; NOT an acceptance result",
+  "case": "negative-transfer",
+  "prompt_tokens": 2048,
+  "reasoning_effort": null,
+  "seconds": 262.6,
+  "within_20_min": true,
+  "defect_found": false,
+  "oracle_reason": "malformed completion framing",
+  "output_tokens": 15,
+  "length_limited": false,
+  "thinking_comparison": "with reasoning_effort=low: 367 tokens, 982 s decode, cancelled",
+  "completion_chars": 36
+}

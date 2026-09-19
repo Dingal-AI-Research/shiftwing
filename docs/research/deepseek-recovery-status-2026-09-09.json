@@ -1,0 +1,24 @@
+{
+  "converted_bytes": 12458680836,
+  "converted_groups": 46,
+  "feature_qualified": false,
+  "free_bytes": 331025457152,
+  "historical_groups_needing_independent_source_comparison": [
+    "dense/model-00001-of-00048.bin",
+    "dense/model-00002-of-00048.bin",
+    "dense/model-00003-of-00048.bin"
+  ],
+  "minimum_free_bytes": 107374182400,
+  "new_independent_validation_groups": 43,
+  "new_payload_bytes_required_on_resume": 1731239256,
+  "next_group": "dspark/model-00047-of-00048.bin",
+  "owned_staging_files": 0,
+  "preserved_old_partial_bytes": 897581056,
+  "recorded_at": "2026-09-09T16:08:00.976317+00:00",
+  "resumed_group_payload_bytes": 3610287448,
+  "resumed_verified_bytes": 1879048192,
+  "resumed_verified_ranges": 224,
+  "source_revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+  "status": "paused_at_requested_group_boundary",
+  "total_groups": 91
+}

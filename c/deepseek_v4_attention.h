@@ -5,7 +5,7 @@
  * layers 0 and 1. Compressed layers reuse these exact q/kv/output projections
  * and add the separately tested compressor/indexer selections. */
 
-#include "deepseek_v4_dense.h"
+#include "deepseek_v4_attention_cuda.h"
 
 #ifndef DSV4_ATTN_HIDDEN
 #define DSV4_ATTN_HIDDEN DSV4_DIM
@@ -56,7 +56,25 @@ typedef struct {
     int *indices;
     uint8_t *activation;
     uint8_t *activation_scale;
+    const float *prefill_q_rank, *prefill_query, *prefill_kv;
+    const float *prefill_compressor_kv, *prefill_compressor_score;
+    float *prefill_context;
+    int (*prefill_collect)(void *,const float *,const float *,const int *,int,const float *,int);
+    void *prefill_collect_context;
 } dsv4_attention_scratch;
+
+static inline int dsv4_attention_project_fp8(
+    const dsv4_dense_arena *dense,float *out,const float *input,
+    const uint8_t *weight,const uint8_t *scale,int batch,int rows,int cols,
+    uint8_t *act,uint8_t *act_scale,const float *precomputed) {
+    if (precomputed) { memcpy(out,precomputed,(size_t)batch*rows*sizeof(float));return 1; }
+    return dsv4_dense_linear_fp8(dense,out,input,weight,scale,batch,rows,cols,act,act_scale);
+}
+static inline void dsv4_attention_project_bf16(float *out,const float *input,
+    const uint16_t *weight,int batch,int rows,int cols,const float *precomputed) {
+    if (precomputed) memcpy(out,precomputed,(size_t)batch*rows*sizeof(float));
+    else dsv4_bf16_gemm(out,input,weight,batch,rows,cols);
+}
 
 static inline int dsv4_sliding_attention_state_init(
     dsv4_sliding_attention_state *state, float *kv_cache) {
@@ -100,9 +118,9 @@ static inline int dsv4_attention_decode_sliding(
     snprintf(projection, sizeof(projection), "%s.wq_a", attention);
     if (!dsv4_dense_fp8_pair(dense, projection, DSV4_ATTN_Q_RANK,
                               DSV4_ATTN_HIDDEN, &weight, &scale) ||
-        !dsv4_dense_linear_fp8(dense, scratch->q_rank, input, weight, scale, 1,
+        !dsv4_attention_project_fp8(dense, scratch->q_rank, input, weight, scale, 1,
                           DSV4_ATTN_Q_RANK, DSV4_ATTN_HIDDEN,
-                          scratch->activation, scratch->activation_scale))
+                          scratch->activation, scratch->activation_scale, scratch->prefill_q_rank))
         return 0;
     const uint16_t *q_norm = (const uint16_t *)dsv4_attention_vector(
         dense, attention, ".q_norm.weight", DSV4_DTYPE_BF16,
@@ -114,21 +132,13 @@ static inline int dsv4_attention_decode_sliding(
     if (!dsv4_dense_fp8_pair(
             dense, projection, DSV4_ATTN_HEADS * DSV4_ATTN_HEAD_DIM,
             DSV4_ATTN_Q_RANK, &weight, &scale) ||
-        !dsv4_dense_linear_fp8(dense,
-            scratch->query, scratch->q_rank, weight, scale, 1,
+        !dsv4_attention_project_fp8(dense, scratch->query, scratch->q_rank, weight, scale, 1,
             DSV4_ATTN_HEADS * DSV4_ATTN_HEAD_DIM, DSV4_ATTN_Q_RANK,
-            scratch->activation, scratch->activation_scale))
+            scratch->activation, scratch->activation_scale, scratch->prefill_query))
         return 0;
     for (int head = 0; head < DSV4_ATTN_HEADS; head++) {
-        float square_sum = 0.0f;
         float *query = scratch->query + (size_t)head * DSV4_ATTN_HEAD_DIM;
-        for (int axis = 0; axis < DSV4_ATTN_HEAD_DIM; axis++)
-            square_sum += query[axis] * query[axis];
-        float inverse = 1.0f / sqrtf(
-            square_sum / DSV4_ATTN_HEAD_DIM + 1e-6f);
-        for (int axis = 0; axis < DSV4_ATTN_HEAD_DIM; axis++)
-            query[axis] *= inverse;
-        dsv4_round_bf16_array(query, DSV4_ATTN_HEAD_DIM);
+        dsv4_query_norm_bf16(query,DSV4_ATTN_HEAD_DIM,1e-6f);
         dsv4_rope(query + DSV4_ATTN_HEAD_DIM - DSV4_ATTN_ROPE_DIM,
                    DSV4_ATTN_ROPE_DIM, state->position, 0, 10000.0f,
                    1.0f, 0, 0, 0);
@@ -137,9 +147,9 @@ static inline int dsv4_attention_decode_sliding(
     snprintf(projection, sizeof(projection), "%s.wkv", attention);
     if (!dsv4_dense_fp8_pair(dense, projection, DSV4_ATTN_HEAD_DIM,
                               DSV4_ATTN_HIDDEN, &weight, &scale) ||
-        !dsv4_dense_linear_fp8(dense, scratch->kv, input, weight, scale, 1,
+        !dsv4_attention_project_fp8(dense, scratch->kv, input, weight, scale, 1,
                           DSV4_ATTN_HEAD_DIM, DSV4_ATTN_HIDDEN,
-                          scratch->activation, scratch->activation_scale))
+                          scratch->activation, scratch->activation_scale, scratch->prefill_kv))
         return 0;
     const uint16_t *kv_norm = (const uint16_t *)dsv4_attention_vector(
         dense, attention, ".kv_norm.weight", DSV4_DTYPE_BF16,
@@ -163,10 +173,17 @@ static inline int dsv4_attention_decode_sliding(
         dense, attention, ".attn_sink", DSV4_DTYPE_F32,
         DSV4_ATTN_HEADS);
     if (!sink || selected < 1) return 0;
-    dsv4_sparse_attention(
+    if (scratch->prefill_collect) {
+        if (!scratch->prefill_collect(scratch->prefill_collect_context,scratch->query,state->kv_cache,
+                scratch->indices,selected,sink,state->position)) return 0;
+        state->position++;
+        return 1;
+    }
+    if (!dsv4_dense_sparse_attention(dense,
         scratch->context, scratch->query, state->kv_cache,
         DSV4_ATTN_HEADS, DSV4_ATTN_HEAD_DIM, scratch->indices, selected,
-        sink, 1.0f / sqrtf((float)DSV4_ATTN_HEAD_DIM));
+        sink, 1.0f / sqrtf((float)DSV4_ATTN_HEAD_DIM),
+        state->position,DSV4_ATTN_WINDOW,0,DSV4_ATTN_WINDOW)) return 0;
     for (int head = 0; head < DSV4_ATTN_HEADS; head++)
         dsv4_rope(scratch->context +
                        (size_t)head * DSV4_ATTN_HEAD_DIM +
@@ -175,6 +192,12 @@ static inline int dsv4_attention_decode_sliding(
                    1.0f, 0, 0, 1);
     dsv4_round_bf16_array(
         scratch->context, (size_t)DSV4_ATTN_HEADS * DSV4_ATTN_HEAD_DIM);
+    if (scratch->prefill_context) {
+        memcpy(scratch->prefill_context,scratch->context,
+            (size_t)DSV4_ATTN_HEADS*DSV4_ATTN_HEAD_DIM*sizeof(float));
+        state->position++;
+        return 1;
+    }
     int group_width = DSV4_ATTN_HEADS * DSV4_ATTN_HEAD_DIM /
                       DSV4_ATTN_O_GROUPS;
     snprintf(projection, sizeof(projection), "%s.wo_a", attention);
@@ -188,13 +211,12 @@ static inline int dsv4_attention_decode_sliding(
         (size_t)((DSV4_ATTN_O_RANK + 127) / 128) *
         ((group_width + 127) / 128);
     for (int group = 0; group < DSV4_ATTN_O_GROUPS; group++)
-        if (!dsv4_dense_linear_fp8(dense,
+        if (!dsv4_dense_fp8_weight_bf16(dense,
                 scratch->o_rank + (size_t)group * DSV4_ATTN_O_RANK,
                 scratch->context + (size_t)group * group_width,
                 wo_a_weight + (size_t)group * group_weight,
                 wo_a_scale + (size_t)group * group_scale, 1,
-                DSV4_ATTN_O_RANK, group_width, scratch->activation,
-                scratch->activation_scale))
+                DSV4_ATTN_O_RANK, group_width))
             return 0;
     snprintf(projection, sizeof(projection), "%s.wo_b", attention);
     if (!dsv4_dense_fp8_pair(

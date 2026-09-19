@@ -35,10 +35,10 @@ int main(void) {
     dsv4_expert_cache experts = {0};
     dsv4_runtime runtime = {0};
     CHECK(dsv4_runtime_state_bytes(1) > 0);
-    CHECK(dsv4_runtime_state_bytes(65536) >
+    CHECK(dsv4_runtime_state_bytes(DSV4_MAX_CONTEXT) >
           dsv4_runtime_state_bytes(1));
     CHECK(dsv4_runtime_state_bytes(0) == 0);
-    CHECK(dsv4_runtime_state_bytes(65537) == 0);
+    CHECK(dsv4_runtime_state_bytes(DSV4_MAX_CONTEXT+1) == 0);
     CHECK(dsv4_runtime_init(&runtime, &store, &dense, &experts, 1));
     CHECK(runtime.context == 1 && runtime.position == 0 &&
           !runtime.poisoned);

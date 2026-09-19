@@ -25,6 +25,8 @@ int coli_cuda_malloc(ColiCuda *ctx, void **ptr, size_t bytes);
 void coli_cuda_free(ColiCuda *ctx, void *ptr);
 int coli_cuda_malloc_host(ColiCuda *ctx, void **ptr, size_t bytes);
 void coli_cuda_free_host(ColiCuda *ctx, void *ptr);
+int coli_cuda_host_register(ColiCuda *ctx, void *ptr, size_t bytes);
+void coli_cuda_host_unregister(ColiCuda *ctx, void *ptr);
 int coli_cuda_upload(ColiCuda *ctx, void *dst, const void *src, size_t bytes);
 int coli_cuda_download(ColiCuda *ctx, void *dst, const void *src, size_t bytes);
 int coli_cuda_copy(ColiCuda *ctx, void *dst, const void *src, size_t bytes);
@@ -233,6 +235,49 @@ int coli_cuda_gqa_slots_q4_f16_device(
     int query_heads, int kv_heads, int head_dim, int rotary_dim,
     int group_size, float theta, float eps);
 
+
+int coli_cuda_dsv4_sparse_attention(ColiCuda *ctx,float *out,const float *query,const float *kv,
+    const int *indices,const float *sink,int heads,int dim,int selected,float scale);
+int coli_cuda_dsv4_sparse_attention_batch(ColiCuda *ctx,float *out,const float *query,const float *kv,
+    const int *indices,const int *counts,const float *sink,int batch,int heads,int dim,int stride,float scale);
+int coli_cuda_dsv4_index_scores(ColiCuda *ctx,float *scores,const float *query,const float *kv,
+    const float *weights,int heads,int dim,int tokens);
+int coli_cuda_dsv4_memory_stats(ColiCuda *ctx,unsigned long long *used_peak,unsigned long long *reserved_peak,
+    unsigned long long *scratch_bytes,size_t *available,size_t *total);
+int coli_cuda_dsv4_fp8_weight_bf16_gemm(ColiCuda *ctx,float *out,const float *input,
+    const unsigned char *weight,const unsigned char *scale,int batch,int rows,int cols);
+int coli_cuda_dsv4_bf16_gemm(
+    ColiCuda *ctx, float *output, const float *input,
+    const unsigned short *weight, int batch, int rows, int columns);
+int coli_cuda_dsv4_fp8_gemm(
+    ColiCuda *ctx, float *out, const unsigned char *act,
+    const unsigned char *act_scale, const unsigned char *weight,
+    const unsigned char *weight_scale, int batch, int rows, int cols);
+int coli_cuda_dsv4_fp4_gemm(
+    ColiCuda *ctx, float *out, const unsigned char *act,
+    const unsigned char *act_scale, const unsigned char *weight,
+    const unsigned char *weight_scale, int batch, int rows, int cols);
+int coli_cuda_dsv4_clamped_swiglu(
+    ColiCuda *ctx, float *out, const float *gate, const float *up, int count);
+int coli_cuda_dsv4_grouped_fp4_experts(
+    ColiCuda *ctx, float *out, const unsigned char *act,
+    const unsigned char *act_scale,
+    const unsigned char *const *w1, const unsigned char *const *s1,
+    const unsigned char *const *w2, const unsigned char *const *s2,
+    const unsigned char *const *w3, const unsigned char *const *s3,
+    const float *route_weight, int experts, int hidden, int intermediate);
+/* Two-phase grouped experts with a host-side middle stage (see the .inc). */
+int coli_cuda_dsv4_grouped_fp4_hidden(
+    ColiCuda *ctx, float *gate_host, float *up_host,
+    const unsigned char *act, const unsigned char *act_scale,
+    const unsigned char *const *w1, const unsigned char *const *s1,
+    const unsigned char *const *w3, const unsigned char *const *s3,
+    int experts, int hidden, int intermediate);
+int coli_cuda_dsv4_grouped_fp4_down(
+    ColiCuda *ctx, float *out, const unsigned char *middle_host,
+    const unsigned char *middle_scale_host,
+    const unsigned char *const *w2, const unsigned char *const *s2,
+    int experts, int hidden, int intermediate);
 #ifdef __cplusplus
 }
 #endif

@@ -1,0 +1,478 @@
+{
+  "scope": "capability and performance only; not acceptance or activation",
+  "created_at": "2026-09-11T09:02:57.557267+00:00",
+  "identity": {
+    "source_revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+    "engine_sha256": "a066822435d644e6ca7df2b446d460657bc23d84bb6edf09c581336d6700d7eb",
+    "manifest_sha256": "c84796f773e5b3942e4ba5200a480b7d1ba1c7add7e87cbb7e959271a1270a47",
+    "tokenizer_sha256": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+    "driver_sha256": "9599f3e6c8e46f25a8f7b1149f807aa6b591564f5bcd5d812167c640910a295b",
+    "profile": {
+      "DSV4_EXPERIMENTAL": "1",
+      "CTX": "40960",
+      "COLI_CUDA": "1",
+      "RAM_GB": "8",
+      "CUDA_EXPERT_GB": "2",
+      "CUDA_HEADROOM_GB": "1.5",
+      "DSPARK": "off",
+      "DSV4_PREFILL_CHUNK": "1024",
+      "Q3_NATIVE": "0",
+      "FIRST_MODEL_OUTPUT_TIMEOUT_MS": "10800000",
+      "DIRECT": "1",
+      "URING": "1",
+      "URING_PERSIST": "1"
+    },
+    "output_budget": 8192,
+    "case_timeout_s": 10800
+  },
+  "limitations": [
+    "one deterministic sample per cell",
+    "small planted defects with synthetic reference helpers",
+    "one distinct defect per length; compare efforts within each length",
+    "effort prefixes consume context; helper padding is adjusted to exact total",
+    "expert and OS caches are not flushed; per-request KV starts empty",
+    "existing full-model numerical parity gate is still failing"
+  ],
+  "cells": [
+    {
+      "key": "02048-off",
+      "effort": "off",
+      "prompt_tokens": 2048,
+      "case": {
+        "id": "negative-transfer",
+        "target": 2048,
+        "path": "transfer.py",
+        "line": 2,
+        "source": "def transfer(sender, receiver, amount):\n    if amount > sender.balance:\n        raise ValueError(\"insufficient funds\")\n    sender.balance -= amount\n    receiver.balance += amount\n",
+        "terms": [
+          "negative|non.?negative|positive",
+          "amount|transfer|balance"
+        ]
+      },
+      "prompt_sha256": "1efd2d76ff9428e65d71ccdd49db6815d75970bf10c6e2e07daa4d147fa042c2",
+      "files": {
+        "request.json": "140e281da0ad9e709641c2f88c5074bcdfed83f4057e8986e58eba34910e52b9",
+        "prompt.txt": "1efd2d76ff9428e65d71ccdd49db6815d75970bf10c6e2e07daa4d147fa042c2",
+        "count.json": "e65e8751d41340e772e59752be84f9f9a978791c99d86ef1d81dc2417cf2bb07"
+      }
+    },
+    {
+      "key": "02048-low",
+      "effort": "low",
+      "prompt_tokens": 2048,
+      "case": {
+        "id": "negative-transfer",
+        "target": 2048,
+        "path": "transfer.py",
+        "line": 2,
+        "source": "def transfer(sender, receiver, amount):\n    if amount > sender.balance:\n        raise ValueError(\"insufficient funds\")\n    sender.balance -= amount\n    receiver.balance += amount\n",
+        "terms": [
+          "negative|non.?negative|positive",
+          "amount|transfer|balance"
+        ]
+      },
+      "prompt_sha256": "0771e5d158e7b6d6ff5333fdbd190b0e8c2d608da12a964b753126943483d99f",
+      "files": {
+        "request.json": "6e7412356d606077e7e1da9646ef92722759d78fa4bb88a9f999cf0ea98b4a6b",
+        "prompt.txt": "0771e5d158e7b6d6ff5333fdbd190b0e8c2d608da12a964b753126943483d99f",
+        "count.json": "64829377bf9e046bf4fc3c5db4a432efefdd90960707d7063e77ba98c8f65801"
+      }
+    },
+    {
+      "key": "02048-high",
+      "effort": "high",
+      "prompt_tokens": 2048,
+      "case": {
+        "id": "negative-transfer",
+        "target": 2048,
+        "path": "transfer.py",
+        "line": 2,
+        "source": "def transfer(sender, receiver, amount):\n    if amount > sender.balance:\n        raise ValueError(\"insufficient funds\")\n    sender.balance -= amount\n    receiver.balance += amount\n",
+        "terms": [
+          "negative|non.?negative|positive",
+          "amount|transfer|balance"
+        ]
+      },
+      "prompt_sha256": "858273ae04d7fd5adf5ccdc1633273b8b2d137430e5a73fb6d06258003d81fbf",
+      "files": {
+        "request.json": "e57f4f6f639b9b6add10771066537ab7e8442b2e1ab3da5f93cc992059a87741",
+        "prompt.txt": "858273ae04d7fd5adf5ccdc1633273b8b2d137430e5a73fb6d06258003d81fbf",
+        "count.json": "a45a89857ed968d280e0339fbdc56241ceac9d1b32b2ad241c73345c66a130ac"
+      }
+    },
+    {
+      "key": "02048-max",
+      "effort": "max",
+      "prompt_tokens": 2048,
+      "case": {
+        "id": "negative-transfer",
+        "target": 2048,
+        "path": "transfer.py",
+        "line": 2,
+        "source": "def transfer(sender, receiver, amount):\n    if amount > sender.balance:\n        raise ValueError(\"insufficient funds\")\n    sender.balance -= amount\n    receiver.balance += amount\n",
+        "terms": [
+          "negative|non.?negative|positive",
+          "amount|transfer|balance"
+        ]
+      },
+      "prompt_sha256": "22041defb3a378303e7e9fa631f06772cac220f2d76af773b437ebac9d3af55c",
+      "files": {
+        "request.json": "b9644d98756304be51d71b9264ab01080106635d5222bb121a7903b95b1cd778",
+        "prompt.txt": "22041defb3a378303e7e9fa631f06772cac220f2d76af773b437ebac9d3af55c",
+        "count.json": "b92c356678929ae24cbbdf1eeaa1fc5bdbbfafd0cc0ce06e21fe3e78c8f46159"
+      }
+    },
+    {
+      "key": "32768-off",
+      "effort": "off",
+      "prompt_tokens": 32768,
+      "case": {
+        "id": "partial-transaction",
+        "target": 32768,
+        "path": "batch.py",
+        "line": 7,
+        "source": "def insert_batch(connection, rows):\n    connection.execute(\"BEGIN\")\n    try:\n        for row in rows:\n            connection.execute(\"INSERT INTO entries(value) VALUES (?)\", (row,))\n    finally:\n        connection.commit()\n",
+        "terms": [
+          "commit|partial",
+          "exception|fail|rollback|roll.back"
+        ]
+      },
+      "prompt_sha256": "f78e8d3b12521fab451685d0d66e9caeff6acd1534e35ad5e7c5e5440390141c",
+      "files": {
+        "request.json": "3a2b59a5de7edf0131a111b4a8a348975c0a5c78d302cd4c3b7260a8d7fac14b",
+        "prompt.txt": "f78e8d3b12521fab451685d0d66e9caeff6acd1534e35ad5e7c5e5440390141c",
+        "count.json": "297bd537aa60942b71e4a2d445e93b070955209bccf2bbda0a6a37844353ad66"
+      }
+    },
+    {
+      "key": "32768-low",
+      "effort": "low",
+      "prompt_tokens": 32768,
+      "case": {
+        "id": "partial-transaction",
+        "target": 32768,
+        "path": "batch.py",
+        "line": 7,
+        "source": "def insert_batch(connection, rows):\n    connection.execute(\"BEGIN\")\n    try:\n        for row in rows:\n            connection.execute(\"INSERT INTO entries(value) VALUES (?)\", (row,))\n    finally:\n        connection.commit()\n",
+        "terms": [
+          "commit|partial",
+          "exception|fail|rollback|roll.back"
+        ]
+      },
+      "prompt_sha256": "7d21ea24aa7c424d947051f4bc68ad0b1982bb1870dd762bba8b4bde63b5c353",
+      "files": {
+        "request.json": "0144497e9abc2d9bc7d9026df4f5f7b84a9ea1331f91486358ee23b24f408c3e",
+        "prompt.txt": "7d21ea24aa7c424d947051f4bc68ad0b1982bb1870dd762bba8b4bde63b5c353",
+        "count.json": "1e434c7dffecb892ad76db93105ee02f0c9dcf3761864465355e349fa53de31b"
+      }
+    },
+    {
+      "key": "32768-high",
+      "effort": "high",
+      "prompt_tokens": 32768,
+      "case": {
+        "id": "partial-transaction",
+        "target": 32768,
+        "path": "batch.py",
+        "line": 7,
+        "source": "def insert_batch(connection, rows):\n    connection.execute(\"BEGIN\")\n    try:\n        for row in rows:\n            connection.execute(\"INSERT INTO entries(value) VALUES (?)\", (row,))\n    finally:\n        connection.commit()\n",
+        "terms": [
+          "commit|partial",
+          "exception|fail|rollback|roll.back"
+        ]
+      },
+      "prompt_sha256": "5644e7dce9faff90926d5b8ba28cbc1067a25e480c9ce9249b901ec17bc50495",
+      "files": {
+        "request.json": "26ad2db6830c486888e7c1accf6810fd29347ed048c659db82ccbdabcd166344",
+        "prompt.txt": "5644e7dce9faff90926d5b8ba28cbc1067a25e480c9ce9249b901ec17bc50495",
+        "count.json": "e8b9e24afc9c7bc8ce8ceb6e5a9a2f69c4868103222a29d3ba2197137a389f76"
+      }
+    },
+    {
+      "key": "32768-max",
+      "effort": "max",
+      "prompt_tokens": 32768,
+      "case": {
+        "id": "partial-transaction",
+        "target": 32768,
+        "path": "batch.py",
+        "line": 7,
+        "source": "def insert_batch(connection, rows):\n    connection.execute(\"BEGIN\")\n    try:\n        for row in rows:\n            connection.execute(\"INSERT INTO entries(value) VALUES (?)\", (row,))\n    finally:\n        connection.commit()\n",
+        "terms": [
+          "commit|partial",
+          "exception|fail|rollback|roll.back"
+        ]
+      },
+      "prompt_sha256": "7b5edbdbb87756e77dd90314cf4f79944087f10fc633044d2ed4d7bbeaade5dd",
+      "files": {
+        "request.json": "9df8916363a314ba5e20f7a0466f34f9e3b65dfe843c5e36caac93f959a26faa",
+        "prompt.txt": "7b5edbdbb87756e77dd90314cf4f79944087f10fc633044d2ed4d7bbeaade5dd",
+        "count.json": "ada13d9139f7315984cee562e595d1b7ec15ef180ceae0d4f4d7b6b55de96cbc"
+      }
+    },
+    {
+      "key": "08192-off",
+      "effort": "off",
+      "prompt_tokens": 8192,
+      "case": {
+        "id": "incomplete-cache-key",
+        "target": 8192,
+        "path": "tax.py",
+        "line": 3,
+        "source": "_cache = {}\ndef total_with_tax(subtotal, tax_rate):\n    if subtotal in _cache:\n        return _cache[subtotal]\n    result = subtotal * (1 + tax_rate)\n    _cache[subtotal] = result\n    return result\n",
+        "terms": [
+          "tax_rate|tax rate|rate",
+          "key|cache"
+        ]
+      },
+      "prompt_sha256": "f08fd7ad78ea362e47a67a19cd54cb710998b240ac6cac07bc17f0ed70f2c00f",
+      "files": {
+        "request.json": "80d061c7e31ae78c6e061a58056241b481f5aa40a5464984003d9bb2b3f2b2c9",
+        "prompt.txt": "f08fd7ad78ea362e47a67a19cd54cb710998b240ac6cac07bc17f0ed70f2c00f",
+        "count.json": "3e6b211092595bcf2cdf82c2b6cfa7bede122f8b5d4320839efc5a2b94cf9eb5"
+      }
+    },
+    {
+      "key": "08192-low",
+      "effort": "low",
+      "prompt_tokens": 8192,
+      "case": {
+        "id": "incomplete-cache-key",
+        "target": 8192,
+        "path": "tax.py",
+        "line": 3,
+        "source": "_cache = {}\ndef total_with_tax(subtotal, tax_rate):\n    if subtotal in _cache:\n        return _cache[subtotal]\n    result = subtotal * (1 + tax_rate)\n    _cache[subtotal] = result\n    return result\n",
+        "terms": [
+          "tax_rate|tax rate|rate",
+          "key|cache"
+        ]
+      },
+      "prompt_sha256": "9bb6649c12eed58e09d729b3e0e17a7b3a0b2d81be0910aa9124f40fd6a86b2a",
+      "files": {
+        "request.json": "a6aa0801c3bfa391b6e1e2ae6edc9096f72e4c52f5c98a2814c8d141e0702a1a",
+        "prompt.txt": "9bb6649c12eed58e09d729b3e0e17a7b3a0b2d81be0910aa9124f40fd6a86b2a",
+        "count.json": "36d0aca0b6a7bc0ffd3d24899b059e4230178ea6bfa433b6130babc3e06a6828"
+      }
+    },
+    {
+      "key": "08192-high",
+      "effort": "high",
+      "prompt_tokens": 8192,
+      "case": {
+        "id": "incomplete-cache-key",
+        "target": 8192,
+        "path": "tax.py",
+        "line": 3,
+        "source": "_cache = {}\ndef total_with_tax(subtotal, tax_rate):\n    if subtotal in _cache:\n        return _cache[subtotal]\n    result = subtotal * (1 + tax_rate)\n    _cache[subtotal] = result\n    return result\n",
+        "terms": [
+          "tax_rate|tax rate|rate",
+          "key|cache"
+        ]
+      },
+      "prompt_sha256": "292633752c6feb023e0cd058a36e5f4ca86aee9cd1e49232281b227da8812daf",
+      "files": {
+        "request.json": "7b212575a27bc1cf1046ab9e276308fd194f1b03302287b4d8c3e145a245579b",
+        "prompt.txt": "292633752c6feb023e0cd058a36e5f4ca86aee9cd1e49232281b227da8812daf",
+        "count.json": "36006dbe5edb934e176c45f52c354520c9e86a216cd90a5d98bb1a0b495bf78e"
+      }
+    },
+    {
+      "key": "08192-max",
+      "effort": "max",
+      "prompt_tokens": 8192,
+      "case": {
+        "id": "incomplete-cache-key",
+        "target": 8192,
+        "path": "tax.py",
+        "line": 3,
+        "source": "_cache = {}\ndef total_with_tax(subtotal, tax_rate):\n    if subtotal in _cache:\n        return _cache[subtotal]\n    result = subtotal * (1 + tax_rate)\n    _cache[subtotal] = result\n    return result\n",
+        "terms": [
+          "tax_rate|tax rate|rate",
+          "key|cache"
+        ]
+      },
+      "prompt_sha256": "f2279b7f89827c7c6783c68c4f0431e089bca8988f1cddd0582b728448c8175d",
+      "files": {
+        "request.json": "0864b1b84fed090022793fee4161ee506dec50bc61b5058e13e3b6e2a2707f54",
+        "prompt.txt": "f2279b7f89827c7c6783c68c4f0431e089bca8988f1cddd0582b728448c8175d",
+        "count.json": "2655437b06d768ca7976f200309b05e3933ebcc71c5dcd96d7d6161b1d0a703b"
+      }
+    },
+    {
+      "key": "16384-off",
+      "effort": "off",
+      "prompt_tokens": 16384,
+      "case": {
+        "id": "path-containment",
+        "target": 16384,
+        "path": "download.py",
+        "line": 4,
+        "source": "from pathlib import Path\ndef download(root, requested):\n    target = (Path(root) / requested).resolve()\n    if not str(target).startswith(str(Path(root).resolve())):\n        raise ValueError(\"outside root\")\n    return target.read_bytes()\n",
+        "terms": [
+          "prefix|startswith|sibling",
+          "escape|outside|travers|contain|directory"
+        ]
+      },
+      "prompt_sha256": "35773108c53263778f83fcde4d642792940142abbb994044565548e847fda467",
+      "files": {
+        "request.json": "b6872f72a9f739fa4384cfad22a5b69dc6f8b0b0b5043481106450da28d6ac05",
+        "prompt.txt": "35773108c53263778f83fcde4d642792940142abbb994044565548e847fda467",
+        "count.json": "1fc0b4c369f79cafd9daf7d5d0851bb7c0f03f5e872edc124af56fe7e13a2301"
+      }
+    },
+    {
+      "key": "16384-low",
+      "effort": "low",
+      "prompt_tokens": 16384,
+      "case": {
+        "id": "path-containment",
+        "target": 16384,
+        "path": "download.py",
+        "line": 4,
+        "source": "from pathlib import Path\ndef download(root, requested):\n    target = (Path(root) / requested).resolve()\n    if not str(target).startswith(str(Path(root).resolve())):\n        raise ValueError(\"outside root\")\n    return target.read_bytes()\n",
+        "terms": [
+          "prefix|startswith|sibling",
+          "escape|outside|travers|contain|directory"
+        ]
+      },
+      "prompt_sha256": "b4834d972b95cca6c4e2084d8d26561432926b937ce667373e0547b7a628d64b",
+      "files": {
+        "request.json": "d9a23af0874a81cb33ff397d12fba14aff6100e0e93eb5fbb8e437f44432ba6e",
+        "prompt.txt": "b4834d972b95cca6c4e2084d8d26561432926b937ce667373e0547b7a628d64b",
+        "count.json": "5f1ff0f5c3b88570041b0d1d6510d31c490ccc8fe5c0226a01d72db5cbe1563d"
+      }
+    },
+    {
+      "key": "16384-high",
+      "effort": "high",
+      "prompt_tokens": 16384,
+      "case": {
+        "id": "path-containment",
+        "target": 16384,
+        "path": "download.py",
+        "line": 4,
+        "source": "from pathlib import Path\ndef download(root, requested):\n    target = (Path(root) / requested).resolve()\n    if not str(target).startswith(str(Path(root).resolve())):\n        raise ValueError(\"outside root\")\n    return target.read_bytes()\n",
+        "terms": [
+          "prefix|startswith|sibling",
+          "escape|outside|travers|contain|directory"
+        ]
+      },
+      "prompt_sha256": "cfd10501ec28c0d6dc02d101b001847e66c20492de62f121be9e47ee0cc3cb83",
+      "files": {
+        "request.json": "fe768f29bb7b22081a07552f92267727a909ee5a1a31e8cf363f201d1a4ef754",
+        "prompt.txt": "cfd10501ec28c0d6dc02d101b001847e66c20492de62f121be9e47ee0cc3cb83",
+        "count.json": "6092e76e6784378f0033da7e6803c67d715e46332cb169347c12a822e722ba20"
+      }
+    },
+    {
+      "key": "16384-max",
+      "effort": "max",
+      "prompt_tokens": 16384,
+      "case": {
+        "id": "path-containment",
+        "target": 16384,
+        "path": "download.py",
+        "line": 4,
+        "source": "from pathlib import Path\ndef download(root, requested):\n    target = (Path(root) / requested).resolve()\n    if not str(target).startswith(str(Path(root).resolve())):\n        raise ValueError(\"outside root\")\n    return target.read_bytes()\n",
+        "terms": [
+          "prefix|startswith|sibling",
+          "escape|outside|travers|contain|directory"
+        ]
+      },
+      "prompt_sha256": "a8dce4593f6aef3afa486a1849e2e72214e7ae517f7818342c15678f5089179e",
+      "files": {
+        "request.json": "f0651cf179d0c2c3de253ea12777147f671f7c60c49d05cfd413cb498ca7e155",
+        "prompt.txt": "a8dce4593f6aef3afa486a1849e2e72214e7ae517f7818342c15678f5089179e",
+        "count.json": "376bea716594ef05d5dca3f15e08ec4f7f902a15cafdef1a89943dea9b01feb3"
+      }
+    },
+    {
+      "key": "00512-off",
+      "effort": "off",
+      "prompt_tokens": 512,
+      "case": {
+        "id": "upper-bound",
+        "target": 512,
+        "path": "lookup.py",
+        "line": 4,
+        "source": "def lookup(items, index):\n    if index < 0:\n        return None\n    if index <= len(items):\n        return items[index]\n    return None\n",
+        "terms": [
+          "index|bound",
+          "len|length|equal|off.by.one"
+        ]
+      },
+      "prompt_sha256": "9a5b8a4fa78e35819d62882c0a953c2f6c346e52dc65300f3fcd9d79224d9650",
+      "files": {
+        "request.json": "707edaaf42982ac6da48e139ed3a70f3bafa0d107f324df7aef0cf7912ccd176",
+        "prompt.txt": "9a5b8a4fa78e35819d62882c0a953c2f6c346e52dc65300f3fcd9d79224d9650",
+        "count.json": "d5436e906489369c09d08d775384f4fc247c12fcd2faa409f7ff5d6a301e5608"
+      }
+    },
+    {
+      "key": "00512-low",
+      "effort": "low",
+      "prompt_tokens": 512,
+      "case": {
+        "id": "upper-bound",
+        "target": 512,
+        "path": "lookup.py",
+        "line": 4,
+        "source": "def lookup(items, index):\n    if index < 0:\n        return None\n    if index <= len(items):\n        return items[index]\n    return None\n",
+        "terms": [
+          "index|bound",
+          "len|length|equal|off.by.one"
+        ]
+      },
+      "prompt_sha256": "38cc7a021fc3999e0f8bca438e706dbbd7ff2ec4d917c42775214c946bd96d53",
+      "files": {
+        "request.json": "5540ce37966a97f3dfcd532b1aa0c3cf1ac786b95efdd4513a717990bc14e344",
+        "prompt.txt": "38cc7a021fc3999e0f8bca438e706dbbd7ff2ec4d917c42775214c946bd96d53",
+        "count.json": "bde2dc061678149f883c3bba104e5e54e04bf2def8f500e08db51280201e6fdb"
+      }
+    },
+    {
+      "key": "00512-high",
+      "effort": "high",
+      "prompt_tokens": 512,
+      "case": {
+        "id": "upper-bound",
+        "target": 512,
+        "path": "lookup.py",
+        "line": 4,
+        "source": "def lookup(items, index):\n    if index < 0:\n        return None\n    if index <= len(items):\n        return items[index]\n    return None\n",
+        "terms": [
+          "index|bound",
+          "len|length|equal|off.by.one"
+        ]
+      },
+      "prompt_sha256": "0e8f6e5a86c6df077431dc21060910feaa19a88868cf5c53fa59c845edf5721b",
+      "files": {
+        "request.json": "2e8fe0d71578cb859a196aeabc2dd324a67c042bcb7f8c3660f15da05dc4d928",
+        "prompt.txt": "0e8f6e5a86c6df077431dc21060910feaa19a88868cf5c53fa59c845edf5721b",
+        "count.json": "2a9dfc582162bfe1ceb928930ec94c977de0a18c2598e8da142ee5192736e037"
+      }
+    },
+    {
+      "key": "00512-max",
+      "effort": "max",
+      "prompt_tokens": 512,
+      "case": {
+        "id": "upper-bound",
+        "target": 512,
+        "path": "lookup.py",
+        "line": 4,
+        "source": "def lookup(items, index):\n    if index < 0:\n        return None\n    if index <= len(items):\n        return items[index]\n    return None\n",
+        "terms": [
+          "index|bound",
+          "len|length|equal|off.by.one"
+        ]
+      },
+      "prompt_sha256": "b2faa678f5f17351092e9c2f6d7ccf6a09cda9c3eb849c91389e047bc4d4edb6",
+      "files": {
+        "request.json": "05d7193a47055a565770046284517016a887e41ae59905af6f43b420158b85b9",
+        "prompt.txt": "b2faa678f5f17351092e9c2f6d7ccf6a09cda9c3eb849c91389e047bc4d4edb6",
+        "count.json": "652b3396968840b58eb0b5d560b963b98ca6c9d62de7db0c86771ec1a719850b"
+      }
+    }
+  ]
+}

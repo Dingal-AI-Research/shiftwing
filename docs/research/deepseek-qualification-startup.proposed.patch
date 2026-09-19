@@ -1,0 +1,117 @@
+--- a/c/tools/deepseek_v4_qualification.py
++++ b/c/tools/deepseek_v4_qualification.py
+@@ -9,7 +9,13 @@
+ import json
+ import math
+ from pathlib import Path
+-from .deepseek_v4_spec import SOURCE_REVISION, TOKENIZER_SHA256
++if __package__:
++    from .deepseek_v4_spec import SOURCE_REVISION, TOKENIZER_SHA256
++else:
++    # Native startup uses Python isolated mode and this exact adjacent helper.
++    import sys
++    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
++    from tools.deepseek_v4_spec import SOURCE_REVISION, TOKENIZER_SHA256
+ 
+ SCHEMA = 'colib.deepseek-v4.review-qualification.v1'
+ STAGES = {'conversion', 'tokenizer', 'protocol', 'released_reference', 'io', 'prefill', 'reviews', 'memory'}
+@@ -159,3 +165,22 @@
+     report = read_report(snapshot / 'review-qualification.json')
+     validate_report(report, snapshot, engine, chunk=chunk)
+     return report
++
++
++def main() -> int:
++    import argparse, sys
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--snapshot', type=Path, required=True)
++    parser.add_argument('--engine', type=Path, required=True)
++    parser.add_argument('--chunk', type=int, default=1024)
++    args = parser.parse_args()
++    try:
++        load_qualification(args.snapshot.resolve(), args.engine.resolve(), chunk=args.chunk)
++    except (OSError, ValueError, TypeError, KeyError) as error:
++        print('DeepSeek qualification rejected: ' + str(error), file=sys.stderr)
++        return 78
++    print('DeepSeek qualification: current engine, checkpoint and reviewer profile passed', file=sys.stderr)
++    return 0
++
++if __name__ == '__main__':
++    raise SystemExit(main())
+--- a/c/deepseek_v4.c
++++ b/c/deepseek_v4.c
+@@ -7,6 +7,8 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <time.h>
++#include <sys/wait.h>
++#include <unistd.h>
+ 
+ #include "deepseek_v4_execute.h"
+ #include "json.h"
+@@ -381,6 +383,32 @@
+ #endif
+     return result;
+ }
++/* Production readiness is bound to this exact executable and checkpoint.
++ * Qualification runs stay available through the explicit experimental flag. */
++static int dsv4_require_qualification(const char *snapshot,int context,int chunk) {
++    const char *cuda=getenv("COLI_CUDA"),*dspark=getenv("DSPARK");
++    if (context!=40960 || !cuda || strcmp(cuda,"1") ||
++        (dspark && strcmp(dspark,"off")) || dsv4_budget_gb("RAM_GB",8)!=8 ||
++        dsv4_budget_gb("CUDA_EXPERT_GB",2)!=2 || dsv4_budget_gb("CUDA_HEADROOM_GB",1.5)!=1.5) {
++        fprintf(stderr,"deepseek_v4: production requires the qualified 40960-context CUDA profile, 8/2 GiB caches, 1.5 GiB headroom and DSpark off\n");
++        return 0;
++    }
++    char executable[4096],helper[4096],chunk_text[16];
++    ssize_t length=readlink("/proc/self/exe",executable,sizeof(executable)-1);
++    if (length<1 || length>=(ssize_t)sizeof(executable)-1) return 0;
++    executable[length]=0;char *slash=strrchr(executable,'/');if (!slash) return 0;
++    if (snprintf(helper,sizeof(helper),"%.*s/tools/deepseek_v4_qualification.py",(int)(slash-executable),executable)>=(int)sizeof(helper)) return 0;
++    snprintf(chunk_text,sizeof(chunk_text),"%d",chunk);
++    pid_t child=fork();if (child<0) return 0;
++    if (!child) {
++        execlp("python3","python3","-I",helper,"--snapshot",snapshot,"--engine",executable,"--chunk",chunk_text,(char*)NULL);
++        _exit(78);
++    }
++    int status;pid_t result;
++    do {result=waitpid(child,&status,0);} while (result<0 && errno==EINTR);
++    return result==child && WIFEXITED(status) && WEXITSTATUS(status)==0;
++}
++
+ int main(void) {
+     const char *snapshot = getenv("SNAP");
+     if (!snapshot || !*snapshot) {
+@@ -436,9 +464,12 @@
+         dsv4_store_close(&store);
+         return result;
+     }
+-    if (!getenv("DSV4_EXPERIMENTAL") || strcmp(getenv("DSV4_EXPERIMENTAL"),"1")) {
++    const char *chunk_text=getenv("DSV4_PREFILL_CHUNK");
++    int chunk=chunk_text ? atoi(chunk_text) : 1024;
++    int experimental=getenv("DSV4_EXPERIMENTAL") && !strcmp(getenv("DSV4_EXPERIMENTAL"),"1");
++    if (!experimental && !dsv4_require_qualification(snapshot,context,chunk)) {
+         dsv4_store_close(&store);
+-        fprintf(stderr,"deepseek_v4: production serving remains locked pending qualification; standalone validation requires DSV4_EXPERIMENTAL=1\n");
++        fprintf(stderr,"deepseek_v4: production serving requires passing identity-bound qualification\n");
+         return 78;
+     }
+     char tokenizer_path[4096],tokenizer_sha[65];
+@@ -446,8 +477,6 @@
+         !dsv4_sha256_file(tokenizer_path,tokenizer_sha) || strcmp(tokenizer_sha,DSV4_TOKENIZER_SHA256)) {
+         fprintf(stderr,"deepseek_v4: pinned tokenizer checksum mismatch\n");dsv4_store_close(&store);return 2;
+     }
+-    const char *chunk_text=getenv("DSV4_PREFILL_CHUNK");
+-    int chunk=chunk_text ? atoi(chunk_text) : 1024;
+     dsv4_execution execution;
+     if (!dsv4_execution_init(&execution,&store,context,chunk)) {
+         fprintf(stderr,"deepseek_v4: %s\n",execution.error);dsv4_store_close(&store);return 2;
+@@ -458,7 +487,7 @@
+         !dsv4_sha256_file("/proc/self/exe",execution.binary_sha256)) {
+         fprintf(stderr,"deepseek_v4: tokenizer or execution identity initialization failed\n");
+     } else {
+-        fprintf(stderr,"DSV4_LOADED seconds=%.6f qualification=experimental\n",execution.load_seconds);
++        fprintf(stderr,"DSV4_LOADED seconds=%.6f qualification=%s\n",execution.load_seconds,experimental?"experimental":"passed");
+         result=dsv4_server_loop(stdin,stdout,dsv4_execute_request,&execution);
+     }
+     dsv4_execution_close(&execution);dsv4_store_close(&store);return result;

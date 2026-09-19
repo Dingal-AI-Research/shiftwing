@@ -1,0 +1,18 @@
+{
+  "bytes": 512,
+  "checked_at": "2026-09-09T15:40:46.879574+00:00",
+  "content_range": "bytes 234493080-234493591/3596229272",
+  "converted_groups_before": 3,
+  "free_bytes": 342146539520,
+  "maximum_sparse_staging_bytes": 3692777472,
+  "next_group": "dense/model-00004-of-00048.bin",
+  "next_group_payload_bytes": 173503576,
+  "old_partial_preserved": 897581056,
+  "plan_sha256": "ec527bb2d8dad257876e0dd1255e6df50666004f82190a186753a9b26e27ae93",
+  "revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+  "seconds": 0.6561866250003732,
+  "sha256": "f0401d5cfb7e28ec9b0e278de7f87056bf51c3c2a3d42a2f6074cba1489cc6fb",
+  "status": 206,
+  "total_groups": 91,
+  "url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731/resolve/9e165c30e2704aec5d9d593cce3eebd58bbef1cb/model-00004-of-00048.safetensors?range=234493080-234493591"
+}

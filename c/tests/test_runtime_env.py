@@ -30,6 +30,10 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             "Q3_NATIVE": "1",
             "CUDA_SPEC_FULL": "1",
             "COLI_MMAP": "1",
+            "DSPARK": "on",
+            "DSV4_EXPERIMENTAL": "1",
+            "DSV4_PREFILL_CHUNK": "2048",
+            "DSV4_FUTURE_UNRECORDED_OPTION": "1",
         }
         result = isolated_engine_env(source)
         self.assertEqual(result["PATH"], source["PATH"])
@@ -38,6 +42,7 @@ class RuntimeEnvironmentTests(unittest.TestCase):
         self.assertNotIn("PREFILL_CACHE_BYPASS", result)
         self.assertNotIn("PREFILL_LOAD_PIPELINE", result)
         self.assertFalse(ENGINE_ENV_KEYS.intersection(result))
+        self.assertFalse(any(name.startswith("DSV4_") for name in result))
 
     def test_explicitly_preserved_controls_survive(self) -> None:
         source = {
@@ -45,14 +50,16 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             "EXPERT_Q3": "1",
             "EXPERT_Q3_MIN_LAYER": "2",
             "MTP": "1",
+            "DSV4_PREFILL_CHUNK": "512",
         }
         result = isolated_engine_env(
             source,
-            preserve=("EXPERT_Q3", "EXPERT_Q3_MIN_LAYER"),
+            preserve=("EXPERT_Q3", "EXPERT_Q3_MIN_LAYER", "DSV4_PREFILL_CHUNK"),
         )
         self.assertEqual(result["EXPERT_Q3"], "1")
         self.assertEqual(result["EXPERT_Q3_MIN_LAYER"], "2")
         self.assertNotIn("MTP", result)
+        self.assertEqual(result["DSV4_PREFILL_CHUNK"], "512")
 
     def test_engine_source_fingerprint_is_stable_and_content_bound(self) -> None:
         import tempfile

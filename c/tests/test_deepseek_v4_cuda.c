@@ -66,8 +66,8 @@ static void fill_fp4(unsigned char *weight, unsigned char *scale,
     }
 }
 
-static void test_generic(ColiCuda *cuda) {
-    enum { batch = 2, rows = 257, cols = 256 };
+static void test_generic(ColiCuda *cuda, int batch) {
+    enum { rows = 257, cols = 256 };
     const int activation_blocks = cols / 128;
     const int row_tiles = (rows + 127) / 128;
     float *input = (float *)malloc((size_t)batch * cols * sizeof(float));
@@ -160,15 +160,15 @@ static void test_generic(ColiCuda *cuda) {
     printf("DeepSeek CUDA generic fp4 absolute=%.9g relative=%.9g\n",
            absolute, relative);
     require(absolute == 0.0f, "FP4 projection differs from BF16 reference");
-    dsv4_bf16_gemm(expected, input, bf16, batch, rows, cols);
+    dsv4_bf16_gemm(expected, input, bf16, 2, rows, cols);
     require(!coli_cuda_dsv4_bf16_gemm(
         cuda, (float *)d_out, (const float *)d_input,
-        (const unsigned short *)d_bf16, batch, rows, cols),
+        (const unsigned short *)d_bf16, 2, rows, cols),
         "CUDA BF16 projection");
     require(!coli_cuda_download(cuda, actual, d_out,
-        (size_t)batch * rows * sizeof(float)) && !coli_cuda_sync(cuda),
+        (size_t)2 * rows * sizeof(float)) && !coli_cuda_sync(cuda),
         "CUDA BF16 result");
-    absolute = compare(actual, expected, (size_t)batch * rows, &relative);
+    absolute = compare(actual, expected, (size_t)2 * rows, &relative);
     printf("DeepSeek CUDA generic bf16 absolute=%.9g relative=%.9g\n",
            absolute, relative);
     require(absolute < 2e-4f && relative < 2e-4f,
@@ -283,6 +283,39 @@ static void test_grouped_fixture(ColiCuda *cuda) {
            absolute, relative);
     require(absolute == 0.0f, "grouped fixture differs from BF16 reference");
 
+    /* Split form: hidden GEMMs on the device, the middle stage on the host
+     * with the per-expert code, down GEMMs and reduction on the device. */
+    {
+        float gate_host[experts * intermediate], up_host[experts * intermediate];
+        unsigned char middle[experts * intermediate];
+        unsigned char middle_scale[experts * (intermediate / 128)];
+        require(!coli_cuda_dsv4_grouped_fp4_hidden(
+            cuda, gate_host, up_host, (const unsigned char *)d_act,
+            (const unsigned char *)d_act_scale, d_w1, d_s1, d_w3, d_s3,
+            experts, hidden, intermediate) && !coli_cuda_sync(cuda),
+            "CUDA grouped hidden phase");
+        for (int expert = 0; expert < experts; expert++) {
+            float *row = gate_host + (size_t)expert * intermediate;
+            const float *up = up_host + (size_t)expert * intermediate;
+            for (int i = 0; i < intermediate; i++)
+                row[i] = dsv4_round_bf16(route[expert] * dsv4_clamped_swiglu(row[i], up[i]));
+            require(dsv4_act_quant_mxfp(row, intermediate,
+                middle + (size_t)expert * intermediate,
+                middle_scale + (size_t)expert * (intermediate / 128)),
+                "host middle quantization");
+        }
+        memset(actual, 0, sizeof(actual));
+        require(!coli_cuda_dsv4_grouped_fp4_down(
+            cuda, (float *)d_out, middle, middle_scale, d_w2, d_s2,
+            experts, hidden, intermediate), "CUDA grouped down phase");
+        require(!coli_cuda_download(cuda, actual, d_out, sizeof(actual)) &&
+                !coli_cuda_sync(cuda), "CUDA grouped split result");
+        absolute = compare(actual, expected, hidden, &relative);
+        printf("DeepSeek CUDA grouped split fixture absolute=%.9g relative=%.9g\n",
+               absolute, relative);
+        require(absolute == 0.0f, "grouped split fixture differs from BF16 reference");
+    }
+
     for (int expert = 0; expert < experts; expert++) {
         coli_cuda_free(cuda, (void *)d_w1[expert]);
         coli_cuda_free(cuda, (void *)d_s1[expert]);
@@ -366,7 +399,8 @@ int main(void) {
             "compute capability");
     printf("DeepSeek CUDA device=%s sm=%d%d\n",
            coli_cuda_device_name(cuda), major, minor);
-    test_generic(cuda);
+    test_generic(cuda, 2);
+    test_generic(cuda, 17);
     test_swiglu(cuda);
     test_grouped_fixture(cuda);
     test_real_shape(cuda);

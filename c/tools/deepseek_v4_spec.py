@@ -14,12 +14,17 @@ from typing import Any, Mapping
 
 SOURCE_REPO = "deepseek-ai/DeepSeek-V4-Flash-0731"
 SOURCE_REVISION = "9e165c30e2704aec5d9d593cce3eebd58bbef1cb"
+TOKENIZER_SHA256 = "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf"
 MODEL_DIRECTORY = "deepseek-v4-flash-0731"
 MODEL_ID = "deepseek-v4-flash-0731-colib"
 MODEL_FAMILY = "deepseek-v4"
 
 DEFAULT_CONTEXT = 16_384
-MAX_CONTEXT = 65_536
+REVIEW_INPUT_TOKENS = 92_160
+REVIEW_OUTPUT_TOKENS = 8_192
+REVIEW_CONTEXT = REVIEW_INPUT_TOKENS + REVIEW_OUTPUT_TOKENS
+MAX_CONTEXT = REVIEW_CONTEXT
+ORIGINAL_CONTEXT = 65_536
 UPSTREAM_MAX_CONTEXT = 1_048_576
 WEIGHT_SHARDS = 48
 
@@ -105,7 +110,7 @@ EXPECTED_ROPE_SCALING = {
     "beta_fast": 32,
     "beta_slow": 1,
     "factor": 16,
-    "original_max_position_embeddings": MAX_CONTEXT,
+    "original_max_position_embeddings": ORIGINAL_CONTEXT,
     "type": "yarn",
 }
 
@@ -135,19 +140,14 @@ def validate_context(context: int) -> int:
         raise ValueError("context must be positive")
     if context > MAX_CONTEXT:
         raise ValueError(
-            f"DeepSeek context {context} exceeds validated maximum {MAX_CONTEXT}"
+            f"DeepSeek context {context} exceeds configured maximum {MAX_CONTEXT}"
         )
     return context
 
 
 def validate_reasoning_effort(value: str | None) -> str | None:
-    if value in (None, "high"):
+    if value in (None, "low", "high", "max"):
         return value
-    if value in ("low", "max"):
-        raise ValueError(
-            f"reasoning_effort={value!r} is unsupported for DeepSeek-V4; "
-            "use 'high' or omit it for non-thinking chat"
-        )
     raise ValueError(f"unknown reasoning_effort={value!r}")
 
 

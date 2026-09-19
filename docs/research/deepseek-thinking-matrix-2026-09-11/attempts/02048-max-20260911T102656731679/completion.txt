@@ -1,0 +1,12 @@
+We need answer JSON. Need review transfer.py. Need identify defects. Need consider context helpers irrelevant. Need inspect code. transfer(sender, receiver, amount): if amount > sender.balance raise; sender.balance -= amount; receiver.balance += amount. Potential defects: no validation amount negative? If amount negative, condition false, sender.balance -= negative increases sender, receiver.balance += negative decreases receiver. That's a concrete defect: negative amount transfers backwards or steals from receiver. Also no type checks? Maybe amount non-numeric causes TypeError. But likely defect is negative amount. Also no check receiver? Maybe if sender/receiver same? If sender is receiver, balance unchanged? Actually sender.balance -= amount then receiver.balance += amount same object, net zero, okay. If amount > balance only. Could be integer/float. Need report line? The issue is line 2 condition should include amount < 0. Trigger: amount = -100, sender balance 1000, receiver balance 1000. Condition -100 > 1000 false, sender.balance becomes 1100, receiver.balance becomes 900. Consequence: unauthorized transfer from receiver to sender. Also maybe amount == 0 okay. Need maybe mention no validation of sender/receiver? But selected file simple. Need concise JSON with verdict REJECT and issues array. Need line one-based integer. Could include one issue at line 2. Maybe also line 4/5? The defect is missing validation. We can report line 2. Need under 300 words. Ensure JSON valid.</think>```json
+{
+  "verdict": "REJECT",
+  "issues": [
+    {
+      "path": "transfer.py",
+      "line": 2,
+      "explanation": "The function does not reject negative amounts. If amount is negative, the check `amount > sender.balance` is false, so sender.balance is increased and receiver.balance is decreased. For example, amount=-100 transfers funds from receiver to sender, violating the intended transfer semantics."
+    }
+  ]
+}
+```

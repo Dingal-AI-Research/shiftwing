@@ -1,0 +1,49 @@
+{
+  "status": "failed",
+  "stage": "reviews",
+  "source_revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+  "engine_sha256": "749aa6e397dcafc09bd4770ea9ec17dac427bf2ecf7879d6f1dd6829c1f165d9",
+  "manifest_sha256": "c84796f773e5b3942e4ba5200a480b7d1ba1c7add7e87cbb7e959271a1270a47",
+  "case_manifest_sha256": "192e873568b974c5f146d524297e25e311ad2c962c3a2243fa400cd87797f5ef",
+  "reviews": [
+    {
+      "id": "upper-bound",
+      "prompt_tokens": 512,
+      "prompt_sha256": "38cc7a021fc3999e0f8bca438e706dbbd7ff2ec4d917c42775214c946bd96d53",
+      "complete": true,
+      "defect_found": true,
+      "termination": "eos",
+      "output_tokens": 286,
+      "stats": {
+        "completion_tokens": 286,
+        "tokens_per_second": 0.354203,
+        "cache_hit_percent": 46.262111,
+        "rss_gb": 16.105766,
+        "prompt_tokens": 512,
+        "length_limited": false,
+        "ttft_ms": 129001.27698200049,
+        "prefill_time_ms": 128635.0,
+        "decode_time_ms": 807446.5772452521,
+        "wall_time_ms": 936448.8954539993
+      },
+      "warm_seconds": 936.4490303869989,
+      "oracle_reason": "planted location and semantic anchors found",
+      "completion_sha256": "8d4f85b53df3177338c8a0db5b51c657a20cc0993366f5810231890f26f2c3df"
+    },
+    {
+      "id": "negative-transfer",
+      "prompt_tokens": 2048,
+      "prompt_sha256": "0771e5d158e7b6d6ff5333fdbd190b0e8c2d608da12a964b753126943483d99f",
+      "complete": false,
+      "defect_found": false,
+      "termination": "error",
+      "output_tokens": 0,
+      "error": "ClientCancelled: ",
+      "warm_seconds": 1202.4369235670001,
+      "oracle_reason": "malformed completion framing",
+      "completion_sha256": "9609453db1e1ba3fadc6be83ac2ec712ef4f83088afd9efa91be3f86459c9147"
+    }
+  ],
+  "error": "ValueError: review acceptance stop gate failed: negative-transfer",
+  "engine_log_sha256": "0e6df99fd26abdf11ba2cff9ff2a86a8373323bf90dcdcdb546dc7bb1f9b6927"
+}

@@ -127,7 +127,10 @@ int main(void) {
 
     CHECK(closef(dsv4_clamped_swiglu(100.0f, 100.0f),
                  100.0f * dsv4_sigmoid(10.0f), 1e-4f));
-    CHECK(dsv4_clamped_swiglu(-100.0f, 2.0f) < 0.0f);
+    /* Pinned Torch FP32 SiLU underflows through exp(100) to signed zero. */
+    CHECK(dsv4_clamped_swiglu(-100.0f, 2.0f) == 0.0f);
+    CHECK(signbit(dsv4_clamped_swiglu(-100.0f, 2.0f)));
+    CHECK(dsv4_clamped_swiglu(-80.0f, 2.0f) < 0.0f);
 
     float mixes[24], base[24], scale[3] = {0.5f,0.75f,1.25f};
     for (int i = 0; i < 24; i++) { mixes[i] = (float)(i - 12) / 7; base[i] = (float)(i % 5 - 2) / 11; }

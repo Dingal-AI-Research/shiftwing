@@ -55,7 +55,7 @@ def render_deepseek_chat(
             target = {"role": "system", "content": ""}
             normalized.insert(0, target)
         target["tools"] = copy.deepcopy(list(tools))
-    thinking_mode = "thinking" if reasoning_effort == "high" else "chat"
+    thinking_mode = "thinking" if reasoning_effort is not None else "chat"
     return official.encode_messages(
         normalized,
         thinking_mode=thinking_mode,
@@ -99,7 +99,7 @@ def parse_deepseek_completion(
     """Parse official DSML, conservatively recovering malformed plain content."""
     verify_vendor()
     validate_reasoning_effort(reasoning_effort)
-    thinking_mode = "thinking" if reasoning_effort == "high" else "chat"
+    thinking_mode = "thinking" if reasoning_effort is not None else "chat"
     candidate = text
     if not candidate.endswith(official.eos_token):
         candidate += official.eos_token

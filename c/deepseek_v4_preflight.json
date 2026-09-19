@@ -1,0 +1,60 @@
+{
+  "accepted": true,
+  "cleanup_policy": [
+    "stale download/conversion staging",
+    "unqualified large-model scratch",
+    "c/ornith35 (only if necessary)",
+    "c/ornith397 only after its fresh control evidence is independently verified"
+  ],
+  "command": "c/tools/preflight_deepseek_v4.py --root . --target c/deepseek-v4-flash-0731 --container-bytes 166881088004 --source c/.deepseek-v4-flash-0731.source --source-bytes 166898734250 --staging-bytes 0 --min-final-free-gib 100 --output c/deepseek_v4_preflight.json",
+  "created_at": "2026-08-16T20:49:44.646607+00:00",
+  "environment": {
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "python": "3.12.3 (main, Jun 19 2026, 12:46:00) [GCC 13.3.0]",
+    "variables": {
+      "PATH": "/home/dinga/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/mnt/c/Users/dinga/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/c/Users/dinga/.codex/tmp/arg0/codex-arg02jLwUy:/mnt/c/Users/dinga/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/mnt/c/Program Files/Eclipse Adoptium/jdk-17.0.19.10-hotspot/bin:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/nodejs/:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files/GitHub CLI/:/mnt/c/Program Files/Tailscale/:/mnt/c/Program Files/Docker/Docker/resources/bin:/mnt/c/Tools/maestro/bin:/mnt/c/Users/dinga/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/powershell:/mnt/c/Users/dinga/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/dinga/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Users/dinga/AppData/Roaming/npm:/mnt/c/Users/dinga/AppData/Local/Programs/Ollama:/mnt/c/Users/dinga/AppData/Local/Programs/Warp/bin:/mnt/c/Users/dinga/AppData/Local/GitHubDesktop/bin:/mnt/c/Users/dinga/AppData/Local/Microsoft/WinGet/Packages/cURL.cURL_Microsoft.Winget.Source_8wekyb3d8bbwe/curl-8.19.0_1-win64-mingw/bin:/mnt/c/Users/dinga/.bun/bin:/mnt/c/Users/dinga/.lmstudio/bin:/mnt/c/Users/dinga/AppData/Local/Packages/PythonSoftwareFoundation.Python.3.12_qbz5n2kfra8p0/LocalCache/local-packages/Python312/Scripts:/mnt/c/Users/dinga/AppData/Local/Microsoft/WinGet/Packages/Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe:/mnt/c/Users/dinga/AppData/Local/OpenAI/Codex/bin/ada252862d154cdd:/mnt/c/Users/dinga/AppData/Local/Programs/pool/bin:/mnt/c/Users/dinga/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/mnt/c/Users/dinga/.cache/codex-runtimes/codex-primary-runtime/dependencies/native/git/cmd:/mnt/c/Users/dinga/AppData/Local/OpenAI/Codex/bin/d3a557c1f1167858:/mnt/c/Program Files/WindowsApps/OpenAI.Codex_26.810.4967.0_x64__2p2nqsd0c76g0/app/resources:/snap/bin"
+    }
+  },
+  "failures": [],
+  "hardware": {
+    "gpus": [
+      {
+        "compute_capability": "12.0",
+        "driver_version": "591.86",
+        "memory_total_mib": 16303,
+        "name": "NVIDIA GeForce RTX 5070 Ti",
+        "uuid": "GPU-26791497-d98e-bb07-24ce-559e498aa0a6"
+      }
+    ],
+    "memory": {
+      "available_bytes": 30543339520,
+      "total_bytes": 31541354496
+    }
+  },
+  "repository": {
+    "branch": "prefill-throughput-and-serve-fixes",
+    "commit": "35d9ab86fa2b8f8acbf56c8438413dfb08f2a2a7",
+    "deepseek_engine_source_sha256": "cf8ff78a9c3a71ed7a1ddf54303cb0031e3d7943ec8a3364c1d6f2aaac558cc5",
+    "deepseek_engine_source_status": "complete",
+    "dirty": true
+  },
+  "schema": "colib.deepseek-v4.preflight.v1",
+  "source": {
+    "model_family": "deepseek-v4",
+    "model_id": "deepseek-v4-flash-0731-colib",
+    "repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+    "weight_shards": 48
+  },
+  "storage": {
+    "capacity_bytes": 1081101176832,
+    "filesystem_path": "/home/dinga/Projects/colib/c",
+    "free_before_bytes": 782779924480,
+    "planned_container_bytes": 166881088004,
+    "planned_staging_bytes": 0,
+    "projected_final_free_bytes": 615886637562,
+    "projected_peak_new_bytes": 166893286918,
+    "required_final_free_bytes": 107374182400,
+    "source_bytes_remaining": 12198914
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "scope": "capability measurement of the full ladder with the 20-minute cancel removed; NOT an acceptance result",
+  "cases": [
+    {
+      "id": "upper-bound",
+      "prompt_tokens": 512,
+      "seconds": 957.4,
+      "minutes": 16.0,
+      "output_tokens": 286,
+      "length_limited": false,
+      "defect_found": true,
+      "oracle_reason": null,
+      "within_20_min": true
+    },
+    {
+      "id": "negative-transfer",
+      "prompt_tokens": 2048,
+      "seconds": 1692.4,
+      "minutes": 28.2,
+      "output_tokens": 528,
+      "length_limited": false,
+      "defect_found": true,
+      "oracle_reason": null,
+      "within_20_min": false
+    },
+    {
+      "id": "incomplete-cache-key",
+      "prompt_tokens": 8192,
+      "seconds": 1968.1,
+      "minutes": 32.8,
+      "output_tokens": 501,
+      "length_limited": false,
+      "defect_found": true,
+      "oracle_reason": null,
+      "within_20_min": false
+    },
+    {
+      "id": "path-containment",
+      "prompt_tokens": 16384,
+      "seconds": 2585.2,
+      "minutes": 43.1,
+      "output_tokens": 634,
+      "length_limited": false,
+      "defect_found": true,
+      "oracle_reason": null,
+      "within_20_min": false
+    },
+    {
+      "id": "partial-transaction",
+      "prompt_tokens": 32768,
+      "seconds": 3063.6,
+      "minutes": 51.1,
+      "output_tokens": 457,
+      "length_limited": false,
+      "defect_found": true,
+      "oracle_reason": null,
+      "within_20_min": false
+    }
+  ],
+  "correct_at_every_length": true,
+  "within_20_min_count": 1
+}

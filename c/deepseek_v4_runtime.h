@@ -33,7 +33,10 @@ typedef struct {
     dsv4_expert_cache *experts;
     int context;
     int position;
+    int prefill_chunk_start;
     int poisoned;
+    int (*trace)(void *, const char *, int, const float *, int, int);
+    void *trace_context;
     int32_t *history;
     float *hc;
     float *head_hidden;
@@ -47,7 +50,16 @@ typedef struct {
     double last_route_seconds[DSV4_RUNTIME_LAYERS];
     double last_routed_seconds[DSV4_RUNTIME_LAYERS];
     double last_shared_seconds[DSV4_RUNTIME_LAYERS];
+    double last_prefill_read_seconds[DSV4_RUNTIME_LAYERS];
     double last_head_seconds;
+    /* Decode (single-token chunk) attribution, cumulative over the request. */
+    uint64_t decode_steps;
+    double decode_step_seconds, decode_attention_seconds, decode_route_seconds,
+        decode_routed_seconds, decode_shared_seconds, decode_head_seconds;
+    /* One grouped six-expert submission per layer instead of six serial
+     * single-expert fetches. Defaults on; DSV4_DECODE_GROUPED=0 restores the
+     * serial path for paired comparison. */
+    int decode_grouped;
     char error[256];
 } dsv4_runtime;
 
@@ -62,7 +74,7 @@ static inline void *dsv4_runtime_calloc(size_t count, size_t size) {
 }
 
 static inline uint64_t dsv4_runtime_state_bytes(int context) {
-    if (context < 1 || context > 65536) return 0;
+    if (context < 1 || context > DSV4_MAX_CONTEXT) return 0;
     uint64_t floats = (uint64_t)DSV4_HC_MULT * DSV4_ATTN_HIDDEN +
         DSV4_ATTN_HIDDEN;
     uint64_t bytes = (uint64_t)context * sizeof(int32_t);
@@ -89,6 +101,7 @@ static inline uint64_t dsv4_runtime_state_bytes(int context) {
 
 static inline int dsv4_runtime_init_layer(dsv4_runtime *runtime,
                                            int layer) {
+    if (!runtime || layer<0 || layer>=DSV4_RUNTIME_LAYERS) return 0;
     dsv4_runtime_layer *current = &runtime->layers[layer];
     current->mode = dsv4_runtime_layer_mode(layer);
     int context = runtime->context;
@@ -265,11 +278,13 @@ static inline int dsv4_runtime_init(dsv4_runtime *runtime,
                                      dsv4_expert_cache *experts,
                                      int context) {
     if (!runtime || !store || !dense || !experts || context < 1 ||
-        context > 65536 || !dsv4_runtime_state_bytes(context))
+        context > DSV4_MAX_CONTEXT || !dsv4_runtime_state_bytes(context))
         return 0;
     memset(runtime, 0, sizeof(*runtime));
     runtime->store = store; runtime->dense = dense;
     runtime->experts = experts; runtime->context = context;
+    const char *grouped = getenv("DSV4_DECODE_GROUPED");
+    runtime->decode_grouped = !grouped || !*grouped || atoi(grouped) != 0;
     runtime->history = (int32_t *)dsv4_runtime_calloc(
         (size_t)context, sizeof(*runtime->history));
     if (!runtime->history || !dsv4_runtime_init_scratch(runtime)) {

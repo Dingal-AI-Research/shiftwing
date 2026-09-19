@@ -13,6 +13,8 @@
 #include <string.h>
 
 struct ColiCuda {
+    unsigned char *dsv4_group_act = nullptr, *dsv4_group_scale = nullptr;
+    size_t dsv4_group_act_cap = 0, dsv4_group_scale_cap = 0;
     int device;
     int major, minor;
     int sm_count, shared_per_block;
@@ -141,6 +143,8 @@ extern "C" void coli_cuda_destroy(ColiCuda *ctx) {
     cudaFree(ctx->group_gate);
     cudaFree(ctx->group_up);
     cudaFree(ctx->group_route_out);
+    cudaFree(ctx->dsv4_group_act);
+    cudaFree(ctx->dsv4_group_scale);
     cudaFree(ctx->group_gate16);
     cudaFree(ctx->gdn_x);
     cudaFree(ctx->gdn_raw);
@@ -235,6 +239,18 @@ extern "C" int coli_cuda_malloc_host(ColiCuda *ctx, void **ptr, size_t bytes) {
 extern "C" void coli_cuda_free_host(ColiCuda *ctx, void *ptr) {
     if (!ctx || !ptr) return;
     cudaFreeHost(ptr);
+}
+
+/* Page-lock caller-owned memory so uploads from it are direct DMA. */
+extern "C" int coli_cuda_host_register(ColiCuda *ctx, void *ptr, size_t bytes) {
+    if (!ctx || !ptr || !bytes) return fail_arg("coli_cuda_host_register: null argument");
+    cudaError_t error = cudaHostRegister(ptr, bytes, cudaHostRegisterDefault);
+    return error == cudaSuccess ? 0 : fail_cuda("cudaHostRegister", error);
+}
+
+extern "C" void coli_cuda_host_unregister(ColiCuda *ctx, void *ptr) {
+    if (!ctx || !ptr) return;
+    cudaHostUnregister(ptr);
 }
 
 extern "C" int coli_cuda_upload(ColiCuda *ctx, void *dst, const void *src,
@@ -2673,3 +2689,5 @@ extern "C" int coli_cuda_gqa_slots_q4_f16_device(
         query_heads, kv_heads, head_dim, rotary_dim, group_size, theta, eps,
         1);
 }
+
+#include "deepseek_v4_cuda.inc"

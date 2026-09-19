@@ -44,7 +44,7 @@ class DeepSeekGatewayTests(unittest.TestCase):
             self.assertEqual(snapshot_model_family(snapshot), "deepseek-v4")
 
     def test_cli_selects_deepseek_binary_id_context_and_dspark(self):
-        namespace = runpy.run_path(str(ROOT / "colib"), run_name="deepseek_cli_test")
+        namespace = runpy.run_path(str(ROOT / "shiftwing"), run_name="deepseek_cli_test")
         with tempfile.TemporaryDirectory() as tmp:
             snapshot = Path(tmp)
             (snapshot / "config.json").write_text(
@@ -58,7 +58,7 @@ class DeepSeekGatewayTests(unittest.TestCase):
                     "--model",
                     str(snapshot),
                     "--context",
-                    "65536",
+                    "100352",
                     "--dspark",
                     "off",
                 ]
@@ -73,12 +73,24 @@ class DeepSeekGatewayTests(unittest.TestCase):
                 "deepseek-v4-flash-0731-colib",
             )
             environment = namespace["_runtime_env"](args)
-            self.assertEqual(environment["CTX"], "65536")
+            self.assertEqual(environment["CTX"], "100352")
             self.assertEqual(environment["DSPARK"], "off")
             with self.assertRaises(SystemExit):
                 parser.parse_args(
-                    ["serve", "--model", str(snapshot), "--context", "65537"]
+                    ["serve", "--model", str(snapshot), "--context", "100353"]
                 )
+
+    def test_cli_retains_other_engines_context_limit(self):
+        namespace = runpy.run_path(str(ROOT / "shiftwing"), run_name="deepseek_cli_test")
+        with tempfile.TemporaryDirectory() as tmp:
+            snapshot = Path(tmp)
+            (snapshot / "config.json").write_text(json.dumps({"model_type": "qwen3_5"}))
+            args = namespace["build_parser"]().parse_args(
+                ["serve", "--model", str(snapshot), "--context", "65536"])
+            self.assertEqual(namespace["_runtime_env"](args)["CTX"], "65536")
+            args.context = 65537
+            with self.assertRaisesRegex(SystemExit, "65536 for this engine"):
+                namespace["_runtime_env"](args)
 
     def test_render_dispatches_to_pinned_official_encoder(self):
         messages = [{"role": "user", "content": "Hello"}]

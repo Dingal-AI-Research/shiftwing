@@ -1,0 +1,1 @@
+We need answer JSON. Need review transfer.py. Need identify defects. Need consider context helpers irrelevant. Need inspect code. transfer(sender, receiver, amount): if amount > sender.balance raise

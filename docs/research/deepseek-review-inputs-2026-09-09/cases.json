@@ -1,0 +1,81 @@
+{
+  "status": "prepared",
+  "source_revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+  "cases": [
+    {
+      "id": "upper-bound",
+      "target": 512,
+      "path": "lookup.py",
+      "line": 4,
+      "source": "def lookup(items, index):\n    if index < 0:\n        return None\n    if index <= len(items):\n        return items[index]\n    return None\n",
+      "terms": [
+        "index|bound",
+        "len|length|equal|off.by.one"
+      ],
+      "prompt_sha256": "38cc7a021fc3999e0f8bca438e706dbbd7ff2ec4d917c42775214c946bd96d53",
+      "request_sha256": "1fa367132909bb3449eff1e33fc88929f23309965e8327180c6fe900dd7814b1",
+      "count_sha256": "0855e106a393f8077f5600bd083f1b0b00d4208b7a4710e2276b3a803409ac03",
+      "token_ids_sha256": "c572c5281f628dbb6f4b8cb9c0bed277e56de64eb11ba5e381a2f1f9bb031784"
+    },
+    {
+      "id": "negative-transfer",
+      "target": 2048,
+      "path": "transfer.py",
+      "line": 2,
+      "source": "def transfer(sender, receiver, amount):\n    if amount > sender.balance:\n        raise ValueError(\"insufficient funds\")\n    sender.balance -= amount\n    receiver.balance += amount\n",
+      "terms": [
+        "negative|non.?negative|positive",
+        "amount|transfer|balance"
+      ],
+      "prompt_sha256": "0771e5d158e7b6d6ff5333fdbd190b0e8c2d608da12a964b753126943483d99f",
+      "request_sha256": "361b9ae43e1e6f980c24c4d82f614b3d4b8cdf80c12fcd3e1408811df2bb5dcb",
+      "count_sha256": "7266207feff16b832869c71ef79549c21404f67a5db135421800aa51ac2095c8",
+      "token_ids_sha256": "18213ba5938587b5c33a6df271359bf9884e9c6d1f32c73f1a5e13617d1c0de1"
+    },
+    {
+      "id": "incomplete-cache-key",
+      "target": 8192,
+      "path": "tax.py",
+      "line": 3,
+      "source": "_cache = {}\ndef total_with_tax(subtotal, tax_rate):\n    if subtotal in _cache:\n        return _cache[subtotal]\n    result = subtotal * (1 + tax_rate)\n    _cache[subtotal] = result\n    return result\n",
+      "terms": [
+        "tax_rate|tax rate|rate",
+        "key|cache"
+      ],
+      "prompt_sha256": "9bb6649c12eed58e09d729b3e0e17a7b3a0b2d81be0910aa9124f40fd6a86b2a",
+      "request_sha256": "46b9121e0869a283588135233ce5cf33a7b1d2be02b662997d550c64f02ebcff",
+      "count_sha256": "16c482e677bdeef35d673016330d80ebc8f90465a47c87901a1c828f2ca09ee1",
+      "token_ids_sha256": "d640b3e3eaba934ffa143f69cc8862fc860eb228fafbb9d006983536e3861b13"
+    },
+    {
+      "id": "path-containment",
+      "target": 16384,
+      "path": "download.py",
+      "line": 4,
+      "source": "from pathlib import Path\ndef download(root, requested):\n    target = (Path(root) / requested).resolve()\n    if not str(target).startswith(str(Path(root).resolve())):\n        raise ValueError(\"outside root\")\n    return target.read_bytes()\n",
+      "terms": [
+        "prefix|startswith|sibling",
+        "escape|outside|travers|contain|directory"
+      ],
+      "prompt_sha256": "b4834d972b95cca6c4e2084d8d26561432926b937ce667373e0547b7a628d64b",
+      "request_sha256": "2ad4d5fb9b35cb537a25dfc504e529ffe503b10ad1225c2620c9a91c98a53bab",
+      "count_sha256": "b1aa26c3a623ab0c3e6db1175424550c6962fc826d418beda91f8cea370b066a",
+      "token_ids_sha256": "057bb39293f5685b73e3f6a384c880115017174cee9a30520c3fa6a3aec473fc"
+    },
+    {
+      "id": "partial-transaction",
+      "target": 32768,
+      "path": "batch.py",
+      "line": 7,
+      "source": "def insert_batch(connection, rows):\n    connection.execute(\"BEGIN\")\n    try:\n        for row in rows:\n            connection.execute(\"INSERT INTO entries(value) VALUES (?)\", (row,))\n    finally:\n        connection.commit()\n",
+      "terms": [
+        "commit|partial",
+        "exception|fail|rollback|roll.back"
+      ],
+      "prompt_sha256": "7d21ea24aa7c424d947051f4bc68ad0b1982bb1870dd762bba8b4bde63b5c353",
+      "request_sha256": "2ebcdbcda258498243fa6f4e9d45836d9904067644ff6fd787d79eebecdcffb1",
+      "count_sha256": "ded8b241c5576126c049f06866ccef614f56bfccf5878105ba8cb3bbd30ce400",
+      "token_ids_sha256": "fa2d6c854be4e25eb646bcd6299b650bc9e1d6f960a2a9e857ccf09b09920859"
+    }
+  ]
+}

@@ -1,0 +1,618 @@
+{
+  "scope": "fresh metadata/request inspection and recomputation of saved 2026-09-11 numerical traces; no fresh model inference",
+  "source": {
+    "model_family": "deepseek-v4",
+    "model_id": "deepseek-v4-flash-0731-colib",
+    "repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+    "verification": "colib-source.json",
+    "weight_shards": 48
+  },
+  "manifest_sha256": "c84796f773e5b3942e4ba5200a480b7d1ba1c7add7e87cbb7e959271a1270a47",
+  "current_binary_sha256": "696433bb32b0d33d69da01d0d66f9051ce7e7a61bd5738f69f710e60c31de49a",
+  "tokenizer_sha256": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+  "record_count": 72317,
+  "segment_count": 91,
+  "payload_bytes": 166878536440,
+  "payload_by_category": {
+    "base_other": 8845959388,
+    "draft": 10862838300,
+    "base_routed": 147169738752
+  },
+  "payload_by_dtype": {
+    "BF16": 2967134976,
+    "F8_E8M0": 9261408000,
+    "F8_E4M3": 6304038912,
+    "F32": 150966520,
+    "I64": 18616320,
+    "I8": 148176371712
+  },
+  "learned_scalar_counts": {
+    "base_other": 7306849879,
+    "draft": 19845850983,
+    "base_routed": 277025390592
+  },
+  "scalar_count_method": "exclude F8_E8M0 quantization scales and I64 routing maps; unpack I8 FP4 weights as two values per byte",
+  "base_routed_expert_projection_coverage": {
+    "0": 768,
+    "1": 768,
+    "2": 768,
+    "3": 768,
+    "4": 768,
+    "5": 768,
+    "6": 768,
+    "7": 768,
+    "8": 768,
+    "9": 768,
+    "10": 768,
+    "11": 768,
+    "12": 768,
+    "13": 768,
+    "14": 768,
+    "15": 768,
+    "16": 768,
+    "17": 768,
+    "18": 768,
+    "19": 768,
+    "20": 768,
+    "21": 768,
+    "22": 768,
+    "23": 768,
+    "24": 768,
+    "25": 768,
+    "26": 768,
+    "27": 768,
+    "28": 768,
+    "29": 768,
+    "30": 768,
+    "31": 768,
+    "32": 768,
+    "33": 768,
+    "34": 768,
+    "35": 768,
+    "36": 768,
+    "37": 768,
+    "38": 768,
+    "39": 768,
+    "40": 768,
+    "41": 768,
+    "42": 768
+  },
+  "request": {
+    "path": "/home/dinga/Projects/localforge/.localforge/reviews/04138cb6ec225910/1789647622895-6696afcd-5445-4ab6-87e7-e6c4da80b4ae.request.json",
+    "sha256": "a8241839eefe18dee227a470dbbacf8d25238183d398485ff0ed0c3a8ec04999",
+    "model": "deepseek-flash",
+    "temperature": 0,
+    "top_p": 1,
+    "max_tokens": 8192,
+    "enable_thinking": false,
+    "reasoning_effort": null,
+    "rendered_tokens": 26517,
+    "rendered_sha256": "38a3cb1f3d53e5990a9fb5d5d243d2bffb24c65c21f4b317e3e55fb22252a3f7",
+    "expected_prompt_sha256": "38a3cb1f3d53e5990a9fb5d5d243d2bffb24c65c21f4b317e3e55fb22252a3f7",
+    "hash_matches": true,
+    "rendered_suffix": "\n57:     </YStack>\n58:   )\n59: }\n60: \n61: export default AdjustmentHistory\n62: <\uff5cAssistant\uff5c></think>"
+  },
+  "pasted_output": {
+    "sha256": "88ef05bb6d93697403e031ec64dce77f65b673ee13cbea5bdbbb8f482510cd34",
+    "complete_action_count": 35,
+    "unique_exact_actions": 28,
+    "duplicate_actions": [
+      {
+        "action_numbers": [
+          19,
+          29
+        ],
+        "text": "Fix the Playwright test 'low stock banner appears and navigates to filtered inventory': the test uses request.patch to set the threshold, but the API route now uses noIdItemSchema.partial() which accepts lowStockThreshold alone. Verify the PATCH succeeds and the threshold is persisted."
+      },
+      {
+        "action_numbers": [
+          20,
+          30
+        ],
+        "text": "Fix the Playwright test 'low stock banner appears and navigates to filtered inventory': the test navigates to '/' and expects the banner, but the banner is rendered in DashboardLayout only when allowedLinks.includes('inventory'). For a cashier role, the banner would not show. Ensure the seeded user is an admin."
+      },
+      {
+        "action_numbers": [
+          21,
+          31
+        ],
+        "text": "Fix the Playwright test 'low stock banner appears and navigates to filtered inventory': the banner navigation uses push('/inventory?filter=low-stock'), but the test asserts toHaveURL(/\\/inventory\\?filter=low-stock/). If Solito's push encodes the query string, the URL may differ. Verify the actual URL."
+      },
+      {
+        "action_numbers": [
+          22,
+          32
+        ],
+        "text": "Fix the Playwright test 'adjustment modal validates input and saves a valid adjustment': the test asserts the stock updates to first.itemBaseCount + 5, but the table may not refetch immediately. Add a wait for the stock value to appear."
+      },
+      {
+        "action_numbers": [
+          23,
+          33
+        ],
+        "text": "Fix the Playwright test 'inline threshold editing saves a new value': the test asserts await expect(page.getByText('Set', { exact: true })).toHaveCount(SORTED_ITEM_NAMES.length - 1) after saving, but if the save fails, the count may not change. Add a wait for the save to complete."
+      },
+      {
+        "action_numbers": [
+          24,
+          34
+        ],
+        "text": "Fix the Playwright test 'low stock banner appears and navigates to filtered inventory': the test asserts the banner is visible on the dashboard page, but the banner may be hidden if the low-stock endpoint returns an error. Ensure the endpoint is working."
+      },
+      {
+        "action_numbers": [
+          25,
+          35
+        ],
+        "text": "Fix the Playwright test 'inventory page loads with table columns and items': the assertion await expect(page.getByText('Name', { exact: true })).toBeVisible() may match the sidebar 'Inventory' label? No, 'Name' is distinct. But 'Stock' and 'Actions' are ambiguous. Use more specific selectors."
+      }
+    ],
+    "exact_repeated_adjacent_blocks": [],
+    "repeated_nonoverlapping_blocks": [
+      {
+        "first_start": 19,
+        "second_start": 29,
+        "actions": 7,
+        "words": 290
+      },
+      {
+        "first_start": 20,
+        "second_start": 30,
+        "actions": 6,
+        "words": 249
+      },
+      {
+        "first_start": 21,
+        "second_start": 31,
+        "actions": 5,
+        "words": 201
+      },
+      {
+        "first_start": 22,
+        "second_start": 32,
+        "actions": 4,
+        "words": 163
+      },
+      {
+        "first_start": 23,
+        "second_start": 33,
+        "actions": 3,
+        "words": 124
+      },
+      {
+        "first_start": 24,
+        "second_start": 34,
+        "actions": 2,
+        "words": 82
+      }
+    ],
+    "characters": 11432
+  },
+  "saved_logit_comparison": {
+    "relative_l2": 0.10273092057366585,
+    "cosine": 0.9947119072842534,
+    "max_absolute_error": 2.9940948486328125,
+    "exact_fraction": 0.0,
+    "native_top10": [
+      {
+        "token": 979,
+        "text": ":\n\n",
+        "logit": 24.246097564697266
+      },
+      {
+        "token": 264,
+        "text": "er",
+        "logit": 23.78866958618164
+      },
+      {
+        "token": 270,
+        "text": " the",
+        "logit": 23.572284698486328
+      },
+      {
+        "token": 565,
+        "text": " -",
+        "logit": 21.040958404541016
+      },
+      {
+        "token": 271,
+        "text": "\n\n",
+        "logit": 21.024188995361328
+      },
+      {
+        "token": 28,
+        "text": ":",
+        "logit": 20.90339469909668
+      },
+      {
+        "token": 1137,
+        "text": ":\n",
+        "logit": 20.69037628173828
+      },
+      {
+        "token": 294,
+        "text": " of",
+        "logit": 20.579421997070312
+      },
+      {
+        "token": 288,
+        "text": "ing",
+        "logit": 20.438077926635742
+      },
+      {
+        "token": 17038,
+        "text": " Response",
+        "logit": 20.074748992919922
+      }
+    ],
+    "native_margin": 0.457427978515625,
+    "reference_top10": [
+      {
+        "token": 270,
+        "text": " the",
+        "logit": 24.059703826904297
+      },
+      {
+        "token": 264,
+        "text": "er",
+        "logit": 23.8021240234375
+      },
+      {
+        "token": 979,
+        "text": ":\n\n",
+        "logit": 23.74953842163086
+      },
+      {
+        "token": 1137,
+        "text": ":\n",
+        "logit": 21.20534324645996
+      },
+      {
+        "token": 565,
+        "text": " -",
+        "logit": 20.98337173461914
+      },
+      {
+        "token": 28,
+        "text": ":",
+        "logit": 20.92639923095703
+      },
+      {
+        "token": 271,
+        "text": "\n\n",
+        "logit": 20.696935653686523
+      },
+      {
+        "token": 294,
+        "text": " of",
+        "logit": 20.437692642211914
+      },
+      {
+        "token": 362,
+        "text": " for",
+        "logit": 20.40207290649414
+      },
+      {
+        "token": 17038,
+        "text": " Response",
+        "logit": 20.145740509033203
+      }
+    ],
+    "reference_margin": 0.2575798034667969,
+    "native_traced_identical": true
+  },
+  "saved_layer_comparisons": [
+    {
+      "layer": 0,
+      "relative_l2": 0.006312039518020705,
+      "cosine": 0.9999800892047225,
+      "max_absolute_error": 0.01171875,
+      "exact_fraction": 0.8381156921386719
+    },
+    {
+      "layer": 1,
+      "relative_l2": 0.014497581420945616,
+      "cosine": 0.9998950041613628,
+      "max_absolute_error": 0.0263671875,
+      "exact_fraction": 0.3235816955566406
+    },
+    {
+      "layer": 2,
+      "relative_l2": 0.018157624802397996,
+      "cosine": 0.9998351951791093,
+      "max_absolute_error": 0.03125,
+      "exact_fraction": 0.25388145446777344
+    },
+    {
+      "layer": 3,
+      "relative_l2": 0.033063527779301535,
+      "cosine": 0.9994532565652537,
+      "max_absolute_error": 0.075439453125,
+      "exact_fraction": 0.08705902099609375
+    },
+    {
+      "layer": 4,
+      "relative_l2": 0.03927763959433708,
+      "cosine": 0.9992283909349008,
+      "max_absolute_error": 0.107421875,
+      "exact_fraction": 0.06932830810546875
+    },
+    {
+      "layer": 5,
+      "relative_l2": 0.010089283502351876,
+      "cosine": 0.9999491019651138,
+      "max_absolute_error": 0.25,
+      "exact_fraction": 0.062328338623046875
+    },
+    {
+      "layer": 6,
+      "relative_l2": 0.007940430303308061,
+      "cosine": 0.9999684768929111,
+      "max_absolute_error": 0.25,
+      "exact_fraction": 0.05228424072265625
+    },
+    {
+      "layer": 7,
+      "relative_l2": 0.011061529775270126,
+      "cosine": 0.9999388260702852,
+      "max_absolute_error": 0.5703125,
+      "exact_fraction": 0.04874229431152344
+    },
+    {
+      "layer": 8,
+      "relative_l2": 0.013433462716072058,
+      "cosine": 0.9999097951534769,
+      "max_absolute_error": 0.5,
+      "exact_fraction": 0.04550361633300781
+    },
+    {
+      "layer": 9,
+      "relative_l2": 0.010444384916795824,
+      "cosine": 0.9999455032165462,
+      "max_absolute_error": 0.5,
+      "exact_fraction": 0.04290771484375
+    },
+    {
+      "layer": 10,
+      "relative_l2": 0.010187815462168978,
+      "cosine": 0.9999481067252507,
+      "max_absolute_error": 0.5,
+      "exact_fraction": 0.04005241394042969
+    },
+    {
+      "layer": 11,
+      "relative_l2": 0.0102337211463353,
+      "cosine": 0.9999476620740708,
+      "max_absolute_error": 1.0,
+      "exact_fraction": 0.0386199951171875
+    },
+    {
+      "layer": 12,
+      "relative_l2": 0.010287722021243662,
+      "cosine": 0.9999471314171106,
+      "max_absolute_error": 1.0,
+      "exact_fraction": 0.03926849365234375
+    },
+    {
+      "layer": 13,
+      "relative_l2": 0.010744852780610848,
+      "cosine": 0.9999428531618338,
+      "max_absolute_error": 2.0,
+      "exact_fraction": 0.03657341003417969
+    },
+    {
+      "layer": 14,
+      "relative_l2": 0.012641312845228255,
+      "cosine": 0.9999206722812543,
+      "max_absolute_error": 2.0,
+      "exact_fraction": 0.035999298095703125
+    },
+    {
+      "layer": 15,
+      "relative_l2": 0.014793494181250052,
+      "cosine": 0.9998911751414716,
+      "max_absolute_error": 2.0,
+      "exact_fraction": 0.03586006164550781
+    },
+    {
+      "layer": 16,
+      "relative_l2": 0.017634265941588935,
+      "cosine": 0.9998454791990606,
+      "max_absolute_error": 2.0,
+      "exact_fraction": 0.03492546081542969
+    },
+    {
+      "layer": 17,
+      "relative_l2": 0.02279333190758137,
+      "cosine": 0.999741588414875,
+      "max_absolute_error": 3.75,
+      "exact_fraction": 0.03388786315917969
+    },
+    {
+      "layer": 18,
+      "relative_l2": 0.028810006478421843,
+      "cosine": 0.9995863338934922,
+      "max_absolute_error": 2.38671875,
+      "exact_fraction": 0.03247642517089844
+    },
+    {
+      "layer": 19,
+      "relative_l2": 0.029327444665561676,
+      "cosine": 0.9995713418104145,
+      "max_absolute_error": 2.6875,
+      "exact_fraction": 0.027170181274414062
+    },
+    {
+      "layer": 20,
+      "relative_l2": 0.029572684398600228,
+      "cosine": 0.9995656966900859,
+      "max_absolute_error": 4.5,
+      "exact_fraction": 0.025194168090820312
+    },
+    {
+      "layer": 21,
+      "relative_l2": 0.030236345034755373,
+      "cosine": 0.9995454569269115,
+      "max_absolute_error": 5.25,
+      "exact_fraction": 0.025232315063476562
+    },
+    {
+      "layer": 22,
+      "relative_l2": 0.028304812347357013,
+      "cosine": 0.9996011037896076,
+      "max_absolute_error": 3.75,
+      "exact_fraction": 0.024564743041992188
+    },
+    {
+      "layer": 23,
+      "relative_l2": 0.02770925303542664,
+      "cosine": 0.99961786733658,
+      "max_absolute_error": 3.5625,
+      "exact_fraction": 0.023487091064453125
+    },
+    {
+      "layer": 24,
+      "relative_l2": 0.02572591065965232,
+      "cosine": 0.9996692100520257,
+      "max_absolute_error": 3.4375,
+      "exact_fraction": 0.023639678955078125
+    },
+    {
+      "layer": 25,
+      "relative_l2": 0.02817273182645709,
+      "cosine": 0.9996033485458616,
+      "max_absolute_error": 3.5,
+      "exact_fraction": 0.022485733032226562
+    },
+    {
+      "layer": 26,
+      "relative_l2": 0.028517364511026027,
+      "cosine": 0.9995936078578979,
+      "max_absolute_error": 3.0,
+      "exact_fraction": 0.02259063720703125
+    },
+    {
+      "layer": 27,
+      "relative_l2": 0.02435348435171459,
+      "cosine": 0.9997040526723627,
+      "max_absolute_error": 4.0,
+      "exact_fraction": 0.021188735961914062
+    },
+    {
+      "layer": 28,
+      "relative_l2": 0.02528785213532516,
+      "cosine": 0.9996808081918437,
+      "max_absolute_error": 4.0,
+      "exact_fraction": 0.020891189575195312
+    },
+    {
+      "layer": 29,
+      "relative_l2": 0.028017968673528584,
+      "cosine": 0.999608361883749,
+      "max_absolute_error": 5.0,
+      "exact_fraction": 0.020009994506835938
+    },
+    {
+      "layer": 30,
+      "relative_l2": 0.030544935943169992,
+      "cosine": 0.9995342646945826,
+      "max_absolute_error": 6.0,
+      "exact_fraction": 0.018093109130859375
+    },
+    {
+      "layer": 31,
+      "relative_l2": 0.032220004400977144,
+      "cosine": 0.99948205726933,
+      "max_absolute_error": 5.0,
+      "exact_fraction": 0.017854690551757812
+    },
+    {
+      "layer": 32,
+      "relative_l2": 0.032799474600777305,
+      "cosine": 0.9994630956421603,
+      "max_absolute_error": 5.0,
+      "exact_fraction": 0.017656326293945312
+    },
+    {
+      "layer": 33,
+      "relative_l2": 0.036049857456736945,
+      "cosine": 0.9993517665495265,
+      "max_absolute_error": 5.25,
+      "exact_fraction": 0.017467498779296875
+    },
+    {
+      "layer": 34,
+      "relative_l2": 0.03716291223172596,
+      "cosine": 0.9993104313933371,
+      "max_absolute_error": 5.0,
+      "exact_fraction": 0.0165252685546875
+    },
+    {
+      "layer": 35,
+      "relative_l2": 0.037828220823455314,
+      "cosine": 0.9992854805837555,
+      "max_absolute_error": 5.0,
+      "exact_fraction": 0.015825271606445312
+    },
+    {
+      "layer": 36,
+      "relative_l2": 0.037642441704581545,
+      "cosine": 0.9993305702643682,
+      "max_absolute_error": 12.0,
+      "exact_fraction": 0.01447296142578125
+    },
+    {
+      "layer": 37,
+      "relative_l2": 0.06480945196467945,
+      "cosine": 0.9996022425981796,
+      "max_absolute_error": 176.0,
+      "exact_fraction": 0.012542724609375
+    },
+    {
+      "layer": 38,
+      "relative_l2": 0.01662503054370974,
+      "cosine": 0.999960973761975,
+      "max_absolute_error": 192.0,
+      "exact_fraction": 0.013406753540039062
+    },
+    {
+      "layer": 39,
+      "relative_l2": 0.016734575769114142,
+      "cosine": 0.9999604610010768,
+      "max_absolute_error": 224.0,
+      "exact_fraction": 0.01328277587890625
+    },
+    {
+      "layer": 40,
+      "relative_l2": 0.01441050655121117,
+      "cosine": 0.9999667335127345,
+      "max_absolute_error": 256.0,
+      "exact_fraction": 0.013654708862304688
+    },
+    {
+      "layer": 41,
+      "relative_l2": 0.014306608491391112,
+      "cosine": 0.9999655720294619,
+      "max_absolute_error": 256.0,
+      "exact_fraction": 0.0136260986328125
+    },
+    {
+      "layer": 42,
+      "relative_l2": 0.014769505539189837,
+      "cosine": 0.999955554650162,
+      "max_absolute_error": 192.0,
+      "exact_fraction": 0.014600753784179688
+    }
+  ],
+  "saved_probability_comparison": {
+    "scope": "saved 32-token fixture, probabilities at temperature 1 without top-p truncation",
+    "total_variation": 0.1707291762135696,
+    "kl_reference_to_native_nats": 0.08950969809273272,
+    "js_nats": 0.021772524835113764,
+    "native_probability_of_reference_top": 0.1945404332265208,
+    "reference_probability_of_reference_top": 0.3129382910376393,
+    "native_probability_of_native_top": 0.3816305105225362,
+    "reference_probability_of_native_top": 0.22948567576722562
+  }
+}

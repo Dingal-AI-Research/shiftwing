@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import os
+import struct
 from pathlib import Path
 
 from deepseek_v4_spec import SOURCE_REVISION
@@ -147,6 +148,10 @@ def compressor_decode_fixture(overlap: bool):
 
 
 def indexer_fixture():
+    def bf16(value):
+        bits = struct.unpack("<I", struct.pack("<f", value))[0]
+        bits = (bits + 0x7fff + ((bits >> 16) & 1)) & 0xffff0000
+        return struct.unpack("<f", struct.pack("<I", bits))[0]
     heads, dim, tokens, topk = 3, 4, 6, 3
     query = [((head * 7 + axis * 3) % 13 - 6) / 5
              for head in range(heads) for axis in range(dim)]
@@ -159,8 +164,8 @@ def indexer_fixture():
         for head in range(heads):
             dot = sum(query[head * dim + axis] * kv[token * dim + axis]
                       for axis in range(dim))
-            score += max(dot, 0.0) * weights[head]
-        scores.append(score)
+            score += bf16(max(bf16(dot), 0.0) * weights[head])
+        scores.append(bf16(score))
     indices = sorted(range(tokens), key=lambda token: scores[token],
                      reverse=True)[:topk]
     return {"heads": heads, "dim": dim, "tokens": tokens, "topk": topk,

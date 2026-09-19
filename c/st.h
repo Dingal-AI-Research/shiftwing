@@ -128,6 +128,15 @@ static int st_env_enabled(const char *name) {
  * that rejects O_DIRECT is a normal runtime condition: callers fall back to
  * the exact buffered pread path. */
 #define ST_DIRECT_ALIGN 4096u
+/* A request whose offset, length and destination are all block-aligned needs
+ * no bounce buffer: O_DIRECT can land it in place. The bytes delivered are the
+ * same either way; only the copy disappears. */
+static int st_direct_in_place(const st_tensor *t, const void *out) {
+    int64_t mask = (int64_t)ST_DIRECT_ALIGN - 1;
+    return !(t->off & mask) && !(t->nbytes & mask) &&
+           !((uintptr_t)out & (uintptr_t)mask);
+}
+
 static int st_pread_direct_try(shards *S, st_tensor *t, void *out) {
     int fd = st_direct_fd(S, t->fd);
     if (fd < 0 || t->nbytes <= 0) return -1;
@@ -136,6 +145,19 @@ static int st_pread_direct_try(shards *S, st_tensor *t, void *out) {
     size_t delta = (size_t)(t->off - aligned_off);
     size_t need = delta + (size_t)t->nbytes;
     size_t request = (need + ST_DIRECT_ALIGN - 1) & ~(size_t)(ST_DIRECT_ALIGN - 1);
+    if (st_direct_in_place(t, out)) {
+        size_t got = 0;
+        while (got < need) {
+            ssize_t n = pread(fd, (char *)out + got, request - got,
+                              aligned_off + (int64_t)got);
+            if (n < 0 && errno == EINTR) continue;
+            if (n <= 0) return -1;
+            got += (size_t)n;
+        }
+        __atomic_fetch_add(&S->read_bytes, (uint64_t)t->nbytes, __ATOMIC_RELAXED);
+        __atomic_fetch_add(&S->direct_bytes, (uint64_t)t->nbytes, __ATOMIC_RELAXED);
+        return 0;
+    }
     void *bounce = NULL;
     if (posix_memalign(&bounce, ST_DIRECT_ALIGN, request) != 0) return -1;
     size_t got = 0;
@@ -364,7 +386,7 @@ typedef struct {
     st_tensor *tensor;
     void *out, *io_buf;
     size_t io_len, delta, need;
-    int fd;
+    int fd, in_place;
 } st_batch_req;
 
 #ifdef __linux__
@@ -453,8 +475,8 @@ static void st_uring_cache_disable(void) {
  * safetensors entries. io_uring is opportunistic: kernels, containers, and
  * filesystems may disable it, in which case the same requests are replayed
  * through the tested synchronous path. */
-static int st_read_raw_batch_uring(shards *S, const char **names, void **outs,
-                                   int nreq, int direct) {
+static int st_read_raw_batch_uring_extents(shards *S, const char **names, void **outs,
+                                   int nreq, int direct, st_tensor *const *extents) {
 #ifdef __linux__
     if (nreq <= 0) return 0;
     int persistent = st_env_enabled("URING_PERSIST");
@@ -462,10 +484,16 @@ static int st_read_raw_batch_uring(shards *S, const char **names, void **outs,
     if (!req) return -1;
     int ok = 1;
     for (int i = 0; i < nreq; i++) {
-        st_tensor *t = st_find(S, names[i]);
+        st_tensor *t = extents ? extents[i] : st_find(S, names[i]);
         if (!t || t->nbytes <= 0 || t->nbytes > UINT32_MAX) { ok = 0; break; }
         req[i].tensor = t; req[i].out = outs[i];
-        if (direct) {
+        if (direct && st_direct_in_place(t, outs[i])) {
+            int fd = st_direct_fd(S, t->fd);
+            if (fd < 0) { ok = 0; break; }
+            req[i].fd = fd; req[i].io_buf = outs[i];
+            req[i].io_len = (size_t)t->nbytes; req[i].need = req[i].io_len;
+            req[i].delta = 0; req[i].in_place = 1;
+        } else if (direct) {
             int fd = st_direct_fd(S, t->fd);
             int64_t mask = (int64_t)ST_DIRECT_ALIGN - 1;
             int64_t aligned_off = t->off & ~mask;
@@ -504,7 +532,7 @@ static int st_read_raw_batch_uring(shards *S, const char **names, void **outs,
     }
     if (!ok || !ring) {
         for (int i = 0; i < nreq; i++)
-            if (direct && !persistent) free(req[i].io_buf);
+            if (direct && !persistent && !req[i].in_place) free(req[i].io_buf);
         free(req); return -1;
     }
     for (int i = 0; i < nreq; i++) {
@@ -533,7 +561,7 @@ static int st_read_raw_batch_uring(shards *S, const char **names, void **outs,
     if (ok) {
         uint64_t bytes = 0;
         for (int i = 0; i < nreq; i++) {
-            if (direct)
+            if (direct && !req[i].in_place)
                 memcpy(req[i].out, (char *)req[i].io_buf + req[i].delta,
                        (size_t)req[i].tensor->nbytes);
             bytes += (uint64_t)req[i].tensor->nbytes;
@@ -544,13 +572,32 @@ static int st_read_raw_batch_uring(shards *S, const char **names, void **outs,
         __atomic_fetch_add(&S->uring_reads, (uint64_t)nreq, __ATOMIC_RELAXED);
     }
     for (int i = 0; i < nreq; i++)
-        if (direct && !persistent) free(req[i].io_buf);
+        if (direct && !persistent && !req[i].in_place) free(req[i].io_buf);
     free(req);
     return ok ? 0 : -1;
 #else
     (void)S; (void)names; (void)outs; (void)nreq; (void)direct;
     return -1;
 #endif
+}
+
+static int st_read_raw_batch_uring(shards *S, const char **names, void **outs, int nreq, int direct) {
+    return st_read_raw_batch_uring_extents(S, names, outs, nreq, direct, NULL);
+}
+
+static void st_read_extents(shards *S, st_tensor *const *extents, void **outs, int count) {
+    int direct = st_env_enabled("DIRECT");
+    if (st_env_enabled("URING") && st_read_raw_batch_uring_extents(S, NULL, outs, count, direct, extents) == 0) return;
+    if (st_env_enabled("URING")) __atomic_fetch_add(&S->uring_fallbacks, 1, __ATOMIC_RELAXED);
+    for (int i=0; i<count; i++) {
+        st_tensor *t=extents[i];
+        if (!direct || st_pread_direct_try(S,t,outs[i]) != 0) {
+            if (direct) __atomic_fetch_add(&S->direct_fallbacks,1,__ATOMIC_RELAXED);
+            st_pread_full(t->fd,outs[i],t->nbytes,t->off,"pread expert extent");
+            __atomic_fetch_add(&S->read_bytes,t->nbytes,__ATOMIC_RELAXED);
+        }
+        posix_fadvise(t->fd,t->off,t->nbytes,POSIX_FADV_DONTNEED);
+    }
 }
 
 static void st_read_raw_batch(shards *S, const char **names, void **outs,

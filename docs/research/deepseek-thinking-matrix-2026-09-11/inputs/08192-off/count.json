@@ -1,0 +1,16 @@
+{
+  "object": "shiftwing.prompt_token_count",
+  "prompt_sha256": "f08fd7ad78ea362e47a67a19cd54cb710998b240ac6cac07bc17f0ed70f2c00f",
+  "prompt_bytes": 27428,
+  "prompt_tokens": 8192,
+  "input_limit": 32768,
+  "output_budget": 8192,
+  "review_context": 40960,
+  "fits": true,
+  "reasoning_effort": null,
+  "source_revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+  "tokenizer_sha256": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+  "encoding_sha256": "abc0d26120250dda0ae077dc64aa28836026e61e970854aaeb792445e6a0dde6",
+  "tokenizer_binary_sha256": "d1a8c00f34b02fd3132c21203b678f57fe0f258fa18542185197df6537957663",
+  "count_time_ms": 251.97028799448162
+}

@@ -1,0 +1,14 @@
+{
+  "scope": "complete 43-layer logit parity, native engine vs pinned reference; not a timing measurement",
+  "tokens": 32,
+  "vocab": 129280,
+  "relative_l2": 0.10273092057366678,
+  "cosine": 0.9947120220417344,
+  "max_absolute_error": 2.9940948486328125,
+  "native_top_token": 979,
+  "reference_top_token": 270,
+  "top_token_matches": false,
+  "native_finite": true,
+  "reference_finite": true,
+  "passed": false
+}

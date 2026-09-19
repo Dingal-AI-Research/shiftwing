@@ -18,7 +18,7 @@ typedef struct {
 
 static inline int dsv4_runtime_session_shape_for(
     int context, dsv4_runtime_session_shape *shape) {
-    if (!shape || context < 1 || context > 65536 ||
+    if (!shape || context < 1 || context > DSV4_MAX_CONTEXT ||
         DSV4_RUNTIME_LAYERS != 43 || DSV4_ATTN_HIDDEN != 4096)
         return 0;
     memset(shape, 0, sizeof(*shape));

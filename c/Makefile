@@ -257,6 +257,10 @@ bench-tier-io: tests/bench_tier_io$(EXE)
 	@test -n "$(SNAP)" || { echo "set SNAP=<converted snapshot>" >&2; exit 1; }
 	./tests/bench_tier_io$(EXE) "$(SNAP)"
 
+# Weight-free DeepSeek exact-count helper; deliberately requires no CUDA object.
+deepseek_v4_tokenize$(EXE): deepseek_v4_tokenize.c deepseek_v4_tokenizer.h deepseek_v4_unicode.h tok.h tok_unicode.h tok_nfc.h json.h
+	$(CC) $(filter-out -DCOLI_CUDA,$(CFLAGS)) $< -o $@ -lm
+
 # tokenizer parity harness (Phase 1 gate): ./tests/test_tok tokenizer.json < cases
 tests/test_tok$(EXE): tests/test_tok.c tok.h tok_unicode.h tok_nfc.h
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
@@ -344,3 +348,25 @@ install: qwen$(EXE) web
 	cp -R ../web/dist/. $(DESTDIR)$(LIBEXECDIR)/web/dist/
 
 .PHONY: all qwen glm53 web test-glm53 test-c test-python test-web test-tokenizer test-docs test-source-package test-cuda test check bench-qmat bench-stack bench-gqa-prefill clean install
+
+# Native DeepSeek remains opt-in until reviewer qualification passes.
+DSV4_HEADERS = $(wildcard deepseek_v4*.h) st.h uring.h json.h backend_cuda.h
+deepseek_v4$(EXE): deepseek_v4.c $(DSV4_HEADERS) $(CUDA_OBJ) .build-config
+	$(CC) $(CFLAGS) $< $(CUDA_OBJ) -o $@ $(LDFLAGS)
+backend_cuda.o: deepseek_v4_cuda.inc
+DSV4_PROBES = tests/probe_deepseek_v4_expert tests/probe_deepseek_v4_prefill tests/probe_deepseek_v4_dense
+$(DSV4_PROBES): %: %.c $(DSV4_HEADERS) $(CUDA_OBJ) .build-config
+	$(CC) $(CFLAGS) $< $(CUDA_OBJ) -o $@ $(LDFLAGS)
+DSV4_CONTRACT = tests/test_deepseek_v4_contract
+DSV4_TESTS = $(filter-out $(DSV4_CONTRACT),$(patsubst %.c,%,$(wildcard tests/test_deepseek_v4*.c)))
+$(DSV4_TESTS) $(DSV4_CONTRACT): %: %.c $(DSV4_HEADERS) $(CUDA_OBJ) .build-config
+	$(CC) $(CFLAGS) $< $(CUDA_OBJ) -o $@ $(LDFLAGS)
+test-deepseek: $(DSV4_TESTS)
+	$(PYTHON) tools/run_tests.py $(DSV4_TESTS)
+.PHONY: test-deepseek
+
+# This check needs a complete converted checkpoint, unlike the fixture suite.
+test-deepseek-contract: $(DSV4_CONTRACT)
+	@test -n "$(DSV4_SNAPSHOT)" || (echo "Set DSV4_SNAPSHOT to a complete converted checkpoint" >&2; exit 2)
+	./$(DSV4_CONTRACT) "$(DSV4_SNAPSHOT)"
+.PHONY: test-deepseek-contract

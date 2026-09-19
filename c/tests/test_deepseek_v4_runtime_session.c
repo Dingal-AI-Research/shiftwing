@@ -57,6 +57,11 @@ static void seed_runtime(dsv4_runtime *runtime) {
 }
 
 int main(void) {
+    dsv4_runtime_session_shape large_shape;
+    CHECK(dsv4_runtime_session_shape_for(100352, &large_shape));
+    CHECK(!dsv4_runtime_session_shape_for(100353, &large_shape));
+    CHECK((large_shape.compressed_kv + large_shape.window_kv + large_shape.mhc)*sizeof(uint16_t)
+          + large_shape.compressor*sizeof(float) + 100352*sizeof(int32_t) < DSV4_SESSION_MAX_BYTES);
     dsv4_store store = {0};
     dsv4_dense_arena dense = {0};
     dsv4_expert_cache experts = {0};

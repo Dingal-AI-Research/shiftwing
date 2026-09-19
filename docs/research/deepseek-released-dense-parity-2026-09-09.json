@@ -1,0 +1,119 @@
+{
+  "source_revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+  "probe_sha256": "4f1a41e863ff72c064274a4d6c359d93dc727bd2cc68d0efcd50ffd144e96a89",
+  "reference_model_sha256": "c0c19e6c9fa439bac7fbb1c5bc1868232dfd5aa2f439a548d0e33dcc2a9edd3f",
+  "passed": true,
+  "results": [
+    {
+      "case": "layers.0.attn.wq_a",
+      "mode": "cpu",
+      "batch": 1,
+      "dtype": "F8_E4M3",
+      "relative_l2_error": 0.0,
+      "max_absolute_error": 0.0,
+      "exact_fraction": 1.0,
+      "passed": true,
+      "probe": "DENSE_PROBE batch=1 rows=1024 cols=4096 seconds=0.047665"
+    },
+    {
+      "case": "layers.0.attn.wq_a",
+      "mode": "cuda",
+      "batch": 17,
+      "dtype": "F8_E4M3",
+      "relative_l2_error": 0.0,
+      "max_absolute_error": 0.0,
+      "exact_fraction": 1.0,
+      "passed": true,
+      "probe": "DENSE_PROBE batch=17 rows=1024 cols=4096 seconds=0.249006"
+    },
+    {
+      "case": "layers.0.attn.wq_b",
+      "mode": "cpu",
+      "batch": 1,
+      "dtype": "F8_E4M3",
+      "relative_l2_error": 0.0,
+      "max_absolute_error": 0.0,
+      "exact_fraction": 1.0,
+      "passed": true,
+      "probe": "DENSE_PROBE batch=1 rows=32768 cols=1024 seconds=0.389766"
+    },
+    {
+      "case": "layers.0.attn.wq_b",
+      "mode": "cuda",
+      "batch": 17,
+      "dtype": "F8_E4M3",
+      "relative_l2_error": 4.957009878125973e-07,
+      "max_absolute_error": 0.000244140625,
+      "exact_fraction": 0.9999892290900735,
+      "passed": true,
+      "probe": "DENSE_PROBE batch=17 rows=32768 cols=1024 seconds=0.005464"
+    },
+    {
+      "case": "layers.0.attn.wo_a",
+      "mode": "cpu",
+      "batch": 1,
+      "dtype": "F8_E4M3",
+      "relative_l2_error": 0.00011023518891306594,
+      "max_absolute_error": 0.00048828125,
+      "exact_fraction": 0.9998779296875,
+      "passed": true,
+      "probe": "DENSE_PROBE batch=1 rows=8192 cols=4096 seconds=0.333855"
+    },
+    {
+      "case": "layers.0.attn.wo_a",
+      "mode": "cuda",
+      "batch": 17,
+      "dtype": "F8_E4M3",
+      "relative_l2_error": 0.00011593271483434364,
+      "max_absolute_error": 0.03125,
+      "exact_fraction": 0.9991885914522058,
+      "passed": true,
+      "probe": "DENSE_PROBE batch=17 rows=8192 cols=4096 seconds=0.003780"
+    },
+    {
+      "case": "layers.2.attn.compressor.wkv",
+      "mode": "cpu",
+      "batch": 1,
+      "dtype": "BF16",
+      "relative_l2_error": 6.532483780574694e-07,
+      "max_absolute_error": 2.2351741790771484e-07,
+      "exact_fraction": 0.0693359375,
+      "passed": true,
+      "probe": "DENSE_PROBE batch=1 rows=1024 cols=4096 seconds=0.002643"
+    },
+    {
+      "case": "layers.2.attn.compressor.wkv",
+      "mode": "cuda",
+      "batch": 17,
+      "dtype": "BF16",
+      "relative_l2_error": 1.5225312210986885e-07,
+      "max_absolute_error": 1.9073486328125e-06,
+      "exact_fraction": 0.18158318014705882,
+      "passed": true,
+      "probe": "DENSE_PROBE batch=17 rows=1024 cols=4096 seconds=0.004983"
+    },
+    {
+      "case": "layers.2.attn.indexer.weights_proj",
+      "mode": "cpu",
+      "batch": 1,
+      "dtype": "BF16",
+      "relative_l2_error": 9.216283842761186e-07,
+      "max_absolute_error": 2.86102294921875e-06,
+      "exact_fraction": 0.140625,
+      "passed": true,
+      "probe": "DENSE_PROBE batch=1 rows=64 cols=4096 seconds=0.000143"
+    },
+    {
+      "case": "layers.2.attn.indexer.weights_proj",
+      "mode": "cuda",
+      "batch": 17,
+      "dtype": "BF16",
+      "relative_l2_error": 1.6731981133943918e-07,
+      "max_absolute_error": 1.9073486328125e-05,
+      "exact_fraction": 0.16636029411764705,
+      "passed": true,
+      "probe": "DENSE_PROBE batch=17 rows=64 cols=4096 seconds=0.003426"
+    }
+  ],
+  "scope": "released dense projections, independent Torch equations; not complete model acceptance"
+}

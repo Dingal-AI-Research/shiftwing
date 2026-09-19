@@ -1,0 +1,10 @@
+{
+  "verdict": "REJECT",
+  "issues": [
+    {
+      "path": "batch.py",
+      "line": 7,
+      "explanation": "The finally block always commits, even if an exception occurs during the loop. This causes a partial batch to be committed, violating atomicity. Trigger: any exception in the loop. Consequence: partial data is persisted."
+    }
+  ]
+}

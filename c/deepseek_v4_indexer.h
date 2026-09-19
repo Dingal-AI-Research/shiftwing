@@ -31,6 +31,7 @@ typedef struct {
     float *scores;
     uint8_t *activation;
     uint8_t *activation_scale;
+    const float *prefill_query, *prefill_compressor_kv, *prefill_compressor_score, *prefill_head_weights;
 } dsv4_indexer_scratch;
 
 static inline int dsv4_indexer_state_init(
@@ -72,10 +73,10 @@ static inline int dsv4_indexer_decode(
     if (!dsv4_dense_fp8_pair(
             dense, projection, DSV4_INDEX_HEADS * DSV4_INDEX_DIM,
             DSV4_ATTN_Q_RANK, &weight, &scale) ||
-        !dsv4_dense_linear_fp8(dense,
+        !dsv4_attention_project_fp8(dense,
             scratch->query, q_rank, weight, scale, 1,
             DSV4_INDEX_HEADS * DSV4_INDEX_DIM, DSV4_ATTN_Q_RANK,
-            scratch->activation, scratch->activation_scale))
+            scratch->activation, scratch->activation_scale, scratch->prefill_query))
         return -1;
     for (int head = 0; head < DSV4_INDEX_HEADS; head++) {
         float *query = scratch->query + (size_t)head * DSV4_INDEX_DIM;
@@ -83,9 +84,9 @@ static inline int dsv4_indexer_decode(
                    DSV4_ATTN_ROPE_DIM, state->position, DSV4_ORIGINAL_CONTEXT,
                    DSV4_COMPRESS_ROPE_THETA, DSV4_ROPE_FACTOR, 32, 1, 0);
         dsv4_round_bf16_array(query, DSV4_INDEX_DIM);
-        if (!dsv4_hadamard(query, DSV4_INDEX_DIM) ||
-            !dsv4_fp4_simulate(query, DSV4_INDEX_DIM, 32))
-            return -1;
+        if (!dsv4_hadamard(query,DSV4_INDEX_DIM)) return -1;
+        dsv4_round_bf16_array(query,DSV4_INDEX_DIM);
+        if (!dsv4_fp4_simulate(query,DSV4_INDEX_DIM,32)) return -1;
     }
     snprintf(projection, sizeof(projection), "%s.compressor", indexer);
     snprintf(name, sizeof(name), "%s.wkv.weight", projection);
@@ -103,10 +104,10 @@ static inline int dsv4_indexer_decode(
         !dsv4_model_tensor_shape(descriptor, DSV4_DTYPE_BF16, 2,
                                  2 * DSV4_INDEX_DIM, DSV4_ATTN_HIDDEN))
         return -1;
-    dsv4_bf16_gemm(scratch->compressor_kv, input, compressor_wkv, 1,
-                    2 * DSV4_INDEX_DIM, DSV4_ATTN_HIDDEN);
-    dsv4_bf16_gemm(scratch->compressor_score, input, compressor_wgate, 1,
-                    2 * DSV4_INDEX_DIM, DSV4_ATTN_HIDDEN);
+    dsv4_attention_project_bf16(scratch->compressor_kv, input, compressor_wkv, 1,
+                    2 * DSV4_INDEX_DIM, DSV4_ATTN_HIDDEN, scratch->prefill_compressor_kv);
+    dsv4_attention_project_bf16(scratch->compressor_score, input, compressor_wgate, 1,
+                    2 * DSV4_INDEX_DIM, DSV4_ATTN_HIDDEN, scratch->prefill_compressor_score);
     const float *ape = (const float *)dsv4_dense_named(
         dense, projection, ".ape", DSV4_DTYPE_F32, DSV4_INDEX_RATIO,
         2 * DSV4_INDEX_DIM);
@@ -133,9 +134,9 @@ static inline int dsv4_indexer_decode(
                    DSV4_ORIGINAL_CONTEXT, DSV4_COMPRESS_ROPE_THETA,
                    DSV4_ROPE_FACTOR, 32, 1, 0);
         dsv4_round_bf16_array(compressed, DSV4_INDEX_DIM);
-        if (!dsv4_hadamard(compressed, DSV4_INDEX_DIM) ||
-            !dsv4_fp4_simulate(compressed, DSV4_INDEX_DIM, 32))
-            return -1;
+        if (!dsv4_hadamard(compressed,DSV4_INDEX_DIM)) return -1;
+        dsv4_round_bf16_array(compressed,DSV4_INDEX_DIM);
+        if (!dsv4_fp4_simulate(compressed,DSV4_INDEX_DIM,32)) return -1;
     }
     snprintf(name, sizeof(name), "%s.weights_proj.weight", indexer);
     const uint16_t *weights_projection =
@@ -144,21 +145,22 @@ static inline int dsv4_indexer_decode(
         !dsv4_model_tensor_shape(descriptor, DSV4_DTYPE_BF16, 2,
                                  DSV4_INDEX_HEADS, DSV4_ATTN_HIDDEN))
         return -1;
-    dsv4_bf16_gemm(scratch->head_weights, input, weights_projection, 1,
-                    DSV4_INDEX_HEADS, DSV4_ATTN_HIDDEN);
+    dsv4_attention_project_bf16(scratch->head_weights, input, weights_projection, 1,
+                    DSV4_INDEX_HEADS, DSV4_ATTN_HIDDEN, scratch->prefill_head_weights);
     dsv4_round_bf16_array(scratch->head_weights, DSV4_INDEX_HEADS);
     float head_scale = 1.0f /
         sqrtf((float)DSV4_INDEX_DIM * DSV4_INDEX_HEADS);
     for (int head = 0; head < DSV4_INDEX_HEADS; head++)
-        scratch->head_weights[head] *= head_scale;
+        scratch->head_weights[head] = dsv4_round_bf16(scratch->head_weights[head]*head_scale);
     int visible = (state->position + 1) / DSV4_INDEX_RATIO;
     int topk = visible < DSV4_INDEX_TOPK ? visible : DSV4_INDEX_TOPK;
     state->position++;
     if (!topk) return 0;
-    return dsv4_indexer_topk(
-        scratch->query, state->kv_cache, scratch->head_weights,
+    int selected=dsv4_dense_indexer_topk(
+        dense, scratch->query, state->kv_cache, scratch->head_weights,
         DSV4_INDEX_HEADS, DSV4_INDEX_DIM, visible, topk, offset,
-        scratch->scores, indices);
+        scratch->scores, indices,state->position-1,DSV4_INDEX_RATIO,state->max_compressed);
+    return selected==topk?selected:-1;
 }
 
 #endif

@@ -323,7 +323,7 @@ def verify_source_revision(source: Path, allow_fixture: bool) -> dict[str, str]:
 
 
 def build_plan(
-    source: Path, allow_fixture: bool = False
+    source: Path, allow_fixture: bool = False, header_provider=None
 ) -> tuple[dict[str, list[TensorRecord]], dict[str, Any]]:
     source = source.resolve()
     revision = verify_source_revision(source, allow_fixture)
@@ -347,9 +347,12 @@ def build_plan(
     headers: dict[str, tuple[int, dict[str, Any]]] = {}
     for shard in shards:
         path = source / shard
-        if not path.is_file():
-            raise FileNotFoundError(f"missing source shard: {path}")
-        headers[shard] = read_safetensors_header(path)
+        if header_provider is not None:
+            headers[shard] = header_provider(shard)
+        else:
+            if not path.is_file():
+                raise FileNotFoundError(f"missing source shard: {path}")
+            headers[shard] = read_safetensors_header(path)
 
     groups: dict[str, list[TensorRecord]] = {}
     for name, shard in sorted(weight_map.items()):
@@ -526,14 +529,19 @@ def convert(
     allow_fixture: bool = False,
     command: str | None = None,
     stop_after_groups: int | None = None,
+    header_provider=None,
+    prepare_group=None,
+    release_group=None,
 ) -> dict[str, Any]:
     if alignment <= 0 or alignment & (alignment - 1):
         raise ValueError("alignment must be a positive power of two")
     source = source.resolve()
     target = target.resolve()
-    groups, plan = build_plan(source, allow_fixture=allow_fixture)
+    groups, plan = build_plan(source, allow_fixture=allow_fixture, header_provider=header_provider)
     required = projected_output_bytes(groups, alignment)
-    preflight_storage(target, required, min_final_free)
+    # Completed segments are verified below; account only for new allocation on resume.
+    existing = sum((target / group).stat().st_size for group in groups if (target / group).is_file())
+    preflight_storage(target, max(0, required - existing), min_final_free)
     target.mkdir(parents=True, exist_ok=True)
     repository_root = Path(__file__).resolve().parents[2]
     repository = _git_metadata(repository_root)
@@ -554,13 +562,21 @@ def convert(
                 raise ValueError(f"completed segment size changed: {group}")
             if sha256_file(output) != completed["sha256"]:
                 raise ValueError(f"completed segment hash changed: {group}")
+            if release_group is not None:
+                # Resume a crash after state commit but before staging release.
+                release_group(records, completed, state["inventory"][group])
             continue
+        if prepare_group is not None:
+            prepare_group(records)
         segment, inventory = write_group(source, target, group, records, alignment)
         state["completed"][group] = segment
         state["inventory"][group] = inventory
         state["updated_at"] = utc_now()
         atomic_json(state_path, state)
+        if release_group is not None:
+            release_group(records, segment, inventory)
         newly_completed += 1
+        print(f"[converted {len(state['completed'])}/{len(groups)}] {group}", flush=True)
         if stop_after_groups is not None and newly_completed >= stop_after_groups:
             return state
 

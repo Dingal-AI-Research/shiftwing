@@ -24,9 +24,28 @@ WORKSPACE_PYTHON = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" els
 PYTHON = Path(os.environ.get("SHIFTWING_PYTHON", os.environ.get("COLI_PYTHON", WORKSPACE_PYTHON if WORKSPACE_PYTHON.is_file() else sys.executable)))
 
 
+DEEPSEEK_ENGINE = SUPPORT / ("deepseek_v4.exe" if os.name == "nt" else "deepseek_v4")
+
+
+def _is_deepseek(model):
+    from openai_server import snapshot_model_family
+    return snapshot_model_family(Path(model)) == "deepseek-v4"
+
+
+def _selected_engine(model):
+    return DEEPSEEK_ENGINE if _is_deepseek(model) else ENGINE
+
+
 def _runtime_env(args: argparse.Namespace) -> dict[str, str]:
     from openai_server import apply_engine_defaults
 
+    from tools.deepseek_v4_spec import validate_context
+
+    deepseek = _is_deepseek(args.model)
+    if deepseek:
+        validate_context(args.context)
+    elif not 1 <= args.context <= 65_536:
+        raise SystemExit("context must be between 1 and 65536 for this engine")
     env = os.environ.copy()
     env.setdefault("SERVE_RESIDENT", "1")
     apply_engine_defaults(env)
@@ -94,6 +113,17 @@ def _runtime_env(args: argparse.Namespace) -> dict[str, str]:
                 "CUDA_PINNED_UPLOAD": "1",
             }
         )
+    if deepseek:
+        env["DSPARK"] = getattr(args, "dspark", "off")
+        env["DSV4_EXPERIMENTAL"] = "1" if getattr(args, "experimental_deepseek", False) else "0"
+        env.setdefault("RAM_GB", "8")
+        env.setdefault("CUDA_EXPERT_GB", "2")
+        env.setdefault("CUDA_HEADROOM_GB", "1.5")
+        env.setdefault("DSV4_PREFILL_CHUNK", "1024")
+        if env["DSPARK"] != "off":
+            raise SystemExit("DeepSeek DSpark is not qualified; use --dspark off")
+        if getattr(args, "expert_q3", False):
+            raise SystemExit("DeepSeek requires native FP4 weights, not Qwen Q3 sidecars")
     return env
 
 
@@ -102,7 +132,7 @@ def _require_model(model: Path) -> None:
         raise SystemExit(f"model directory not found: {model}")
     if not (model / "tokenizer.json").is_file():
         raise SystemExit(f"tokenizer.json is missing from {model}")
-    if not ENGINE.is_file():
+    if not _selected_engine(model).is_file():
         raise SystemExit(f"engine is not built: {ENGINE}\nrun: make -C {HERE} qwen")
 
 
@@ -113,17 +143,17 @@ def _server_argv(args: argparse.Namespace) -> list[str]:
         "--model",
         str(Path(args.model).expanduser().resolve()),
         "--engine",
-        str(ENGINE),
+        str(_selected_engine(args.model)),
         "--host",
         args.host,
         "--port",
         str(args.port),
         "--model-id",
-        args.model_id,
+        ("deepseek-v4-flash-0731-colib" if _is_deepseek(args.model) and args.model_id == "qwen3.5-shiftwing" else args.model_id),
         "--max-tokens",
         str(args.max_tokens),
         "--kv-slots",
-        str(args.kv_slots),
+        str(1 if _is_deepseek(args.model) else args.kv_slots),
         "--max-queue",
         str(args.max_queue),
     ] + (["--api-key", args.api_key] if args.api_key else [])
@@ -154,7 +184,7 @@ def command_chat(args: argparse.Namespace) -> int:
     _require_model(model)
     family = snapshot_model_family(model)
     runtime = Engine(
-        ENGINE,
+        _selected_engine(model),
         model,
         max_tokens=args.max_tokens,
         env=_runtime_env(args),
@@ -234,8 +264,9 @@ def context_value(value: str) -> int:
         context = int(value)
     except ValueError as error:
         raise argparse.ArgumentTypeError("context must be an integer") from error
-    if not 1 <= context <= 65_536:
-        raise argparse.ArgumentTypeError("context must be between 1 and 65536")
+    from tools.deepseek_v4_spec import MAX_CONTEXT
+    if not 1 <= context <= MAX_CONTEXT:
+        raise argparse.ArgumentTypeError(f"context must be between 1 and {MAX_CONTEXT}")
     return context
 
 
@@ -244,6 +275,8 @@ def add_runtime_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", default=str(DEFAULT_MODEL))
     parser.add_argument("--context", type=context_value, default=4096)
     parser.add_argument("--cuda", action="store_true")
+    parser.add_argument("--dspark", choices=("off",), default="off")
+    parser.add_argument("--experimental-deepseek", action="store_true", help="enable unqualified DeepSeek development probes")
     parser.add_argument("--session-dir")
     parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--expert-q3", action="store_true")

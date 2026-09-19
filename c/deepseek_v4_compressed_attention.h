@@ -62,9 +62,9 @@ static inline int dsv4_attention_decode_compressed_nonoverlap(
     snprintf(projection, sizeof(projection), "%s.wq_a", attention);
     if (!dsv4_dense_fp8_pair(dense, projection, DSV4_ATTN_Q_RANK,
                               DSV4_ATTN_HIDDEN, &weight, &scale) ||
-        !dsv4_dense_linear_fp8(dense, work->q_rank, input, weight, scale, 1,
+        !dsv4_attention_project_fp8(dense, work->q_rank, input, weight, scale, 1,
                           DSV4_ATTN_Q_RANK, DSV4_ATTN_HIDDEN,
-                          work->activation, work->activation_scale))
+                          work->activation, work->activation_scale, work->prefill_q_rank))
         return 0;
     const uint16_t *q_norm = (const uint16_t *)dsv4_attention_vector(
         dense, attention, ".q_norm.weight", DSV4_DTYPE_BF16,
@@ -76,21 +76,13 @@ static inline int dsv4_attention_decode_compressed_nonoverlap(
     if (!dsv4_dense_fp8_pair(
             dense, projection, DSV4_ATTN_HEADS * DSV4_ATTN_HEAD_DIM,
             DSV4_ATTN_Q_RANK, &weight, &scale) ||
-        !dsv4_dense_linear_fp8(dense,
-            work->query, work->q_rank, weight, scale, 1,
+        !dsv4_attention_project_fp8(dense, work->query, work->q_rank, weight, scale, 1,
             DSV4_ATTN_HEADS * DSV4_ATTN_HEAD_DIM, DSV4_ATTN_Q_RANK,
-            work->activation, work->activation_scale))
+            work->activation, work->activation_scale, work->prefill_query))
         return 0;
     for (int head = 0; head < DSV4_ATTN_HEADS; head++) {
         float *query = work->query + (size_t)head * DSV4_ATTN_HEAD_DIM;
-        float square_sum = 0.0f;
-        for (int axis = 0; axis < DSV4_ATTN_HEAD_DIM; axis++)
-            square_sum += query[axis] * query[axis];
-        float inverse = 1.0f / sqrtf(
-            square_sum / DSV4_ATTN_HEAD_DIM + 1e-6f);
-        for (int axis = 0; axis < DSV4_ATTN_HEAD_DIM; axis++)
-            query[axis] *= inverse;
-        dsv4_round_bf16_array(query, DSV4_ATTN_HEAD_DIM);
+        dsv4_query_norm_bf16(query,DSV4_ATTN_HEAD_DIM,1e-6f);
         dsv4_rope(query + DSV4_ATTN_HEAD_DIM - DSV4_ATTN_ROPE_DIM,
                    DSV4_ATTN_ROPE_DIM, state->position, DSV4_ORIGINAL_CONTEXT,
                    DSV4_COMPRESS_ROPE_THETA, DSV4_ROPE_FACTOR, 32, 1, 0);
@@ -99,9 +91,9 @@ static inline int dsv4_attention_decode_compressed_nonoverlap(
     snprintf(projection, sizeof(projection), "%s.wkv", attention);
     if (!dsv4_dense_fp8_pair(dense, projection, DSV4_ATTN_HEAD_DIM,
                               DSV4_ATTN_HIDDEN, &weight, &scale) ||
-        !dsv4_dense_linear_fp8(dense, work->kv, input, weight, scale, 1,
+        !dsv4_attention_project_fp8(dense, work->kv, input, weight, scale, 1,
                           DSV4_ATTN_HEAD_DIM, DSV4_ATTN_HIDDEN,
-                          work->activation, work->activation_scale))
+                          work->activation, work->activation_scale, work->prefill_kv))
         return 0;
     const uint16_t *kv_norm = (const uint16_t *)dsv4_attention_vector(
         dense, attention, ".kv_norm.weight", DSV4_DTYPE_BF16,
@@ -136,10 +128,10 @@ static inline int dsv4_attention_decode_compressed_nonoverlap(
         !dsv4_model_tensor_shape(descriptor, DSV4_DTYPE_BF16, 2,
                                  DSV4_ATTN_HEAD_DIM, DSV4_ATTN_HIDDEN))
         return 0;
-    dsv4_bf16_gemm(scratch->compressor_kv, input, compressor_wkv, 1,
-                    DSV4_ATTN_HEAD_DIM, DSV4_ATTN_HIDDEN);
-    dsv4_bf16_gemm(scratch->compressor_score, input, compressor_wgate, 1,
-                    DSV4_ATTN_HEAD_DIM, DSV4_ATTN_HIDDEN);
+    dsv4_attention_project_bf16(scratch->compressor_kv, input, compressor_wkv, 1,
+                    DSV4_ATTN_HEAD_DIM, DSV4_ATTN_HIDDEN, work->prefill_compressor_kv);
+    dsv4_attention_project_bf16(scratch->compressor_score, input, compressor_wgate, 1,
+                    DSV4_ATTN_HEAD_DIM, DSV4_ATTN_HIDDEN, work->prefill_compressor_score);
     const float *ape = (const float *)dsv4_dense_named(
         dense, compressor, ".ape", DSV4_DTYPE_F32,
         DSV4_COMPRESS_RATIO, DSV4_ATTN_HEAD_DIM);
@@ -181,10 +173,17 @@ static inline int dsv4_attention_decode_compressed_nonoverlap(
         dense, attention, ".attn_sink", DSV4_DTYPE_F32,
         DSV4_ATTN_HEADS);
     if (!sink || selected < 1) return 0;
-    dsv4_sparse_attention(
+    if (work->prefill_collect) {
+        if (!work->prefill_collect(work->prefill_collect_context,work->query,state->kv_cache,
+                work->indices,selected,sink,state->position)) return 0;
+        state->position++;
+        return 1;
+    }
+    if (!dsv4_dense_sparse_attention(dense,
         work->context, work->query, state->kv_cache, DSV4_ATTN_HEADS,
         DSV4_ATTN_HEAD_DIM, work->indices, selected, sink,
-        1.0f / sqrtf((float)DSV4_ATTN_HEAD_DIM));
+        1.0f / sqrtf((float)DSV4_ATTN_HEAD_DIM),
+        state->position,DSV4_ATTN_WINDOW,DSV4_COMPRESS_RATIO,DSV4_ATTN_WINDOW+state->max_compressed)) return 0;
     for (int head = 0; head < DSV4_ATTN_HEADS; head++)
         dsv4_rope(work->context +
                        (size_t)head * DSV4_ATTN_HEAD_DIM +
@@ -193,6 +192,12 @@ static inline int dsv4_attention_decode_compressed_nonoverlap(
                    DSV4_COMPRESS_ROPE_THETA, DSV4_ROPE_FACTOR, 32, 1, 1);
     dsv4_round_bf16_array(
         work->context, (size_t)DSV4_ATTN_HEADS * DSV4_ATTN_HEAD_DIM);
+    if (work->prefill_context) {
+        memcpy(work->prefill_context,work->context,
+            (size_t)DSV4_ATTN_HEADS*DSV4_ATTN_HEAD_DIM*sizeof(float));
+        state->position++;
+        return 1;
+    }
     int group_width = DSV4_ATTN_HEADS * DSV4_ATTN_HEAD_DIM /
                       DSV4_ATTN_O_GROUPS;
     snprintf(projection, sizeof(projection), "%s.wo_a", attention);
@@ -206,13 +211,12 @@ static inline int dsv4_attention_decode_compressed_nonoverlap(
         (size_t)((DSV4_ATTN_O_RANK + 127) / 128) *
         ((group_width + 127) / 128);
     for (int group = 0; group < DSV4_ATTN_O_GROUPS; group++)
-        if (!dsv4_dense_linear_fp8(dense,
+        if (!dsv4_dense_fp8_weight_bf16(dense,
                 work->o_rank + (size_t)group * DSV4_ATTN_O_RANK,
                 work->context + (size_t)group * group_width,
                 wo_a_weight + (size_t)group * group_weight,
                 wo_a_scale + (size_t)group * group_scale, 1,
-                DSV4_ATTN_O_RANK, group_width, work->activation,
-                work->activation_scale))
+                DSV4_ATTN_O_RANK, group_width))
             return 0;
     snprintf(projection, sizeof(projection), "%s.wo_b", attention);
     if (!dsv4_dense_fp8_pair(

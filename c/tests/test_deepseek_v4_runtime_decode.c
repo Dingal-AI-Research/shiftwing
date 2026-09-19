@@ -21,8 +21,12 @@
 #define DSV4_INDEX_TOPK 2
 #define DSV4_INDEX_RATIO 4
 #define DSV4_MOE_INTERMEDIATE 128
+#ifndef DSV4_RUNTIME_LAYERS
 #define DSV4_RUNTIME_LAYERS 1
+#endif
+#ifndef DSV4_BASE_LAYERS
 #define DSV4_BASE_LAYERS 1
+#endif
 #define DSV4_DSPARK_LAYERS 0
 #include "../deepseek_v4_runtime.h"
 
@@ -39,7 +43,7 @@ typedef struct {
 } record;
 
 typedef struct {
-    record items[96];
+    record items[96*DSV4_RUNTIME_LAYERS];
     int count;
     size_t bytes;
 } layout;
@@ -51,10 +55,16 @@ static int dtype_bytes(const char *dtype) {
     return 1;
 }
 
+static int fixture_disk_order = 0;
 static int add_record(layout *plan, const char *name, const char *dtype,
                       int rank, int rows, int columns) {
     if (!plan || plan->count >= (int)(sizeof(plan->items) /
                                       sizeof(plan->items[0]))) return 0;
+    /* Disk order starts every expert (its w1.scale record) on a page. */
+    size_t length = strlen(name);
+    if (fixture_disk_order && strstr(name, ".ffn.experts.") && length > 9 &&
+        !strcmp(name + length - 9, ".w1.scale"))
+        plan->bytes = (plan->bytes + 4095) & ~(size_t)4095;
     record *item = &plan->items[plan->count++];
     if (snprintf(item->name, sizeof(item->name), "%s", name) >=
         (int)sizeof(item->name)) return 0;
@@ -85,10 +95,23 @@ static int add_fp8(layout *plan, const char *prefix, int rows, int columns) {
                 (columns + 127) / 128);
 }
 
+/* Default: records packed in w1/s1/w2/s2/w3/s3 order at arbitrary offsets.
+ * Disk order: the converter's real layout -- each expert page-aligned with its
+ * records as s1,w1,s3,w3,s2,w2 -- which the tier reads in place. */
 static int add_expert(layout *plan, int expert) {
     char prefix[160], name[192];
     snprintf(prefix, sizeof(prefix), "layers.0.ffn.experts.%d", expert);
     const char *projection[3] = {"w1", "w2", "w3"};
+    if (fixture_disk_order) {
+        const char *order[3] = {"w1", "w3", "w2"};
+        for (int index = 0; index < 3; index++) {
+            snprintf(name, sizeof(name), "%s.%s.scale", prefix, order[index]);
+            if (!add2(plan, name, "F8_E8M0", 128, 4)) return 0;
+            snprintf(name, sizeof(name), "%s.%s.weight", prefix, order[index]);
+            if (!add2(plan, name, "I8", 128, 64)) return 0;
+        }
+        return 1;
+    }
     for (int index = 0; index < 3; index++) {
         snprintf(name, sizeof(name), "%s.%s.weight", prefix,
                  projection[index]);
@@ -132,6 +155,40 @@ static int build_layout(layout *plan) {
         return 0;
     for (int expert = 0; expert < DSV4_EXPERTS; expert++)
         if (!add_expert(plan, expert)) return 0;
+    int original_count=plan->count;
+    for (int layer=1;layer<DSV4_RUNTIME_LAYERS;layer++)
+        for (int i=0;i<original_count;i++) {
+            record copy=plan->items[i];
+            if (strncmp(copy.name,"layers.0.",9)) continue;
+            char name[192];snprintf(name,sizeof(name),"layers.%d.%.170s",layer,copy.name+9);
+            if (!add_record(plan,name,copy.dtype,copy.rank,copy.rows,copy.columns)) return 0;
+        }
+    for (int layer=2;layer<DSV4_RUNTIME_LAYERS;layer++) {
+        char name[192];int overlap=!(layer&1),cw=(overlap?2:1)*DSV4_ATTN_HEAD_DIM;
+        snprintf(name,sizeof(name),"layers.%d.ffn.gate.bias",layer);
+        if (!add1(plan,name,"F32",DSV4_EXPERTS)) return 0;
+        snprintf(name,sizeof(name),"layers.%d.attn.compressor.wkv.weight",layer);
+        if (!add2(plan,name,"BF16",cw,DSV4_ATTN_HIDDEN)) return 0;
+        snprintf(name,sizeof(name),"layers.%d.attn.compressor.wgate.weight",layer);
+        if (!add2(plan,name,"BF16",cw,DSV4_ATTN_HIDDEN)) return 0;
+        snprintf(name,sizeof(name),"layers.%d.attn.compressor.ape",layer);
+        if (!add2(plan,name,"F32",overlap?DSV4_INDEX_RATIO:128,cw)) return 0;
+        snprintf(name,sizeof(name),"layers.%d.attn.compressor.norm.weight",layer);
+        if (!add1(plan,name,"BF16",DSV4_ATTN_HEAD_DIM)) return 0;
+        if (!overlap) continue;
+        snprintf(name,sizeof(name),"layers.%d.attn.indexer.wq_b",layer);
+        if (!add_fp8(plan,name,DSV4_INDEX_HEADS*DSV4_INDEX_DIM,DSV4_ATTN_Q_RANK)) return 0;
+        snprintf(name,sizeof(name),"layers.%d.attn.indexer.compressor.wkv.weight",layer);
+        if (!add2(plan,name,"BF16",2*DSV4_INDEX_DIM,DSV4_ATTN_HIDDEN)) return 0;
+        snprintf(name,sizeof(name),"layers.%d.attn.indexer.compressor.wgate.weight",layer);
+        if (!add2(plan,name,"BF16",2*DSV4_INDEX_DIM,DSV4_ATTN_HIDDEN)) return 0;
+        snprintf(name,sizeof(name),"layers.%d.attn.indexer.compressor.ape",layer);
+        if (!add2(plan,name,"F32",DSV4_INDEX_RATIO,2*DSV4_INDEX_DIM)) return 0;
+        snprintf(name,sizeof(name),"layers.%d.attn.indexer.compressor.norm.weight",layer);
+        if (!add1(plan,name,"BF16",DSV4_INDEX_DIM)) return 0;
+        snprintf(name,sizeof(name),"layers.%d.attn.indexer.weights_proj.weight",layer);
+        if (!add2(plan,name,"BF16",DSV4_INDEX_HEADS,DSV4_ATTN_HIDDEN)) return 0;
+    }
     return 1;
 }
 

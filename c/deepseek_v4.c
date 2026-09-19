@@ -2,13 +2,20 @@
  * LOAD_ONLY=1 validates the converted identity. Serving remains fail-closed
  * until the streamed forward path passes its manifest-bound quality gate. */
 
+/* Before any system header: glibc locks its feature-test macros at the
+ * first one it sees, so st.h defining _GNU_SOURCE later has no effect and
+ * O_DIRECT stays invisible in this translation unit. That silently turned
+ * every expert read into a buffered one -- measured direct_bytes=0 with
+ * 2140 direct fallbacks on a filesystem that supports O_DIRECT fine.
+ * qwen.c and glm53.c already define it first; this file did not. */
+#define _GNU_SOURCE
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-#include "deepseek_v4_runtime.h"
+#include "deepseek_v4_execute.h"
 #include "json.h"
 
 #define DSV4_SOURCE_REVISION "9e165c30e2704aec5d9d593cce3eebd58bbef1cb"
@@ -111,8 +118,8 @@ static int validate_config(const char *snapshot, int context) {
         json_string(root, "colib_model_family", "deepseek-v4", 1) &&
         json_string(root, "colib_source_revision", DSV4_SOURCE_REVISION, 1);
     if (!ok) fprintf(stderr, "deepseek_v4: pinned configuration validation failed\n");
-    if (context < 1 || context > 65536) {
-        fprintf(stderr, "deepseek_v4: CTX must be in 1..65536\n");
+    if (context < 1 || context > DSV4_MAX_CONTEXT) {
+        fprintf(stderr, "deepseek_v4: CTX must be in 1..%d\n", DSV4_MAX_CONTEXT);
         ok = 0;
     }
     free(text);
@@ -135,7 +142,7 @@ static double dsv4_env_gb(const char *name, double fallback) {
 }
 
 static int dsv4_run_smoke(dsv4_store *store, int context, int token) {
-    if (!store || context < 1 || context > 65536 ||
+    if (!store || context < 1 || context > DSV4_MAX_CONTEXT ||
         token < 0 || token >= DSV4_VOCAB) {
         fprintf(stderr, "deepseek_v4: invalid smoke token/context\n");
         return 2;
@@ -153,21 +160,33 @@ static int dsv4_run_smoke(dsv4_store *store, int context, int token) {
     uint64_t read_start =
         __atomic_load_n(&store->raw.read_bytes, __ATOMIC_RELAXED);
 
+    int use_cuda=getenv("COLI_CUDA") && atoi(getenv("COLI_CUDA"))!=0;
+    uint64_t device_free=0;
+#ifdef COLI_CUDA
+    if (use_cuda) {
+        size_t available,total;
+        if (coli_cuda_create(&cuda,0) || coli_cuda_memory_info(cuda,&available,&total)) goto done;
+        device_free=available;
+    }
+#else
+    if (use_cuda) { fprintf(stderr,"deepseek_v4: binary has no CUDA support\n");goto done; }
+#endif
+    dsv4_memory_plan plan;
+    double ram_gb=dsv4_budget_gb("RAM_GB",8),gpu_gb=dsv4_budget_gb("CUDA_EXPERT_GB",2),headroom=dsv4_budget_gb("CUDA_HEADROOM_GB",1.5);
+    if (ram_gb<0 || gpu_gb<0 || headroom<1.5 ||
+        !dsv4_plan_memory(&plan,context,256,dsv4_host_available_bytes(),device_free,use_cuda,
+            (uint64_t)(ram_gb*DSV4_GIB),(uint64_t)(gpu_gb*DSV4_GIB),(uint64_t)(headroom*DSV4_GIB),
+            dsv4_dense_fp8_page_bytes(store,0))) {
+        fprintf(stderr,"deepseek_v4: smoke memory budget cannot fit\n");goto done;
+    }
+    if (!dsv4_store_require_integrity(store)) { fprintf(stderr,"deepseek_v4: %s\n",store->error);goto done; }
     if (!dsv4_dense_arena_init(&dense, store, 0, 1)) {
         fprintf(stderr, "deepseek_v4: dense initialization failed: %s\n",
                 dense.error);
         goto done;
     }
     dense_ready = 1;
-    double ram_gb = dsv4_env_gb("RAM_GB", 6.0);
-    size_t expert_bytes = dsv4_expert_payload_bytes();
-    size_t layer_bytes =
-        (size_t)(DSV4_BASE_LAYERS + DSV4_DSPARK_LAYERS) * expert_bytes;
-    int capacity = layer_bytes
-        ? (int)((ram_gb * 1024.0 * 1024.0 * 1024.0) / (double)layer_bytes)
-        : 0;
-    if (capacity < DSV4_TOPK) capacity = DSV4_TOPK;
-    if (capacity > DSV4_EXPERTS) capacity = DSV4_EXPERTS;
+    int capacity=plan.host_capacity;
     if (!dsv4_expert_cache_init(&experts, store, capacity)) {
         fprintf(stderr, "deepseek_v4: expert-cache initialization failed: %s\n",
                 experts.error);
@@ -176,18 +195,11 @@ static int dsv4_run_smoke(dsv4_store *store, int context, int token) {
     experts_ready = 1;
 #ifdef COLI_CUDA
     if (getenv("COLI_CUDA") && atoi(getenv("COLI_CUDA")) != 0) {
-        if (coli_cuda_create(&cuda, 0)) {
-            fprintf(stderr, "deepseek_v4: CUDA initialization failed: %s\n",
-                    coli_cuda_last_error());
-            goto done;
-        }
         if (!dsv4_dense_arena_enable_cuda(&dense, cuda)) {
             fprintf(stderr, "deepseek_v4: %s\n", dense.error);
             goto done;
         }
-        size_t cuda_budget = (size_t)(
-            dsv4_env_gb("CUDA_EXPERT_GB", 4.0) *
-            1024.0 * 1024.0 * 1024.0);
+        size_t cuda_budget=(size_t)plan.device_cache;
         if (!dsv4_expert_cache_enable_cuda(&experts, cuda, cuda_budget)) {
             fprintf(stderr, "deepseek_v4: CUDA expert cache failed: %s\n",
                     experts.error);
@@ -384,17 +396,22 @@ int main(void) {
         return 1;
     }
     const char *context_text = getenv("CTX");
-    int context = context_text ? atoi(context_text) : 16384;
+    int context = context_text ? atoi(context_text) : DSV4_MAX_CONTEXT;
     const char *dspark = getenv("DSPARK");
-    if (dspark && strcmp(dspark, "auto") && strcmp(dspark, "on") &&
-        strcmp(dspark, "off")) {
-        fprintf(stderr, "deepseek_v4: DSPARK must be auto, on, or off\n");
-        return 2;
+    if (dspark && strcmp(dspark,"off")) {
+        fprintf(stderr,"deepseek_v4: native reviewer requires DSPARK=off\n");return 2;
     }
     if (!validate_config(snapshot, context)) return 2;
-    printf("colib DeepSeek-V4 engine — pinned native backend\n");
-    printf("model=%s source=%s ctx=%d dspark=%s\n", DSV4_MODEL_ID,
-           DSV4_SOURCE_REVISION, context, dspark ? dspark : "auto");
+    /* Startup text goes to stderr, not stdout.
+     *
+     * When this process serves, stdout carries the length-framed protocol and
+     * its first bytes must be the READY frame. A human banner ahead of that
+     * breaks the handshake: the host reads exactly len(READY) bytes and sees
+     * "colib Deep" instead, which is precisely how the acceptance run failed.
+     * Nothing parses these lines from stdout; they are diagnostics. */
+    fprintf(stderr, "colib DeepSeek-V4 engine — pinned native backend\n");
+    fprintf(stderr, "model=%s source=%s ctx=%d dspark=%s\n", DSV4_MODEL_ID,
+           DSV4_SOURCE_REVISION, context, dspark ? dspark : "off");
     char manifest[4096];
     int has_manifest = snprintf(manifest, sizeof(manifest), "%s/model-manifest.json",
                                 snapshot) < (int)sizeof(manifest) && access(manifest, R_OK) == 0;
@@ -413,7 +430,7 @@ int main(void) {
         dsv4_store_close(&store);
         return 2;
     }
-    printf("container=%d records/%d segments layers=%d dspark_layers=%d "
+    fprintf(stderr, "container=%d records/%d segments layers=%d dspark_layers=%d "
            "read_bytes=%llu runtime_state_bytes=%llu\n", store.records,
            store.segments, contract.base_layers, contract.dspark_layers,
            (unsigned long long)store.raw.read_bytes,
@@ -434,8 +451,30 @@ int main(void) {
         dsv4_store_close(&store);
         return result;
     }
-    dsv4_store_close(&store);
-    fprintf(stderr,
-        "deepseek_v4: serving is locked until the native forward/quality gate passes\n");
-    return 78;
+    if (!getenv("DSV4_EXPERIMENTAL") || strcmp(getenv("DSV4_EXPERIMENTAL"),"1")) {
+        dsv4_store_close(&store);
+        fprintf(stderr,"deepseek_v4: production serving remains locked pending qualification; standalone validation requires DSV4_EXPERIMENTAL=1\n");
+        return 78;
+    }
+    char tokenizer_path[4096],tokenizer_sha[65];
+    if (snprintf(tokenizer_path,sizeof(tokenizer_path),"%s/tokenizer.json",snapshot)>=(int)sizeof(tokenizer_path) ||
+        !dsv4_sha256_file(tokenizer_path,tokenizer_sha) || strcmp(tokenizer_sha,DSV4_TOKENIZER_SHA256)) {
+        fprintf(stderr,"deepseek_v4: pinned tokenizer checksum mismatch\n");dsv4_store_close(&store);return 2;
+    }
+    const char *chunk_text=getenv("DSV4_PREFILL_CHUNK");
+    int chunk=chunk_text ? atoi(chunk_text) : 1024;
+    dsv4_execution execution;
+    if (!dsv4_execution_init(&execution,&store,context,chunk)) {
+        fprintf(stderr,"deepseek_v4: %s\n",execution.error);dsv4_store_close(&store);return 2;
+    }
+    int result=2;
+    if (!dsv4_tok_load(&execution.tokenizer,tokenizer_path) ||
+        !dsv4_sha256_file(manifest,execution.manifest_sha256) ||
+        !dsv4_sha256_file("/proc/self/exe",execution.binary_sha256)) {
+        fprintf(stderr,"deepseek_v4: tokenizer or execution identity initialization failed\n");
+    } else {
+        fprintf(stderr,"DSV4_LOADED seconds=%.6f qualification=experimental\n",execution.load_seconds);
+        result=dsv4_server_loop(stdin,stdout,dsv4_execute_request,&execution);
+    }
+    dsv4_execution_close(&execution);dsv4_store_close(&store);return result;
 }

@@ -1,0 +1,14 @@
+We need to review the selected source for correctness. The function lookup(items, index) should return the item at index if valid, else None. The code has a bug: line 4 uses `index <= len(items)` which allows index equal to len(items), but valid indices are 0 to len(items)-1. So if index == len(items), it will try items[len(items)] which raises IndexError. The condition should be `index < len(items)`. Also line 2 checks index < 0, so negative indices are handled. So the defect is off-by-one. Trigger: index equals len(items). Consequence: IndexError. Also note that if index is negative, it returns None, but that's fine. So verdict: REJECT. Issue at line 4.
+
+We need to output JSON with verdict and issues array. Path is "lookup.py", line 4, explanation.
+
+Keep under 300 words.</think>{
+  "verdict": "REJECT",
+  "issues": [
+    {
+      "path": "lookup.py",
+      "line": 4,
+      "explanation": "Condition `index <= len(items)` allows index equal to the list length, causing `items[index]` to raise IndexError. Valid indices are 0 to len(items)-1, so the condition should be `index < len(items)`."
+    }
+  ]
+}

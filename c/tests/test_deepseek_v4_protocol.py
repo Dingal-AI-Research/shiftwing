@@ -27,11 +27,13 @@ class DeepSeekV4ProtocolTests(unittest.TestCase):
         )
         self.assertIn("Reasoning Effort: Absolute maximum", thinking)
         self.assertTrue(thinking.endswith(official.thinking_start_token))
-        for unsupported in ("low", "max"):
-            with self.assertRaisesRegex(ValueError, "unsupported"):
-                protocol.render_deepseek_chat(
-                    messages, reasoning_effort=unsupported
-                )
+        for effort in ("low", "max"):
+            rendered = protocol.render_deepseek_chat(messages, reasoning_effort=effort)
+            self.assertTrue(rendered.endswith(official.thinking_start_token))
+            self.assertEqual("Reasoning Effort:" in rendered, effort == "max")
+            parsed = protocol.parse_deepseek_completion("Checking.</think>answer", reasoning_effort=effort)
+            self.assertEqual(parsed["content"], "answer")
+            self.assertEqual(parsed["reasoning_content"], "Checking.")
 
     def test_tools_use_official_dsml_template(self):
         tools = [

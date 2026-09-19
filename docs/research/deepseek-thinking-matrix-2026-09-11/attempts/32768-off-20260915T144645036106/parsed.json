@@ -1,0 +1,9 @@
+{
+  "role": "assistant",
+  "content": "{\n  \"verdict\": \"REJECT\",\n  \"issues\": [\n    {\n      \"path\": \"batch.py\",\n      \"line\": 7,\n      \"explanation\": \"The finally block always commits, even if an exception occurs during the loop. This causes a partial batch to be committed, violating atomicity. Trigger: any exception in the loop. Consequence: partial data is persisted.\"\n    }\n  ]\n}",
+  "reasoning_content": "",
+  "tool_calls": [],
+  "colib_recovery": {
+    "recovered": false
+  }
+}

@@ -1,0 +1,220 @@
+{
+  "schema": "colib.deepseek-v4.prefix-diagnostic.v1",
+  "status": "observed",
+  "source_revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+  "scope": "partial model diagnostics before expert-major scheduling; not reviewer qualification",
+  "results": [
+    {
+      "case": "four_layer_128",
+      "tokens": 128,
+      "layer": 0,
+      "relative_l2": 0.00798918679356575,
+      "cosine": 0.9999664425849915,
+      "exact_fraction": 0.8232936859130859,
+      "native_sha256": "abed5e335e2268a35072a354bb87ea23fdc4d17d628f040d69d2cff873eee899",
+      "reference_sha256": "a98bf119ec8e2e361c71363e236f24dc8a5b20799a795331d8d23d3f8b8b62a1"
+    },
+    {
+      "case": "four_layer_128",
+      "tokens": 128,
+      "layer": 1,
+      "relative_l2": 0.015345140360295773,
+      "cosine": 0.9998719096183777,
+      "exact_fraction": 0.35795021057128906,
+      "native_sha256": "54dd4256c1e150bda159cd4364971c1a8d6790e9ef3cb44b5d2db4379c891c37",
+      "reference_sha256": "25e607e354eabaef20b6468d8cce90c34e8b87b8264a6bf0c883da52011e3ef7"
+    },
+    {
+      "case": "four_layer_128",
+      "tokens": 128,
+      "layer": 2,
+      "relative_l2": 0.02060610055923462,
+      "cosine": 0.9997758269309998,
+      "exact_fraction": 0.2772941589355469,
+      "native_sha256": "bde78d688f2fc56a17af2438d539ba296acc0b6780c626d59c7b29c021435d40",
+      "reference_sha256": "35133185de4f7b5fabcbb0ec0337ba368bf07f4c97171d37af5894cc6e700008"
+    },
+    {
+      "case": "four_layer_128",
+      "tokens": 128,
+      "layer": 3,
+      "relative_l2": 0.030937237665057182,
+      "cosine": 0.9995042681694031,
+      "exact_fraction": 0.08708620071411133,
+      "native_sha256": "23a35604b11450f21f95fc4d25fee914e28121ad69355157f65e5218ed098bdb",
+      "reference_sha256": "1263f45c53dfe9dd41502ab8709c5789b6e7a718493a6538cc1fb5093a50f3d2"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 0,
+      "relative_l2": 0.00023195790708996356,
+      "cosine": 1.0,
+      "exact_fraction": 0.997314453125,
+      "native_sha256": "539307c08a64e34d640df86450ccb7a33921e8fcb664c15d7595790dd7b90e16",
+      "reference_sha256": "66be2d840e47955345a9deadd6b8a1f4f7faba4a8ee40679683567889f05cd94"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 1,
+      "relative_l2": 0.004971782676875591,
+      "cosine": 0.9999878406524658,
+      "exact_fraction": 0.588623046875,
+      "native_sha256": "ff66600ce16d11f05efac14be0a772c4e52a978c11941efab5096f4b56f80035",
+      "reference_sha256": "74d37cbcd7953ddbc26a4eb4513b840a6d9a52d23507c3a97482c1ca8ccf255e"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 2,
+      "relative_l2": 0.007274511270225048,
+      "cosine": 0.9999738335609436,
+      "exact_fraction": 0.33953857421875,
+      "native_sha256": "b8e90a42f78a8c3d3f57589e2831e01a301813ece5619aad4ca3a7a9efa3bfb2",
+      "reference_sha256": "e3c2cf4b1793b9fb1d75d1e315aa681c1020f7972b0f42abb6353200c35d6278"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 3,
+      "relative_l2": 0.00934361107647419,
+      "cosine": 0.9999568462371826,
+      "exact_fraction": 0.185302734375,
+      "native_sha256": "c402c3b939adc593cb9f22bfc650a8054423861a33339cb02cacd6fdac3af4e4",
+      "reference_sha256": "0fd6e6326caae72ec38c193cf51c37391346a8e3ebd6c0e8b2046473a40d7754"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 4,
+      "relative_l2": 0.013231195509433746,
+      "cosine": 0.999912679195404,
+      "exact_fraction": 0.13232421875,
+      "native_sha256": "a404f9cac5f15bd8e58ba71a368ade6d2b608e0a0773d769581408688a9c6cff",
+      "reference_sha256": "105b85ae9d66cb64115483a64bcf7e25ca5788be96a399054452029894527b0a"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 5,
+      "relative_l2": 0.002492651343345642,
+      "cosine": 0.9999967217445374,
+      "exact_fraction": 0.28045654296875,
+      "native_sha256": "f5c3568235e6faa3f8758018881160cb3d3dd64bd93dd59c2dfd78a84c37d6dd",
+      "reference_sha256": "4c681c4099306a6c42294d586a7b3274b1a3238da5262750392f49e87431e18f"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 6,
+      "relative_l2": 0.0232804324477911,
+      "cosine": 0.9998540878295898,
+      "exact_fraction": 0.0692138671875,
+      "native_sha256": "182c6d08064e64f2a64d8c4a8af8e0e74c4521553187748a47f2b3c44a7e72a9",
+      "reference_sha256": "530bbf482277a59d63f4c9655c2145e20ffa31607275904e0034df050c181053"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 7,
+      "relative_l2": 0.02231683023273945,
+      "cosine": 0.999856173992157,
+      "exact_fraction": 0.06866455078125,
+      "native_sha256": "52f0611602ba0eba3115450c78146fae0996210b27453551aff498dd1661b782",
+      "reference_sha256": "18e0c952501e61bb3c033e3d0a8c84b689ccba023c82fa5e1b3df61eaf8cfe85"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 8,
+      "relative_l2": 0.01915571466088295,
+      "cosine": 0.9998819828033447,
+      "exact_fraction": 0.0872802734375,
+      "native_sha256": "24c1d049334f20536d981883d79583e5e8f5601b457afd3426b3c407301ce190",
+      "reference_sha256": "90230df64e504a825e8bf32cad547d9e829ecc06991dc5764ce92e63a3024e2a"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 9,
+      "relative_l2": 0.01488574594259262,
+      "cosine": 0.9999200105667114,
+      "exact_fraction": 0.145751953125,
+      "native_sha256": "7d73f2c5fa7115f7f3a2aa885358f955be8ddc601daaf0f98c2bf2c02d24bff0",
+      "reference_sha256": "2636551436afc101f795770e8dc95d38d9c2d85e3a800d3371672de15298c52f"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 10,
+      "relative_l2": 0.017835380509495735,
+      "cosine": 0.9998468160629272,
+      "exact_fraction": 0.0859375,
+      "native_sha256": "13c7cc1e37d5e2e7bb1aa80bf30ed105fcae3d940f01e7bf17790b41bb00a486",
+      "reference_sha256": "aa21503e59741fe9d1372e02b30c93694e56d16a8a57c276127029b393e46f9b"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 11,
+      "relative_l2": 0.015130279585719109,
+      "cosine": 0.9998939633369446,
+      "exact_fraction": 0.0960693359375,
+      "native_sha256": "71a6a279e6d652aa40925007c63214010d7b40c4f02a243744939d6f0b46e1d7",
+      "reference_sha256": "c27cb0183e221ff0bd0c0409971a380a3d4ad7c445391559d646c4b6d7e90cf9"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 12,
+      "relative_l2": 0.012322887778282166,
+      "cosine": 0.9999333024024963,
+      "exact_fraction": 0.11090087890625,
+      "native_sha256": "df4d762f13228a109d081dde2451712827333903659b25f7e69523fc592db3e4",
+      "reference_sha256": "49c304cea9e4c0465af2ae691b46131eac354a83eb1ec56557a302544810fa58"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 13,
+      "relative_l2": 0.011072658933699131,
+      "cosine": 0.9999451637268066,
+      "exact_fraction": 0.12261962890625,
+      "native_sha256": "1d9b932be5c6db2ecf609dccf122f67b5a38a2dbb37bfd5b2ef0cffc678ec7c9",
+      "reference_sha256": "132c8fd25ca405783c56ef2f3b732213790bcbc26a4c12febaad9d1ef61c6117"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 14,
+      "relative_l2": 0.01109609380364418,
+      "cosine": 0.9999448657035828,
+      "exact_fraction": 0.1229248046875,
+      "native_sha256": "f953d4ff64e10bf4b5159bda46e11356aa70713f7a2e937ef444f72597542dc8",
+      "reference_sha256": "53b7ffee407156f56f5676d4f25d2c9004cf5deee3f2ec28c5e666e4823d75cb"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 15,
+      "relative_l2": 0.011097579263150692,
+      "cosine": 0.9999452829360962,
+      "exact_fraction": 0.12127685546875,
+      "native_sha256": "8e0bd9b267b092eafab2867970fa9b24db3739b6c4b9a7b61f745e4a92b3095b",
+      "reference_sha256": "b71378a12d532966793ab2db2ccdcff2f7388d8970dae3d1b5636700d7e94238"
+    },
+    {
+      "case": "seventeen_layer_one",
+      "tokens": 1,
+      "layer": 16,
+      "relative_l2": 0.011183277703821659,
+      "cosine": 0.999944806098938,
+      "exact_fraction": 0.11993408203125,
+      "native_sha256": "35cdfecbd9d7eeff2c80a7c302ee2477ff77cc10f7f9dffb7b8215235b3d9dc3",
+      "reference_sha256": "391c2f43e9e59fd72def950bcf91d6d4a43952bb526ec9a892178b0cc492b53a"
+    }
+  ],
+  "reference_implementation": "pinned model.py with independent CPU Torch kernel adapters",
+  "created_at": "2026-09-09T19:21:58.443662+00:00"
+}

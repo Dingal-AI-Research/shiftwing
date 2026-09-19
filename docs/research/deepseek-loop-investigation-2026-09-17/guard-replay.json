@@ -1,0 +1,35 @@
+{
+  "scope": "Replay captured partial output through the existing production guard; no inference",
+  "results": [
+    {
+      "chunkSize": 1,
+      "characters": 11432,
+      "detected": false,
+      "reason": ""
+    },
+    {
+      "chunkSize": 4,
+      "characters": 11432,
+      "detected": false,
+      "reason": ""
+    },
+    {
+      "chunkSize": 16,
+      "characters": 11432,
+      "detected": false,
+      "reason": ""
+    },
+    {
+      "chunkSize": 64,
+      "characters": 11432,
+      "detected": false,
+      "reason": ""
+    },
+    {
+      "chunkSize": 256,
+      "characters": 11432,
+      "detected": false,
+      "reason": ""
+    }
+  ]
+}

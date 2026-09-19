@@ -80,6 +80,7 @@ ENGINE_ENV_KEYS = frozenset(
         "DECODE_PROTECT_PREWARM",
         "DIRECT",
         "DRAFT",
+        "DSPARK",
         "DUMP_ACTS",
         "EMAP_PATH",
         "EVAL_CHUNK",
@@ -158,7 +159,8 @@ def isolated_engine_env(
 
     original = os.environ if source is None else source
     retained = {name: original[name] for name in preserve if name in original}
-    env = {name: value for name, value in original.items() if name not in ENGINE_ENV_KEYS}
+    env = {name: value for name, value in original.items()
+           if name not in ENGINE_ENV_KEYS and not name.startswith("DSV4_")}
     env.update(retained)
     return env
 
@@ -183,3 +185,12 @@ def engine_source_sha256(root: Path) -> str:
     """Hash the unchanged Qwen/Ornith rollback engine source contract."""
 
     return _source_sha256(root, ENGINE_SOURCE_FILES)
+
+
+def deepseek_engine_source_sha256(root: Path) -> str:
+    """Bind native DeepSeek sources and shared dependencies, excluding binaries."""
+    files = {str(p.relative_to(root)) for p in (root / "c").glob("deepseek_v4*")
+             if p.suffix in (".c", ".h", ".inc")}
+    files.update(("c/Makefile", "c/backend_cuda.cu", "c/backend_cuda.h",
+                  "c/st.h", "c/uring.h", "c/json.h", "c/tok.h", "c/tok_nfc.h", "c/tok_unicode.h"))
+    return _source_sha256(root, tuple(sorted(files)))

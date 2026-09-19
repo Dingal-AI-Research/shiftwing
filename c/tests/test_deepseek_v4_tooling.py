@@ -40,13 +40,14 @@ class DeepSeekSpecTests(unittest.TestCase):
     def test_context_reasoning_and_sampling_contracts(self):
         self.assertEqual(spec.validate_context(16_384), 16_384)
         self.assertEqual(spec.validate_context(65_536), 65_536)
-        with self.assertRaisesRegex(ValueError, "validated maximum"):
-            spec.validate_context(65_537)
+        self.assertEqual(spec.validate_context(100_352), 100_352)
+        self.assertEqual(spec.EXPECTED_ROPE_SCALING["original_max_position_embeddings"], 65_536)
+        with self.assertRaisesRegex(ValueError, "configured maximum"):
+            spec.validate_context(100_353)
         self.assertIsNone(spec.validate_reasoning_effort(None))
         self.assertEqual(spec.validate_reasoning_effort("high"), "high")
         for value in ("low", "max"):
-            with self.assertRaisesRegex(ValueError, "unsupported"):
-                spec.validate_reasoning_effort(value)
+            self.assertEqual(spec.validate_reasoning_effort(value), value)
         self.assertEqual(spec.sampling_profile(0, 1).name, "deterministic")
         self.assertEqual(spec.sampling_profile(1, 0.95).name, "agent")
         with self.assertRaisesRegex(ValueError, "supports only"):

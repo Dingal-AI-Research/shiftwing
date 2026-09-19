@@ -1,0 +1,9 @@
+{
+  "role": "assistant",
+  "content": "{\"verdict\": \"APPROVE\", \"issues\": []}",
+  "reasoning_content": "",
+  "tool_calls": [],
+  "colib_recovery": {
+    "recovered": false
+  }
+}

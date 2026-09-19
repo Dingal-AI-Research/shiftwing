@@ -91,6 +91,9 @@ c/qwen397/
 c/.qwen397.source/
 c/ornith35/
 c/ornith397/
+c/deepseek-v4-flash-0731/
+c/.deepseek-v4-flash-0731.source/
+c/.deepseek-v4-historical.source/
 c/reference/
 c/acts/
 c/bench/
@@ -132,9 +135,13 @@ c/tests/test_uring
 .venv/
 .toolchains/
 
-# Shiftwing engine binary (rebuild with make -C c qwen)
+# Shiftwing engine binaries (rebuild with make -C c qwen / deepseek_v4 / deepseek_v4_tokenize)
 c/qwen
 c/qwen.exe
+c/deepseek_v4
+c/deepseek_v4.exe
+c/deepseek_v4_tokenize
+c/deepseek_v4_tokenize.exe
 
 # local source-inspection scratch output
 /embed

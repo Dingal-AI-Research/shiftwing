@@ -5,6 +5,8 @@
  * bytes for the model manifest, tokenizer/protocol, and native engine source.
  * Attention/cache arrays stay in their native BF16 representation. */
 
+#include "deepseek_v4_limits.h"
+
 #include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -15,7 +17,7 @@
 
 #define DSV4_SESSION_VERSION 1u
 #define DSV4_SESSION_ENDIAN 0x01020304u
-#define DSV4_SESSION_MAX_CONTEXT 65536u
+#define DSV4_SESSION_MAX_CONTEXT DSV4_MAX_CONTEXT
 #define DSV4_SESSION_MAX_BYTES (2ull << 30)
 
 typedef struct {

@@ -5,6 +5,8 @@
  * auditability over speed and are the correctness oracle for the SM120
  * kernels.  Tensor layouts match the pinned 0731 checkpoint. */
 
+#include "deepseek_v4_limits.h"
+
 #include <float.h>
 #include <math.h>
 #include <stddef.h>
@@ -34,49 +36,58 @@ static inline float dsv4_fp4_e2m1(uint8_t code) {
     return (code & 8u) ? -v : v;
 }
 
+/* Exact IEEE bit construction avoids scalar libm calls in hot conversion
+ * loops. E4M3 values and UE8M0 scales are unchanged, including signed zero. */
 static inline float dsv4_fp8_e4m3fn(uint8_t code) {
-    int sign = code >> 7;
-    int exponent = (code >> 3) & 15;
-    int mantissa = code & 7;
-    if (exponent == 15 && mantissa == 7) return NAN;
-    float v;
-    if (!exponent) v = ldexpf((float)mantissa, -9);
-    else v = ldexpf(1.0f + (float)mantissa * 0.125f, exponent - 7);
-    return sign ? -v : v;
+    uint32_t sign=(uint32_t)(code&128u)<<24;
+    unsigned exponent=(code>>3)&15u,mantissa=code&7u;
+    if (exponent==15 && mantissa==7) return NAN;
+    if (!exponent) {
+        float value=(float)mantissa*0.001953125f;
+        return sign?-value:value;
+    }
+    uint32_t bits=sign|((exponent+120u)<<23)|(mantissa<<20);
+    float value;memcpy(&value,&bits,sizeof(value));return value;
 }
 
 static inline float dsv4_ue8m0(uint8_t code) {
-    return code == 255u ? NAN : ldexpf(1.0f, (int)code - 127);
+    if (code==255u) return NAN;
+    uint32_t bits=code?(uint32_t)code<<23:UINT32_C(0x00400000);
+    float value;memcpy(&value,&bits,sizeof(value));return value;
 }
 
 /* Reference encoder used only by fixture quantization.  Ties select the even
  * raw mantissa, matching round-to-nearest-even casts used by the GPU path. */
 static inline uint8_t dsv4_fp4_encode(float value) {
-    int best = 0;
-    float best_error = INFINITY;
-    for (int code = 0; code < 16; code++) {
-        float candidate = dsv4_fp4_e2m1((uint8_t)code);
-        float error = fabsf(value - candidate);
-        if (error < best_error) { best_error = error; best = code; }
+    if (isnan(value)) return 0;
+    int best=0;float error=INFINITY,target=fminf(fabsf(value),6.0f);
+    for (int code=0;code<8;code++) {
+        float e=fabsf(target-dsv4_fp4_e2m1((uint8_t)code));
+        if (e<error || (e==error && !(code&1) && (best&1))) {error=e;best=code;}
     }
-    return (uint8_t)best;
+    return (uint8_t)(best | (signbit(value)?8:0));
 }
 
 static inline uint8_t dsv4_fp8_encode(float x) {
-    if (isnan(x)) return 0x7f;
-    int negative = signbit(x) != 0;
-    float target = fminf(fabsf(x), 448.0f);
-    uint8_t best = 0;
-    float best_error = FLT_MAX;
-    for (uint8_t code = 0; code <= 0x7e; code++) {
-        float error = fabsf(dsv4_fp8_e4m3fn(code) - target);
-        if (error < best_error ||
-            (error == best_error && !(code & 1u) && (best & 1u))) {
-            best = code;
-            best_error = error;
-        }
+    uint32_t bits;memcpy(&bits,&x,sizeof(bits));
+    uint32_t magnitude=bits&UINT32_C(0x7fffffff);
+    unsigned sign=(bits>>24)&128u;
+    if (magnitude>UINT32_C(0x7f800000)) return 0x7f;
+    if (magnitude>UINT32_C(0x43e00000)) magnitude=UINT32_C(0x43e00000);
+    unsigned raw;
+    if (magnitude<UINT32_C(0x3c800000)) {
+        float target;memcpy(&target,&magnitude,sizeof(target));
+        float scaled=target*512.0f;
+        raw=(unsigned)scaled;float fraction=scaled-raw;
+        if (fraction>0.5f || (fraction==0.5f && (raw&1))) raw++;
+    } else {
+        raw=(magnitude>>20)-960u;
+        unsigned remainder=magnitude&UINT32_C(0x000fffff);
+        if (remainder>UINT32_C(0x00080000) ||
+            (remainder==UINT32_C(0x00080000) && (raw&1))) raw++;
     }
-    return (uint8_t)(best | (negative ? 0x80u : 0u));
+    if (raw>0x7e) raw=0x7e;
+    return (uint8_t)(raw|sign);
 }
 
 /* Official MXFP activation quantization: groups of 128, amax floor 1e-4,
@@ -101,19 +112,31 @@ static inline int dsv4_act_quant_mxfp(const float *x, int n,
     return 1;
 }
 
+static inline int dsv4_act_quant_mxfp_batch(const float *input,int batch,int columns,
+    uint8_t *activation,uint8_t *scales) {
+    if (!input || !activation || !scales || batch<1 || columns<1 || columns%DSV4_FP8_BLOCK) return 0;
+    int ok=1;
+#ifdef _OPENMP
+#pragma omp parallel for if(batch>=16) num_threads(6) reduction(&:ok)
+#endif
+    for (int b=0;b<batch;b++)
+        ok &= dsv4_act_quant_mxfp(input+(size_t)b*columns,columns,activation+(size_t)b*columns,
+                                 scales+(size_t)b*(columns/DSV4_FP8_BLOCK));
+    return ok;
+}
+
 /* FP8 A[M,K] x FP8 B[N,K]^T with one activation scale per 128 K and
  * one weight scale per 128x128 output/K tile. */
 static inline int dsv4_fp8_simulate(float *values, int count,
                                       int block) {
     if (!values || count <= 0 || block <= 0 || count % block) return 0;
     for (int base = 0; base < count; base += block) {
-        float maximum = 0.0f;
+        float maximum = 1e-4f;
         for (int index = 0; index < block; index++)
             maximum = fmaxf(maximum, fabsf(values[base + index]));
-        int exponent = maximum == 0.0f ? -127 :
-            (int)ceilf(log2f(maximum / 448.0f));
+        int exponent = (int)ceilf(log2f(maximum / 448.0f));
         if (exponent < -127) exponent = -127;
-        if (exponent > 0) exponent = 0;
+        if (exponent > 127) exponent = 127;
         float scale = ldexpf(1.0f, exponent);
         for (int index = 0; index < block; index++) {
             uint8_t quantized = dsv4_fp8_encode(values[base + index] / scale);
@@ -141,13 +164,12 @@ static inline int dsv4_hadamard(float *values, int count) {
 static inline int dsv4_fp4_simulate(float *values, int count, int block) {
     if (!values || count <= 0 || block <= 0 || count % block) return 0;
     for (int base = 0; base < count; base += block) {
-        float maximum = 0.0f;
+        float maximum = 6.0f*0x1p-126f;
         for (int index = 0; index < block; index++)
             maximum = fmaxf(maximum, fabsf(values[base + index]));
-        int exponent = maximum == 0.0f ? -127 :
-            (int)ceilf(log2f(maximum / 6.0f));
+        int exponent = (int)ceilf(log2f(maximum / 6.0f));
         if (exponent < -127) exponent = -127;
-        if (exponent > 0) exponent = 0;
+        if (exponent > 127) exponent = 127;
         float scale = ldexpf(1.0f, exponent);
         for (int index = 0; index < block; index++) {
             uint8_t quantized = dsv4_fp4_encode(values[base + index] / scale);
@@ -242,12 +264,22 @@ static inline void dsv4_round_bf16_array(float *values, size_t count) {
 
 static inline void dsv4_rmsnorm(float *out, const float *x,
                                 const uint16_t *weight, int n, float eps) {
-    float squares = 0.0f;
-    for (int i = 0; i < n; i++) squares += x[i] * x[i];
-    float inverse = 1.0f / sqrtf(squares / n + eps);
+    /* Accumulate the exactly representable BF16 squares without the long
+     * serial-FP32 reduction drift, then retain the upstream FP32 mean/RMS. */
+    double squares = 0.0;
+    for (int i = 0; i < n; i++) squares += (double)x[i] * x[i];
+    float inverse = 1.0f / sqrtf((float)(squares / n) + eps);
     for (int i = 0; i < n; i++)
         out[i] = dsv4_round_bf16(
             x[i] * inverse * dsv4_bf16(weight[i]));
+}
+
+static inline void dsv4_query_norm_bf16(float *query,int dim,float epsilon) {
+    float square=0;
+    for (int i=0;i<dim;i++) square+=dsv4_round_bf16(query[i]*query[i]);
+    float mean=dsv4_round_bf16(square/dim);
+    float inverse=dsv4_round_bf16(1.0f/sqrtf(dsv4_round_bf16(mean+epsilon)));
+    for (int i=0;i<dim;i++) query[i]=dsv4_round_bf16(query[i]*inverse);
 }
 
 static inline void dsv4_bf16_gemm(float *out, const float *x,
@@ -378,7 +410,7 @@ static inline int dsv4_route_topk(const float *logits, const float *bias,
         total += original[indices[route]];
     if (!(total > 0.0f)) return 0;
     for (int route = 0; route < topk; route++)
-        weights[route] = 1.5f * original[indices[route]] / total;
+        weights[route] = (original[indices[route]] / total) * 1.5f;
     return 1;
 }
 
@@ -392,7 +424,7 @@ static inline int dsv4_route_top6(const float *logits, const float *bias,
 static inline float dsv4_clamped_swiglu(float gate, float up) {
     up = fminf(10.0f, fmaxf(-10.0f, up));
     gate = fminf(10.0f, gate);
-    return (gate * dsv4_sigmoid(gate)) * up;
+    return (gate / (1.0f + expf(-gate))) * up;
 }
 
 static inline void dsv4_hc_split_sinkhorn(const float mixes[DSV4_HC_MIX],
@@ -442,17 +474,19 @@ static inline void dsv4_hc_forward_pre(
     const float *residual, const float *function_weight, int dim,
     const float scale[3], const float base[DSV4_HC_MIX], float norm_eps,
     float *reduced, float post[4], float comb[16], float *mixes_out) {
-    float square_sum = 0.0f, mixes[DSV4_HC_MIX], pre[4];
+    double square_sum = 0.0;float mixes[DSV4_HC_MIX], pre[4];
     int residual_dim = DSV4_HC_MULT * dim;
     for (int index = 0; index < residual_dim; index++)
-        square_sum += residual[index] * residual[index];
-    float inverse_rms = 1.0f / sqrtf(square_sum / residual_dim + norm_eps);
+        square_sum += (double)residual[index] * residual[index];
+    float inverse_rms = 1.0f / sqrtf((float)(square_sum / residual_dim) + norm_eps);
     for (int mix = 0; mix < DSV4_HC_MIX; mix++) {
-        float value = 0.0f;
+        /* HC function weights are FP32. Retain their full precision while
+         * avoiding a 16384-term serial FP32 reduction error. */
+        double value = 0.0;
         for (int index = 0; index < residual_dim; index++)
-            value += function_weight[(size_t)mix * residual_dim + index] *
+            value += (double)function_weight[(size_t)mix * residual_dim + index] *
                      residual[index];
-        mixes[mix] = value * inverse_rms;
+        mixes[mix] = (float)value * inverse_rms;
     }
     dsv4_hc_split_sinkhorn(mixes, scale, base, 1e-6f, 20,
                             pre, post, comb);
@@ -464,10 +498,10 @@ static inline void dsv4_hc_post(const float *x, const float *residual, int dim,
                                 const float post[4], const float comb[16],
                                 float *out) {
     for (int to = 0; to < 4; to++) for (int d = 0; d < dim; d++) {
-        float sum = post[to] * x[d];
+        float sum = 0.0f;
         for (int from = 0; from < 4; from++)
             sum += comb[from * 4 + to] * residual[(size_t)from * dim + d];
-        out[(size_t)to * dim + d] = sum;
+        out[(size_t)to * dim + d] = post[to]*x[d]+sum;
     }
 }
 
@@ -500,7 +534,9 @@ static inline float dsv4_yarn_frequency(int pair, int rotary_dim,
                                         int original_seq_len, float base,
                                         float factor, int beta_fast,
                                         int beta_slow) {
-    float freq = powf(base, -(float)(2 * pair) / rotary_dim);
+    /* Match the pinned FP32 reciprocal-after-power operation. A negative
+     * exponent rounds frequencies differently, magnified at long positions. */
+    float freq = 1.0f / powf(base, (float)(2 * pair) / rotary_dim);
     if (original_seq_len <= 0) return freq;
     float denom = 2.0f * logf(base);
     float low_f = rotary_dim * logf(original_seq_len / (beta_fast * 2.0f * DSV4_PI)) / denom;
@@ -695,6 +731,57 @@ static inline int dsv4_dspark_indices(int window, int block, int start_pos,
 /* Learned indexer score from Indexer.forward: ReLU(q_h dot kv_t),
  * weighted across heads, then top-k over visible compressed positions. The
  * caller provides `workspace[tokens]`; selected indices include cache offset. */
+static inline int dsv4_indexer_select(const float *workspace,int tokens,int topk,int offset,int *indices) {
+    if (!workspace || !indices || tokens<1 || topk<1 || topk>tokens || offset<0) return 0;
+    /* Keep the best k in a heap whose root is the worst retained item.
+     * Equal scores prefer the lower source index, exactly as the scalar scan.
+     * This avoids a quadratic scan of already selected indices at every token. */
+    int retained=0;
+    for (int token=0;token<tokens;token++) {
+        if (isnan(workspace[token]) || workspace[token]==-INFINITY) continue;
+        int at;
+        if (retained<topk) { at=retained++;indices[at]=token+offset; }
+        else {
+            int worst=indices[0]-offset;
+            if (workspace[token]<workspace[worst] || (workspace[token]==workspace[worst] && token>worst)) continue;
+            indices[0]=token+offset;at=0;
+        }
+        if (at) {
+            while (at>0) {
+                int parent=(at-1)/2,a=indices[at]-offset,b=indices[parent]-offset;
+                if (!(workspace[a]<workspace[b] || (workspace[a]==workspace[b] && a>b))) break;
+                int temp=indices[at];indices[at]=indices[parent];indices[parent]=temp;at=parent;
+            }
+        } else {
+            for (;;) {
+                int child=at*2+1;if (child>=retained) break;
+                if (child+1<retained) {
+                    int a=indices[child+1]-offset,b=indices[child]-offset;
+                    if (workspace[a]<workspace[b] || (workspace[a]==workspace[b] && a>b)) child++;
+                }
+                int a=indices[child]-offset,b=indices[at]-offset;
+                if (!(workspace[a]<workspace[b] || (workspace[a]==workspace[b] && a>b))) break;
+                int temp=indices[at];indices[at]=indices[child];indices[child]=temp;at=child;
+            }
+        }
+    }
+    if (retained!=topk) return 0;
+    for (int end=retained-1;end>0;end--) {
+        int temp=indices[0];indices[0]=indices[end];indices[end]=temp;
+        for (int at=0;;) {
+            int child=at*2+1;if (child>=end) break;
+            if (child+1<end) {
+                int a=indices[child+1]-offset,b=indices[child]-offset;
+                if (workspace[a]<workspace[b] || (workspace[a]==workspace[b] && a>b)) child++;
+            }
+            int a=indices[child]-offset,b=indices[at]-offset;
+            if (!(workspace[a]<workspace[b] || (workspace[a]==workspace[b] && a>b))) break;
+            temp=indices[at];indices[at]=indices[child];indices[child]=temp;at=child;
+        }
+    }
+    return topk;
+}
+
 static inline int dsv4_indexer_topk(const float *query, const float *kv,
                                     const float *head_weights, int heads,
                                     int dim, int tokens, int topk, int offset,
@@ -710,51 +797,44 @@ static inline int dsv4_indexer_topk(const float *query, const float *kv,
             for (int axis = 0; axis < dim; axis++)
                 dot += query[(size_t)head * dim + axis] *
                        kv[(size_t)token * dim + axis];
-            score += fmaxf(dot, 0.0f) * head_weights[head];
+            score += dsv4_round_bf16(fmaxf(dsv4_round_bf16(dot), 0.0f) * head_weights[head]);
         }
-        workspace[token] = score;
+        workspace[token] = dsv4_round_bf16(score);
     }
-    for (int selected = 0; selected < topk; selected++) {
-        int best = -1;
-        float best_score = -INFINITY;
-        for (int token = 0; token < tokens; token++) {
-            int used = 0;
-            for (int prior = 0; prior < selected; prior++)
-                if (indices[prior] == token + offset) used = 1;
-            if (!used && workspace[token] > best_score) {
-                best_score = workspace[token];
-                best = token;
-            }
-        }
-        if (best < 0) return 0;
-        indices[selected] = best + offset;
-    }
-    return topk;
+    return dsv4_indexer_select(workspace,tokens,topk,offset,indices);
 }
 
+/* Pinned sparse_attn_kernel: online softmax in 64-key blocks, FP32
+ * denominator, BF16 probabilities for the value GEMM, and BF16 output. */
 static inline void dsv4_sparse_attention(float *out, const float *q,
-                                          const float *kv, int heads, int dim,
-                                          const int *indices, int topk,
-                                          const float *sink, float scale) {
-    for (int h = 0; h < heads; h++) {
-        float max_score = sink[h];
-        for (int t = 0; t < topk; t++) if (indices[t] >= 0) {
-            float score = 0.0f;
-            for (int d = 0; d < dim; d++) score += q[(size_t)h * dim + d] * kv[(size_t)indices[t] * dim + d];
-            max_score = fmaxf(max_score, score * scale);
+    const float *kv, int heads, int dim, const int *indices,
+    int topk, const float *sink, float scale) {
+    for (int h=0;h<heads;h++) {
+        float maximum=-INFINITY,denominator=0.0f;
+        float *output=out+(size_t)h*dim;
+        for (int d=0;d<dim;d++) output[d]=0;
+        for (int start=0;start<topk;start+=64) {
+            int count=topk-start;if (count>64) count=64;
+            float scores[64],previous=maximum;
+            for (int t=0;t<count;t++) {
+                int index=indices[start+t];float dot=0;
+                if (index>=0) for (int d=0;d<dim;d++) dot+=q[(size_t)h*dim+d]*kv[(size_t)index*dim+d];
+                scores[t]=index>=0?dot*scale:-INFINITY;
+                maximum=fmaxf(maximum,scores[t]);
+            }
+            if (maximum==-INFINITY) continue;
+            float factor=expf(previous-maximum),sum=0;
+            for (int d=0;d<dim;d++) output[d]*=factor;
+            for (int t=0;t<count;t++) {
+                float probability=expf(scores[t]-maximum);sum+=probability;
+                scores[t]=dsv4_round_bf16(probability);
+            }
+            denominator=denominator*factor+sum;
+            for (int t=0;t<count;t++) if (indices[start+t]>=0)
+                for (int d=0;d<dim;d++) output[d]+=scores[t]*kv[(size_t)indices[start+t]*dim+d];
         }
-        float denom = expf(sink[h] - max_score);
-        for (int d = 0; d < dim; d++) out[(size_t)h * dim + d] = 0.0f;
-        for (int t = 0; t < topk; t++) if (indices[t] >= 0) {
-            float score = 0.0f;
-            for (int d = 0; d < dim; d++) score += q[(size_t)h * dim + d] * kv[(size_t)indices[t] * dim + d];
-            float p = expf(score * scale - max_score);
-            denom += p;
-            for (int d = 0; d < dim; d++) out[(size_t)h * dim + d] += p * kv[(size_t)indices[t] * dim + d];
-        }
-        for (int d = 0; d < dim; d++)
-            out[(size_t)h * dim + d] = dsv4_round_bf16(
-                out[(size_t)h * dim + d] / denom);
+        denominator+=expf(sink[h]-maximum);
+        for (int d=0;d<dim;d++) output[d]=dsv4_round_bf16(output[d]/denominator);
     }
 }
 

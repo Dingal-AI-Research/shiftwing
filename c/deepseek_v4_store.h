@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 
 #include "st.h"
+#include "deepseek_v4_sha256.h"
 
 #define DSV4_MANIFEST_SCHEMA "colib.deepseek-v4.model-manifest.v1"
 #define DSV4_PINNED_REVISION "9e165c30e2704aec5d9d593cce3eebd58bbef1cb"
@@ -32,6 +33,7 @@ typedef struct {
     int layer;
     int expert;
     char projection[16];
+    char sha256[65];
 } dsv4_tensor_desc;
 
 typedef struct {
@@ -39,6 +41,7 @@ typedef struct {
     dsv4_tensor_desc *descriptors;
     int records;
     int segments;
+    int require_integrity;
     char error[512];
 } dsv4_store;
 
@@ -112,6 +115,15 @@ static void dsv4_store_hash_insert(shards *store, int index) {
     store->hidx[hash] = index;
 }
 
+static void dsv4_store_free_json(jval *node) {
+    if (!node) return;
+    for (int i=0;i<node->len;i++) {
+        dsv4_store_free_json(node->kids[i]);
+        if (node->keys) free(node->keys[i]);
+    }
+    free(node->str);free(node->kids);free(node->keys);free(node);
+}
+
 static int dsv4_store_init(dsv4_store *store, const char *snapshot) {
     if (!store || !snapshot) return 0;
     memset(store, 0, sizeof(*store));
@@ -134,14 +146,14 @@ static int dsv4_store_init(dsv4_store *store, const char *snapshot) {
         revision->t != J_STR || strcmp(revision->str, DSV4_PINNED_REVISION) ||
         !inventory || inventory->t != J_OBJ) {
         snprintf(store->error, sizeof(store->error), "manifest identity/schema mismatch");
-        free(text); return 0;
+        dsv4_store_free_json(root); free(text); return 0;
     }
     int count = 0;
     for (int group = 0; group < inventory->len; group++) {
         jval *records = inventory->kids[group];
         if (!records || records->t != J_ARR) {
             snprintf(store->error, sizeof(store->error), "inventory group is not an array");
-            free(text); return 0;
+            dsv4_store_free_json(root); free(text); return 0;
         }
         count += records->len;
     }
@@ -151,7 +163,7 @@ static int dsv4_store_init(dsv4_store *store, const char *snapshot) {
     if (!store->raw.t || !store->descriptors ||
         !dsv4_store_prepare_hash(&store->raw, count)) {
         snprintf(store->error, sizeof(store->error), "out of memory");
-        free(text); return 0;
+        dsv4_store_free_json(root); free(text); return 0;
     }
     for (int group = 0; group < inventory->len; group++) {
         jval *records = inventory->kids[group];
@@ -170,19 +182,19 @@ static int dsv4_store_init(dsv4_store *store, const char *snapshot) {
                 !shape || shape->t != J_ARR || shape->len > DSV4_MAX_DIMS ||
                 !dtype || dtype->t != J_STR || storage_dtype == DSV4_DTYPE_INVALID) {
                 snprintf(store->error, sizeof(store->error), "malformed inventory record %d", index);
-                free(text); return 0;
+                dsv4_store_free_json(root); free(text); return 0;
             }
             char path[PATH_MAX];
             if (snprintf(path, sizeof(path), "%s/%s", snapshot, file->str) >= (int)sizeof(path)) {
                 snprintf(store->error, sizeof(store->error), "segment path is too long");
-                free(text); return 0;
+                dsv4_store_free_json(root); free(text); return 0;
             }
             int fd = st_open_fd(&store->raw, path);
             struct stat status;
             int64_t off = (int64_t)offset->num, bytes = (int64_t)nbytes->num;
             if (fstat(fd, &status) || off > status.st_size || bytes > status.st_size - off) {
                 snprintf(store->error, sizeof(store->error), "record %s exceeds segment", name->str);
-                free(text); return 0;
+                dsv4_store_free_json(root); free(text); return 0;
             }
             int64_t numel = 1;
             dsv4_tensor_desc descriptor = {
@@ -193,13 +205,13 @@ static int dsv4_store_init(dsv4_store *store, const char *snapshot) {
                     shape->kids[axis]->num < 0 ||
                     shape->kids[axis]->num > (double)INT64_MAX) {
                     snprintf(store->error, sizeof(store->error), "invalid shape for %s", name->str);
-                    free(text); return 0;
+                    dsv4_store_free_json(root); free(text); return 0;
                 }
                 int64_t dimension = (int64_t)shape->kids[axis]->num;
                 if ((double)dimension != shape->kids[axis]->num ||
                     (dimension && numel > INT64_MAX / dimension)) {
                     snprintf(store->error, sizeof(store->error), "shape overflow for %s", name->str);
-                    free(text); return 0;
+                    dsv4_store_free_json(root); free(text); return 0;
                 }
                 descriptor.shape[axis] = dimension;
                 numel *= dimension;
@@ -207,23 +219,31 @@ static int dsv4_store_init(dsv4_store *store, const char *snapshot) {
             int element_bytes = dsv4_store_dtype_bytes(storage_dtype);
             if (numel > INT64_MAX / element_bytes || numel * element_bytes != bytes) {
                 snprintf(store->error, sizeof(store->error), "dtype/shape byte mismatch for %s", name->str);
-                free(text); return 0;
+                dsv4_store_free_json(root); free(text); return 0;
             }
             if (st_has(&store->raw, name->str)) {
                 snprintf(store->error, sizeof(store->error), "duplicate tensor %s", name->str);
-                free(text); return 0;
+                dsv4_store_free_json(root); free(text); return 0;
             }
             if (layer && layer->t == J_NUM) descriptor.layer = (int)layer->num;
             if (expert && expert->t == J_NUM) descriptor.expert = (int)expert->num;
             if (projection && projection->t == J_STR)
                 snprintf(descriptor.projection, sizeof(descriptor.projection), "%s", projection->str);
+            jval *checksum = json_get(record, "sha256");
+            if (checksum) {
+                if (checksum->t != J_STR || !dsv4_sha256_valid(checksum->str)) {
+                    snprintf(store->error, sizeof(store->error), "invalid checksum for %s", name->str);
+                    dsv4_store_free_json(root); free(text); return 0;
+                }
+                memcpy(descriptor.sha256, checksum->str, 65);
+            }
             int tensor_index = store->raw.n++;
             st_tensor *tensor = &store->raw.t[tensor_index];
             tensor->name = strdup(name->str); tensor->fd = fd; tensor->off = off;
             tensor->nbytes = bytes; tensor->dtype = 3; tensor->numel = numel;
             if (!tensor->name) {
                 snprintf(store->error, sizeof(store->error), "out of memory");
-                free(text); return 0;
+                dsv4_store_free_json(root); free(text); return 0;
             }
             store->descriptors[tensor_index] = descriptor;
             dsv4_store_hash_insert(&store->raw, tensor_index);
@@ -231,7 +251,51 @@ static int dsv4_store_init(dsv4_store *store, const char *snapshot) {
     }
     store->records = store->raw.n;
     store->segments = store->raw.nfd;
-    free(text);
+    dsv4_store_free_json(root); free(text);
+    return 1;
+}
+
+/* Fixtures may omit checksums; real engine startup requires every record to
+ * carry one and verifies bytes before a dense/cache entry becomes usable. */
+static inline int dsv4_store_require_integrity(dsv4_store *store) {
+    for (int i=0;i<store->records;i++) if (!store->descriptors[i].sha256[0]) {
+        snprintf(store->error,sizeof(store->error),"missing checksum for %s",store->raw.t[i].name);
+        return 0;
+    }
+    store->require_integrity=1;
+    return 1;
+}
+static inline int dsv4_store_verify_record(dsv4_store *store,st_tensor *tensor,const void *data) {
+    ptrdiff_t i=tensor-store->raw.t;
+    if (i<0 || i>=store->records) return 0;
+    const char *expected=store->descriptors[i].sha256;
+    if (!*expected) return !store->require_integrity;
+    char actual[65];dsv4_sha256_hex(data,(size_t)tensor->nbytes,actual);
+    if (!strcmp(actual,expected)) return 1;
+    snprintf(store->error,sizeof(store->error),"checksum mismatch for %s",tensor->name);
+    return 0;
+}
+
+static inline int dsv4_store_verify_records(dsv4_store *store,st_tensor **records,void **data,int count) {
+    if (count<1 || count>36) return 0;
+    int valid[36]={0};
+    /* Independent record hashes can use CPU cores while preserving a single
+     * error writer. The read buffers remain owned until every hash completes. */
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(6) if(count>1)
+#endif
+    for (int j=0;j<count;j++) {
+        ptrdiff_t i=records[j]-store->raw.t;
+        if (i<0 || i>=store->records) continue;
+        const char *expected=store->descriptors[i].sha256;
+        if (!*expected) { valid[j]=!store->require_integrity;continue; }
+        char actual[65];dsv4_sha256_hex(data[j],(size_t)records[j]->nbytes,actual);
+        valid[j]=!strcmp(actual,expected);
+    }
+    for (int j=0;j<count;j++) if (!valid[j]) {
+        snprintf(store->error,sizeof(store->error),"checksum mismatch for %.400s",records[j]->name);
+        return 0;
+    }
     return 1;
 }
 

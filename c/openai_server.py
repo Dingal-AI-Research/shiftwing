@@ -91,6 +91,18 @@ def _engine_error(fields, message):
                         f"messages resulted in at least {used} tokens. Please shorten the "
                         f"conversation, or restart the server with a larger CTX.",
                         "messages", "context_length_exceeded")
+    code = fields[0] if fields else ""
+    if code == "BAD_REQUEST":
+        return APIError(400,
+                        "Shiftwing rejected the engine request (BAD_REQUEST) before generation. "
+                        "Check the effective engine context limit and cache slot configuration.",
+                        None, "engine_bad_request")
+    if code == "EMPTY_PROMPT":
+        return APIError(400, "Shiftwing received an empty tokenized prompt.",
+                        "messages", "empty_prompt")
+    if code == "BAD_FRAME":
+        return APIError(500, "Shiftwing rejected an invalid engine protocol frame (BAD_FRAME).",
+                        None, "engine_protocol_error", "server_error")
     return RuntimeError(message)
 
 
@@ -531,6 +543,8 @@ def split_assistant_reply(reply, assume_reasoning=False):
 
 
 def parse_assistant_reply(reply, tools=None, assume_reasoning=False, family=None):
+    if family == "deepseek-v4":
+        return parse_model_reply(family, reply, tools, assume_reasoning)
     reasoning, body = split_assistant_reply(reply, assume_reasoning)
     content, calls = (parse_model_tool_calls(family, body, tools) if tools
                       else (body, []))
@@ -706,6 +720,26 @@ def render_chat(messages, enable_thinking=False, reasoning_effort=None, tools=No
     return "".join(prompt)
 
 
+def parse_model_reply(family, reply, tools=None, assume_reasoning=False):
+    if family != "deepseek-v4":
+        return parse_assistant_reply(reply, tools, assume_reasoning, family)
+    from tools.deepseek_v4_protocol import parse_deepseek_completion
+    parsed = parse_deepseek_completion(reply, reasoning_effort="low" if assume_reasoning else None)
+    # A malformed structured completion is an infrastructure error, never approval.
+    if parsed.get("colib_recovery", {}).get("recovered"):
+        raise APIError(502, "DeepSeek returned an incomplete or malformed response.")
+    allowed = {_qwen_tool_function(tool)["name"] for tool in (tools or [])}
+    calls = [call for call in parsed.get("tool_calls", [])
+             if call.get("function", {}).get("name") in allowed]
+    for call in calls:
+        call.setdefault("id", "call_" + uuid.uuid4().hex[:24])
+        call.setdefault("type", "function")
+        fn = call["function"]
+        if not isinstance(fn.get("arguments"), str):
+            fn["arguments"] = json.dumps(fn.get("arguments", {}), ensure_ascii=False)
+    return parsed.get("reasoning_content", ""), parsed.get("content", ""), calls
+
+
 def parse_model_tool_calls(family, reply, tools=None):
     """Parse tool calls in the dialect the family emits.
 
@@ -715,6 +749,9 @@ def parse_model_tool_calls(family, reply, tools=None):
     """
     if isinstance(family, str) and family.startswith("glm"):
         return parse_glm_tool_calls(reply, tools)
+    if family == "deepseek-v4":
+        _, content, calls = parse_model_reply(family, reply, tools)
+        return content, calls
     return parse_tool_calls(reply, tools)
 
 
@@ -727,6 +764,8 @@ def snapshot_model_family(snapshot):
         config = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, json.JSONDecodeError):
         return "qwen3.5"
+    if config.get("model_type") == "deepseek_v4":
+        return "deepseek-v4"
     family = config.get("shiftwing_model_family", config.get("colib_model_family"))
     return family if isinstance(family, str) and family else "qwen3.5"
 
@@ -735,6 +774,16 @@ def render_model_chat(snapshot, family, messages, enable_thinking=False,
                       reasoning_effort=None, tools=None, tool_choice=None,
                       cache_prefix_compatible=True):
     """Dispatch chat rendering by the converted snapshot's explicit family."""
+    if family == "deepseek-v4":
+        from tools.deepseek_v4_protocol import render_deepseek_chat
+        if tool_choice not in (None, "auto", "none"):
+            raise APIError(400, "DeepSeek forced tool choice is not implemented.", "tool_choice")
+        effort = (reasoning_effort or "low") if enable_thinking else None
+        try:
+            return render_deepseek_chat(messages, tools=None if tool_choice == "none" else tools,
+                                       reasoning_effort=effort)
+        except (TypeError, ValueError) as error:
+            raise APIError(400, str(error), "reasoning_effort") from error
     if isinstance(family, str) and family.startswith("glm"):
         return render_glm_chat(messages, enable_thinking, reasoning_effort,
                                tools, tool_choice)
@@ -965,7 +1014,7 @@ GENERIC_JSON_GBNF = (
     'jws ::= ( " " | "\\t" | "\\n" | "\\r" )*\n'
 )
 
-def generation_options(body, limit):
+def generation_options(body, limit, family=None):
     if body.get("n", 1) != 1:
         raise APIError(400, "shiftwing currently supports `n=1` only.", "n", "unsupported_value")
     # `tools`/`functions` are handled by render_chat (declaration) + parse_tool_calls (output).
@@ -1040,8 +1089,9 @@ def generation_options(body, limit):
         maximum = limit
     temperature = body.get("temperature")
     top_p = body.get("top_p")
-    temperature = 0.0 if temperature is None else temperature
-    top_p = 1.0 if top_p is None else top_p
+    agent = family == "deepseek-v4" and bool(tools_raw)
+    temperature = (1.0 if agent else 0.0) if temperature is None else temperature
+    top_p = (0.95 if agent else 1.0) if top_p is None else top_p
     if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 1:
         raise APIError(400, f"`{maximum_param}` must be a positive integer.", maximum_param)
     if maximum > limit:
@@ -1053,7 +1103,13 @@ def generation_options(body, limit):
     if (isinstance(top_p, bool) or not isinstance(top_p, (int, float)) or
             not math.isfinite(top_p) or not 0 < top_p <= 1):
         raise APIError(400, "`top_p` must be greater than 0 and at most 1.", "top_p")
-    if float(temperature) != 0.0 or float(top_p) != 1.0:
+    if family == "deepseek-v4":
+        from tools.deepseek_v4_spec import sampling_profile
+        try:
+            sampling_profile(float(temperature), float(top_p))
+        except ValueError as error:
+            raise APIError(400, str(error)) from error
+    elif float(temperature) != 0.0 or float(top_p) != 1.0:
         raise APIError(400, "The Phase-9 Qwen mux currently supports greedy decoding "
                        "only (`temperature=0`, `top_p=1`).", None,
                        "unsupported_parameter")
@@ -1141,16 +1197,16 @@ class Engine:
         self.trace = child_env.get("COLI_ENGINE_TRACE", "0") == "1"
         try:
             self.first_model_output_timeout_ms = int(
-                child_env.get("FIRST_MODEL_OUTPUT_TIMEOUT_MS", "900000"))
+                child_env.get("FIRST_MODEL_OUTPUT_TIMEOUT_MS", "3600000"))
         except ValueError as error:
             raise RuntimeError("FIRST_MODEL_OUTPUT_TIMEOUT_MS must be an integer") from error
         if self.first_model_output_timeout_ms <= 0:
             raise RuntimeError("FIRST_MODEL_OUTPUT_TIMEOUT_MS must be positive")
         try:
             self.prefill_first_progress_timeout_ms = int(
-                child_env.get("PREFILL_FIRST_PROGRESS_TIMEOUT_MS", "180000"))
+                child_env.get("PREFILL_FIRST_PROGRESS_TIMEOUT_MS", "900000"))
             self.prefill_progress_stall_timeout_ms = int(
-                child_env.get("PREFILL_PROGRESS_STALL_TIMEOUT_MS", "120000"))
+                child_env.get("PREFILL_PROGRESS_STALL_TIMEOUT_MS", "900000"))
         except ValueError as error:
             raise RuntimeError("PREFILL_PROGRESS_STALL_TIMEOUT_MS must be an integer") from error
         if self.prefill_first_progress_timeout_ms <= 0:
@@ -1247,9 +1303,15 @@ class Engine:
                             "prompt_tokens_prefilled": cached,
                             "elapsed_ms": 0,
                         }))
-                elif kind == "PREFILL_PROGRESS" and len(fields) == 5:
+                elif kind == "PREFILL_PROGRESS" and len(fields) in (5, 6):
                     request_id = fields[1]
-                    completed, total, elapsed = map(int, fields[2:])
+                    completed, total, elapsed = map(int, fields[2:5])
+                    extra = {}
+                    if len(fields) == 6:
+                        milli_percent = int(fields[5])
+                        if not 0 <= milli_percent <= 100000:
+                            raise RuntimeError("invalid PREFILL_PROGRESS percentage")
+                        extra["progress_percent"] = milli_percent / 1000.0
                     with self.pending_lock:
                         events = self.pending.get(request_id)
                         cached = self.prefill_cached.get(request_id, 0)
@@ -1262,6 +1324,21 @@ class Engine:
                             "prompt_tokens_cached": cached,
                             "prompt_tokens_prefilled": completed,
                             "elapsed_ms": elapsed,
+                            **extra,
+                        }))
+                elif kind == "PREFILL_ACTIVITY" and len(fields) in (7, 8):
+                    request_id = fields[1]
+                    committed, chunk, layer, layers, activity = map(int, fields[2:7])
+                    chunk_start = int(fields[7]) if len(fields) == 8 else committed
+                    if committed < 0 or not 1 <= chunk <= 2048 or not 0 <= layer < layers or activity < 0 or chunk_start < committed:
+                        raise RuntimeError("invalid PREFILL_ACTIVITY")
+                    with self.pending_lock:
+                        events = self.pending.get(request_id)
+                    if events is not None:
+                        events.put(("prefill_activity", {
+                            "phase": "prefill", "event": "activity",
+                            "prompt_tokens_prefilled": committed, "chunk_tokens": chunk,
+                            "layer": layer, "layers": layers, "activity": activity, "chunk_start": chunk_start,
                         }))
                 elif kind == "PREFILL_END" and len(fields) == 4:
                     request_id = fields[1]
@@ -1276,6 +1353,18 @@ class Engine:
                             "prompt_tokens_cached": cached,
                             "prompt_tokens_prefilled": total,
                             "elapsed_ms": elapsed,
+                        }))
+                elif kind == "DECODE_PROGRESS" and len(fields) == 5:
+                    request_id = fields[1]
+                    generated, maximum, elapsed = map(int, fields[2:])
+                    if generated < 0 or maximum < 1 or generated > maximum or elapsed < 0:
+                        raise RuntimeError("invalid DECODE_PROGRESS")
+                    with self.pending_lock:
+                        events = self.pending.get(request_id)
+                    if events is not None:
+                        events.put(("decode_progress", {
+                            "phase": "decode", "completion_tokens": generated,
+                            "max_tokens": maximum, "elapsed_ms": elapsed,
                         }))
                 elif kind == "DONE" and len(fields) >= 7:
                     request_id = fields[1]
@@ -1545,6 +1634,7 @@ class Engine:
         first_output_deadline = now + self.first_model_output_timeout_ms / 1000.0
         progress_stall_deadline = now + self.prefill_first_progress_timeout_ms / 1000.0
         last_progress_marker = None
+        last_activity_marker = None
         progress_started = False
         while True:
             try:
@@ -1575,15 +1665,29 @@ class Engine:
                     prefill_elapsed_ms = value.get("elapsed_ms")
                 if not cancel_sent:
                     marker = (value.get("prompt_tokens_cached"),
-                              value.get("prompt_tokens_prefilled"))
+                              value.get("prompt_tokens_prefilled"), value.get("progress_percent"))
                     advanced = (isinstance(marker[0], int) and isinstance(marker[1], int)
-                                and marker[1] > marker[0])
+                                and (marker[1] > marker[0] or
+                                     (isinstance(marker[2], (int, float)) and
+                                      marker[2] > 100 * marker[0] / max(1, value.get("prompt_tokens_total", 1)))))
                     if marker != last_progress_marker:
                         last_progress_marker = marker
                         if advanced:
                             progress_started = True
                             progress_stall_deadline = (time.monotonic() +
                                                        self.prefill_progress_stall_timeout_ms / 1000.0)
+                    if on_progress:
+                        on_progress(value)
+                    if cancelled and cancelled():
+                        request_cancel()
+            elif kind in ("decode_progress", "prefill_activity"):
+                if not cancel_sent:
+                    if kind == "prefill_activity":
+                        marker = (value["prompt_tokens_prefilled"], value["chunk_start"], value["layer"], value["activity"])
+                        if marker != last_activity_marker:
+                            last_activity_marker = marker
+                            progress_started = True
+                            progress_stall_deadline = time.monotonic() + self.prefill_progress_stall_timeout_ms / 1000.0
                     if on_progress:
                         on_progress(value)
                     if cancelled and cancelled():
@@ -1675,6 +1779,9 @@ class APIServer(ThreadingHTTPServer):
                  kv_slots=1, model_path=None):
         super().__init__(address, APIHandler)
         self.engine = engine
+        self.tokenizer_only = False
+        self.token_counter = None
+        self.token_counter_lock = threading.Lock()
         self.model_id = model_id
         self.model_path = Path(model_path).resolve() if model_path is not None else None
         self.model_family = snapshot_model_family(self.model_path)
@@ -1892,7 +1999,13 @@ class APIHandler(BaseHTTPRequestHandler):
             body = self.read_json()
             self.check_model(body)
             path = urlsplit(self.path).path
-            if path == "/v1/chat/completions":
+            if (self.server.tokenizer_only and path in
+                    ("/v1/chat/completions", "/v1/completions", "/v1/messages")):
+                raise APIError(503, "This endpoint provides token counting only.",
+                               None, "generation_unavailable", "server_error")
+            if path == "/v1/chat/count_tokens":
+                self.count_chat_tokens(body, request_id)
+            elif path == "/v1/chat/completions":
                 self.chat_completion(body, request_id)
             elif path == "/v1/completions":
                 self.completion(body, request_id)
@@ -1940,7 +2053,7 @@ class APIHandler(BaseHTTPRequestHandler):
         if dbg >= 2:
             sys.stderr.write(f"\n===== PROMPT [{request_id}] =====\n{prompt}\n===== OUTPUT [{request_id}] =====\n")
             sys.stderr.flush()
-        maximum, temperature, top_p, grammar = generation_options(body, self.server.max_tokens)
+        maximum, temperature, top_p, grammar = generation_options(body, self.server.max_tokens, self.server.model_family)
         # tools and tool_choice come from chat_completion() already processed/filtered
         if chat and tool_choice == "none":
             tools = None          # client forbade tools: never surface tool_calls
@@ -2148,18 +2261,27 @@ class APIHandler(BaseHTTPRequestHandler):
                 stats = self.server.engine.generate(
                     prompt, maximum, temperature, top_p, emit_model, cache_slot,
                     lambda: not connected, grammar=grammar, on_progress=progress_event)
-            except FirstModelOutputTimeoutError as error:
-                # The 200/SSE headers are already committed, so the outer HTTP error
-                # handler cannot replace this response with a JSON 504. Surface the
-                # terminal error in-band and close the stream cleanly instead.
+            except Exception as error:
+                # Headers are already committed: every generation failure must be
+                # an SSE error, never a second HTTP/JSON response inside the stream.
                 ka_stop.set()
                 ka_thread.join(timeout=2)
-                payload = error_object(APIError(
-                    504, str(error), None, "first_model_output_timeout", "server_error"))
+                if isinstance(error, ClientCancelled):
+                    self.close_connection = True
+                    return
+                if isinstance(error, FirstModelOutputTimeoutError):
+                    api_error = APIError(504, str(error), None,
+                                         "first_model_output_timeout", "server_error")
+                elif isinstance(error, APIError):
+                    api_error = error
+                else:
+                    self.log_error("stream generation failed: %s", error)
+                    api_error = APIError(500, "The Shiftwing engine failed to process the request.",
+                                         None, "engine_error", "server_error")
                 if connected:
                     with ka_lock:
                         try:
-                            data = json.dumps(payload, ensure_ascii=False,
+                            data = json.dumps(error_object(api_error), ensure_ascii=False,
                                               separators=(",", ":"))
                             self.wfile.write(f"data: {data}\n\n".encode())
                             self.wfile.write(b"data: [DONE]\n\n")
@@ -2254,16 +2376,19 @@ class APIHandler(BaseHTTPRequestHandler):
             "direct_io_bytes": int(profile.get("expert_direct_bytes", 0)),
         }
 
-    def chat_completion(self, body, request_id):
+    def chat_prompt(self, body):
         reasoning_effort = body.get("reasoning_effort")
         efforts = (None, "none", "minimal", "low", "medium", "high", "xhigh")
+        if self.server.model_family == "deepseek-v4":
+            efforts = (None, "none", "low", "high", "max")
         if reasoning_effort not in efforts:
             raise APIError(400, "`reasoning_effort` must be none, minimal, low, medium, high, or xhigh.",
                            "reasoning_effort")
         # COLI_THINK=1 makes thinking the default when the client sends NEITHER reasoning_effort
         # nor enable_thinking (a global switch, like the old server's --think). An explicit
         # client value always wins. Default off => exact OpenAI-standard behavior.
-        if (reasoning_effort is None and "enable_thinking" not in body
+        if (self.server.model_family != "deepseek-v4" and reasoning_effort is None
+                and "enable_thinking" not in body
                 and os.environ.get("COLI_THINK", "0") == "1"):
             reasoning_effort = "high"
         enable_thinking = body.get("enable_thinking", reasoning_effort not in (None, "none"))
@@ -2281,8 +2406,35 @@ class APIHandler(BaseHTTPRequestHandler):
             tool_choice,
             cache_prefix_compatible=True,
         )
-        self.generation(body, prompt, request_id, True, tools, tool_choice,
-                        enable_thinking)
+        effort = (reasoning_effort or "low") if enable_thinking else None
+        return prompt, tools, tool_choice, enable_thinking, effort
+
+    def chat_completion(self, body, request_id):
+        prompt, tools, tool_choice, thinking, _ = self.chat_prompt(body)
+        expected = body.get("expected_prompt_sha256")
+        if expected is not None:
+            import hashlib
+            if (self.server.model_family != "deepseek-v4" or not isinstance(expected, str)
+                    or hashlib.sha256(prompt.encode("utf-8")).hexdigest() != expected):
+                raise APIError(400, "Rendered prompt differs from the exact-count preflight.",
+                               "expected_prompt_sha256", "prompt_identity_mismatch")
+        self.generation(body, prompt, request_id, True, tools, tool_choice, thinking)
+
+    def count_chat_tokens(self, body, request_id):
+        if self.server.model_family != "deepseek-v4":
+            raise APIError(400, "Exact review counting is available for DeepSeek only.",
+                           "model", "unsupported_model")
+        from tools.deepseek_v4_count import DeepSeekTokenCounter
+        prompt, _, _, _, effort = self.chat_prompt(body)
+        try:
+            with self.server.token_counter_lock:
+                if self.server.token_counter is None:
+                    self.server.token_counter = DeepSeekTokenCounter(self.server.model_path)
+                result = self.server.token_counter.count(prompt, reasoning_effort=effort)
+        except ValueError as error:
+            raise APIError(400, str(error), "messages") from error
+        result["model"] = self.server.model_id
+        self.send_json(200, result, request_id)
 
     # ---- Anthropic /v1/messages (#343) ----------------------------------------------------
     ANTHROPIC_STOP = {"stop": "end_turn", "length": "max_tokens", "tool_calls": "tool_use"}
@@ -2326,7 +2478,7 @@ class APIHandler(BaseHTTPRequestHandler):
         self.anthropic_generation(translated, prompt, request_id, tools)
 
     def anthropic_generation(self, body, prompt, request_id, tools):
-        maximum, temperature, top_p, grammar = generation_options(body, self.server.max_tokens)
+        maximum, temperature, top_p, grammar = generation_options(body, self.server.max_tokens, self.server.model_family)
         cache_slot = body.get("cache_slot")
         if (cache_slot is not None and
                 (isinstance(cache_slot, bool) or not isinstance(cache_slot, int) or
@@ -2496,7 +2648,9 @@ class APIHandler(BaseHTTPRequestHandler):
 
 def serve(model, host="127.0.0.1", port=8000, model_id="qwen3.5-shiftwing", api_key=None,
           cap=8, max_tokens=1024, engine=None, env=None, cors_origins=None,
-          max_queue=8, queue_timeout=300, kv_slots=1):
+          max_queue=8, queue_timeout=300, kv_slots=1, tokenizer_only=False):
+    if tokenizer_only and snapshot_model_family(model) != "deepseek-v4":
+        raise ValueError("tokenizer-only mode requires the pinned DeepSeek snapshot metadata")
     if engine is None:
         engine = default_engine()
     if not 1 <= max_tokens:
@@ -2527,8 +2681,14 @@ def serve(model, host="127.0.0.1", port=8000, model_id="qwen3.5-shiftwing", api_
     runtime = None
     previous_sigterm = signal.getsignal(signal.SIGTERM)
     try:
-        runtime = Engine(engine,model,cap,max_tokens,env,kv_slots)
-        server.engine = runtime
+        if tokenizer_only:
+            from tools.deepseek_v4_count import DeepSeekTokenCounter
+            server.tokenizer_only = True
+            server.token_counter = DeepSeekTokenCounter(server.model_path)
+            server.token_counter.validate_identity()
+        else:
+            runtime = Engine(engine,model,cap,max_tokens,env,kv_slots)
+            server.engine = runtime
         print(f"OpenAI-compatible API listening on http://{host}:{port}/v1", file=sys.stderr)
         signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=server.shutdown, daemon=True).start())
         server.serve_forever()
@@ -2544,6 +2704,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default=os.environ.get("COLI_MODEL"), required=not os.environ.get("COLI_MODEL"))
     parser.add_argument("--engine", default=str(default_engine()))
+    parser.add_argument("--tokenizer-only", action="store_true",
+                        help="serve DeepSeek exact prompt counts without starting an inference engine")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--model-id", default=os.environ.get("SHIFTWING_MODEL_ID", os.environ.get("COLI_MODEL_ID", "qwen3.5-shiftwing")))
@@ -2559,7 +2721,8 @@ def main():
     args = parser.parse_args()
     serve(args.model, args.host, args.port, args.model_id, args.api_key,
           args.cap,args.max_tokens,args.engine,cors_origins=args.cors_origin,
-          max_queue=args.max_queue,queue_timeout=args.queue_timeout,kv_slots=args.kv_slots)
+          max_queue=args.max_queue,queue_timeout=args.queue_timeout,kv_slots=args.kv_slots,
+          tokenizer_only=args.tokenizer_only)
 
 
 if __name__ == "__main__":

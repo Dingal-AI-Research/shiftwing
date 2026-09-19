@@ -117,6 +117,14 @@ int main(void) {
     setenv("URING_PERSIST", "1", 1);
     dsv4_store store; CHECK(dsv4_store_init(&store, root));
     CHECK(store.records == 56);
+    CHECK(!dsv4_store_require_integrity(&store));
+    store.error[0]=0;
+    for (int i=0;i<store.records;i++) {
+        st_tensor *t=&store.raw.t[i];
+        const unsigned char *payload=strstr(t->name,".experts.") ? source : dense_source;
+        dsv4_sha256_hex(payload+t->off,(size_t)t->nbytes,store.descriptors[i].sha256);
+    }
+    CHECK(dsv4_store_require_integrity(&store));
     dsv4_expert_cache cache;
     CHECK(dsv4_expert_cache_init(&cache, &store, 2));
     CHECK(dsv4_expert_payload_bytes() == sizeof(source));
@@ -201,6 +209,14 @@ int main(void) {
     CHECK(!dsv4_expert_cache_acquire_many(
         &cache, 0, duplicate_ids, 2, grouped));
     CHECK(strstr(cache.error, "must be unique") != NULL);
+    dsv4_expert_cache_close(&cache);
+    CHECK(dsv4_expert_cache_init(&cache,&store,2));
+    file=fopen(segment_path,"r+b");CHECK(file);
+    CHECK(fputc(0,file)!=EOF && !fclose(file));
+    int corrupt_ids[2]={6,7};dsv4_expert_entry *corrupt[2]={0};
+    CHECK(!dsv4_expert_cache_acquire_many(&cache,0,corrupt_ids,2,corrupt));
+    CHECK(strstr(cache.error,"checksum mismatch")!=NULL);
+    for (int i=0;i<cache.capacity_per_layer;i++) CHECK(!cache.entries[i].valid && !cache.entries[i].references);
     dsv4_expert_cache_close(&cache);
     dsv4_store_close(&store);
     unlink(manifest_path); unlink(dense_path); unlink(segment_path); rmdir(root);

@@ -391,6 +391,8 @@ fallback.
 ## Phase 11 reports
 
 1. [DeepSeek-V4 pinned specification and storage preflight](phase11_preflight_01_deepseek_v4_spec_and_storage.md)
+2. [Reviewer acceptance: measured status](deepseek-reviewer-acceptance-findings-2026-09-11.md)
+
 2. [DeepSeek-V4 native loader, CUDA correctness, and serving metrics](phase11_preflight_02_native_loader_cuda_and_metrics.md)
 3. [Host-storage recovery and Ornith35 reconstruction record](phase11_experiment_03_storage_recovery.md)
 4. [Pinned source fetch completion](phase11_experiment_04_pinned_fetch_completion.md)
@@ -399,6 +401,8 @@ fallback.
 7. [First real 43-layer CUDA forward](phase11_experiment_07_first_real_forward.md)
 8. [Cold/warm real-model profile](phase11_experiment_08_cold_warm_profile.md)
 9. [Pinned/direct matched A/B](phase11_experiment_09_pinned_direct_ab.md)
+10. [Decode: grouped per-layer expert stage and in-place reads](deepseek-decode-grouped-2026-09-17.md)
+11. [Launch failures under LocalForge: host-memory floor and swap race](deepseek-launch-memory-2026-09-19.md)
 
 The first preflight freezes the DeepSeek-V4-Flash-0731 source identity and
 inference-critical configuration, adds a secret-redacted storage/hardware

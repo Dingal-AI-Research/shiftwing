@@ -1,0 +1,14 @@
+{
+  "revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+  "tokenizer_sha256": "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+  "binary_sha256": "d1a8c00f34b02fd3132c21203b678f57fe0f258fa18542185197df6537957663",
+  "reference": "tokenizers.Tokenizer.from_file; add_special_tokens=False",
+  "cases": 7630,
+  "seed": 40960,
+  "matching_ids": 7630,
+  "roundtrip_failures": 0,
+  "long_prompt_tokens": 32768,
+  "over_limit_prompt_tokens": 32769,
+  "first_failures": [],
+  "passed": true
+}
