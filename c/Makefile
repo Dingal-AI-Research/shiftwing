@@ -56,6 +56,11 @@ NVCC      ?= $(CUDA_HOME)/bin/nvcc
 CUDA_ARCH ?= native
 NVCCFLAGS ?= -O3 -std=c++17 -arch=$(CUDA_ARCH) -Xcompiler=-Wall,-Wextra
 CUDA_OBJ   =
+GLM_CUDA_OBJ =
+GLM_CUDA_FLAGS =
+GLM_CUDA_LIBS =
+CUBLAS_HOME ?= $(if $(wildcard ../.toolchains/cublas/nvidia/cublas/include/cublas_v2.h),$(abspath ../.toolchains/cublas/nvidia/cublas),$(CUDA_HOME))
+CUBLAS_LIBDIR ?= $(if $(wildcard $(CUBLAS_HOME)/lib/libcublas.so*),$(CUBLAS_HOME)/lib,$(CUBLAS_HOME)/lib64)
 ifeq ($(CUDA),1)
 ifneq (,$(DARWIN))
 $(error CUDA=1 is supported only on Linux)
@@ -63,6 +68,9 @@ endif
 CFLAGS   += -DCOLI_CUDA
 LDFLAGS  += -L$(CUDA_HOME)/lib64 -Wl,-rpath,$(CUDA_HOME)/lib64 -lcudart -lstdc++
 CUDA_OBJ  = backend_cuda.o
+GLM_CUDA_OBJ = glm53_cuda.o
+GLM_CUDA_FLAGS = -DGLM53_CUDA_BACKEND
+GLM_CUDA_LIBS = -L$(CUBLAS_LIBDIR) -Wl,-rpath,$(CUBLAS_LIBDIR) -l:libcublas.so.12
 endif
 
 CHECK_CUDA ?= $(if $(wildcard $(NVCC)),1,0)
@@ -106,7 +114,7 @@ endif
 
 # Config stamp: make tracks file timestamps, not flag changes; record the
 # build-affecting flags so a flag change forces a relink (colibri #306).
-BUILD_CONFIG     := $(CC)|$(CFLAGS)|$(LDFLAGS)|CUDA=$(CUDA)|ARCH=$(ARCH)|CUDA_ARCH=$(CUDA_ARCH)
+BUILD_CONFIG     := $(CC)|$(CFLAGS)|$(LDFLAGS)|CUDA=$(CUDA)|ARCH=$(ARCH)|CUDA_ARCH=$(CUDA_ARCH)|CUBLAS=$(CUBLAS_HOME)
 BUILD_CONFIG_OLD := $(shell cat .build-config 2>/dev/null)
 ifneq "$(BUILD_CONFIG)" "$(BUILD_CONFIG_OLD)"
 $(shell printf '%s' '$(BUILD_CONFIG)' > .build-config)
@@ -119,9 +127,19 @@ qwen$(EXE): qwen.c st.h uring.h json.h tok.h tok_unicode.h tok_nfc.h compat.h gr
 # GLM-5.3-Flash engine. Separate binary, not linked into qwen: the two engines
 # have their own Cfg/Layer/forward and only share the leaf headers. Keeping them
 # apart means GLM work cannot destabilise the lane that is serving reviews.
-glm53$(EXE): glm53.c st.h json.h tok.h tok_unicode_o200k.h compat.h quant.h cli_args.h \
-             glm53_compat.h hyper_connections.h delta_attention.h sparse_index.h vision_tower.h .build-config
-	$(CC) $(CFLAGS) glm53.c -o glm53$(EXE) $(LDFLAGS)
+GLM53_HEADERS = st.h json.h tok.h tok_unicode_o200k.h compat.h quant.h cli_args.h glm53_compat.h hyper_connections.h delta_attention.h sparse_index.h vision_tower.h glm53_gpu.inc glm53_cuda.h
+
+glm53$(EXE): glm53.c $(GLM53_HEADERS) $(GLM_CUDA_OBJ) .build-config
+	$(CC) $(CFLAGS) $(GLM_CUDA_FLAGS) glm53.c $(GLM_CUDA_OBJ) -o glm53$(EXE) $(LDFLAGS) $(GLM_CUDA_LIBS)
+
+glm53_cuda.o: glm53_cuda.cu glm53_cuda.h .build-config
+	"$(NVCC)" $(NVCCFLAGS) -I$(CUBLAS_HOME)/include -c $< -o $@
+
+tests/test_glm53_cuda$(EXE): tests/test_glm53_cuda.c glm53_cuda.o glm53_cuda.h
+	$(CC) $(CFLAGS) $< glm53_cuda.o -o $@ $(LDFLAGS) $(GLM_CUDA_LIBS)
+
+test-glm53-cuda: tests/test_glm53_cuda$(EXE)
+	./tests/test_glm53_cuda$(EXE)
 
 backend_cuda.o: backend_cuda.cu backend_cuda.h .build-config
 	@command -v "$(NVCC)" >/dev/null 2>&1 || { echo "nvcc not found: set CUDA_HOME or NVCC" >&2; exit 1; }
@@ -333,7 +351,7 @@ check:
 
 clean:
 	rm -rf $(GLM53_CONVERTED)
-	rm -f qwen$(EXE) glm53$(EXE) iobench$(EXE) backend_cuda.o .build-config $(TEST_BINS) tests/test_tok$(EXE) tests/test_backend_cuda$(EXE) tests/test_qwen_session_cuda$(EXE) tests/test_attn_prefill_cuda$(EXE) tests/bench_qmat$(EXE) tests/bench_layer_stack$(EXE) tests/bench_gqa_prefill$(EXE)
+	rm -f qwen$(EXE) glm53$(EXE) iobench$(EXE) backend_cuda.o glm53_cuda.o tests/test_glm53_cuda$(EXE) tests/test_glm53_prefill$(EXE) tests/bench_glm53_chunks$(EXE) .build-config $(TEST_BINS) tests/test_tok$(EXE) tests/test_backend_cuda$(EXE) tests/test_qwen_session_cuda$(EXE) tests/test_attn_prefill_cuda$(EXE) tests/bench_qmat$(EXE) tests/bench_layer_stack$(EXE) tests/bench_gqa_prefill$(EXE)
 
 web:
 	cd ../web && npm ci && npm run build
@@ -348,6 +366,20 @@ install: qwen$(EXE) web
 	cp -R ../web/dist/. $(DESTDIR)$(LIBEXECDIR)/web/dist/
 
 .PHONY: all qwen glm53 web test-glm53 test-c test-python test-web test-tokenizer test-docs test-source-package test-cuda test check bench-qmat bench-stack bench-gqa-prefill clean install
+
+.PHONY: test-glm53-cuda
+
+# Opt-in GLM chunk-size checks and loaded-model benchmark.
+tests/test_glm53_prefill$(EXE): tests/test_glm53_prefill.c glm53.c $(GLM53_HEADERS) $(GLM_CUDA_OBJ) .build-config
+	$(CC) $(CFLAGS) $(GLM_CUDA_FLAGS) $< $(GLM_CUDA_OBJ) -o $@ $(LDFLAGS) $(GLM_CUDA_LIBS)
+
+tests/bench_glm53_chunks$(EXE): tests/bench_glm53_chunks.c glm53.c $(GLM53_HEADERS) $(GLM_CUDA_OBJ) .build-config
+	$(CC) $(CFLAGS) $(GLM_CUDA_FLAGS) $< $(GLM_CUDA_OBJ) -o $@ $(LDFLAGS) $(GLM_CUDA_LIBS)
+
+test-glm53-prefill: tests/test_glm53_prefill$(EXE) $(GLM53_CONVERTED)/model.safetensors
+	./tests/test_glm53_prefill$(EXE) $(GLM53_CONVERTED)
+
+.PHONY: test-glm53-prefill
 
 # Native DeepSeek remains opt-in until reviewer qualification passes.
 DSV4_HEADERS = $(wildcard deepseek_v4*.h) st.h uring.h json.h backend_cuda.h

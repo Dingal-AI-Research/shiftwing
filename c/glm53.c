@@ -63,6 +63,12 @@
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
+#if defined(GLM53_CUDA_BACKEND) && (defined(COLI_SEGMENT_ADAPTER) || defined(COLI_EDGE_ADAPTER))
+#error GLM53_CUDA_BACKEND currently supports the standalone GLM engine only
+#endif
+#ifdef GLM53_CUDA_BACKEND
+#include "glm53_cuda.h"
+#endif
 #include <stdarg.h>
 
 #include "cli_args.h"
@@ -605,6 +611,7 @@ typedef struct {
     const float *s;
     int rows, columns, gs;
     void *vk;                             /* ColiVkTensor*, caricata alla prima uso */
+    void *gpu;                            /* immutable resident CUDA weight handle */
 } Mat;
 
 typedef struct {
@@ -653,6 +660,9 @@ typedef struct {
     int filled;                           /* posizioni gia' in cache */
     int cap;
     int n_layers;                         /* quanti stati: include il layer MTP */
+    /* Transient observer, enabled only for served prompt prefill. */
+    void (*on_prefill_layer)(int completed_layers, void *context);
+    void *prefill_context;
 } GSession;
 
 typedef struct {
@@ -1009,9 +1019,15 @@ static void mlp3(float *out, const float *x, const Mat *g, const Mat *u, const M
     mv(out, d, sg);
 }
 
+#include "glm53_gpu.inc"
+
 /* ---------- KDA: proiezioni, gate, ricorrenza ---------- */
 static void kda_layer(const Cfg *c, const GLayer *l, const float *x, int tokens,
                       float *out, float *state, float *window, float *scratch) {
+    if (g_batch_prefill && tokens > 1) {
+        kda_layer_batch(c, l, x, tokens, out, state, window, scratch);
+        return;
+    }
     const int P = c->kda_proj, H = c->kda_heads, D = c->kda_hd;
     float *qkv = malloc((size_t)3 * P * sizeof(float));
     float *gate = malloc((size_t)P * sizeof(float));
@@ -1073,6 +1089,28 @@ static void mla_layer(const Cfg *c, const GLayer *l, const float *x, int tokens,
     unsigned char *valid = malloc((size_t)seen);
     memset(valid, 1, (size_t)seen);
 
+    const int batch_math = g_batch_prefill && tokens > 1;
+    if (batch_math) {
+        mm(qa, &l->qa, x, tokens);
+        mm(latent + (size_t)base * L, &l->kva, x, tokens);
+        for (int t = 0; t < tokens; t++) {
+            float *qn = qa + (size_t)t * c->q_lora;
+            float *here = latent + (size_t)(base + t) * L;
+            rms(qn, qn, l->qa_ln, c->q_lora, c->eps);
+            rms(here, here, l->kva_ln, L, c->eps);
+        }
+        mm(queries, &l->qb, qa, tokens);
+        mm_heads(absorbed, &l->kvb_kt, queries, tokens, H, QK, L);
+        mm(iq, &l->iwq, qa, tokens);
+        mm(ik + (size_t)base * ID, &l->iwk, x, tokens);
+        mm(gates + (size_t)base * ID, &l->ikpg, x, tokens);
+        mm(head_w, &l->iwp, x, tokens);
+        for (int t = 0; t < tokens; t++) {
+            float *kraw = ik + (size_t)(base + t) * ID;
+            layer_norm(kraw, kraw, l->ik_nw, l->ik_nb, ID, 1e-5f);
+            for (int h = 0; h < IH; h++) head_w[(size_t)t * IH + h] /= sqrtf((float)IH);
+        }
+    } else {
     for (int t = 0; t < tokens; t++) {
         const int at = base + t;          /* posizione assoluta nella cache */
         const float *row = x + (size_t)t * c->hidden;
@@ -1098,6 +1136,7 @@ static void mla_layer(const Cfg *c, const GLayer *l, const float *x, int tokens,
         mv(head_w + (size_t)t * IH, &l->iwp, row);
         for (int h = 0; h < IH; h++) head_w[(size_t)t * IH + h] /= sqrtf((float)IH);
     }
+    }
 
     const int width = coli_sparse_index_width(c->index_topk, c->index_kpool, c->index_kpool_tail);
     int *selected = malloc((size_t)tokens * width * sizeof(int));
@@ -1117,8 +1156,9 @@ static void mla_layer(const Cfg *c, const GLayer *l, const float *x, int tokens,
     }
     /* Attenzione nello spazio del latente. La scala resta 1/sqrt(qk_nope):
      * il prodotto e' lo stesso numero di prima, calcolato in un altro ordine. */
-    float *context = malloc((size_t)H * V * sizeof(float));
-    float *pooled = malloc((size_t)L * sizeof(float));
+    float *context = batch_floats((size_t)(batch_math ? tokens : 1) * H * V);
+    float *pooled_all = batch_floats((size_t)(batch_math ? tokens * H : 1) * L);
+    float *pooled = pooled_all;
     float *score = malloc((size_t)width * sizeof(float));
     const float scale = 1.0f / sqrtf((float)QK);
     for (int t = 0; t < tokens; t++) {
@@ -1137,7 +1177,9 @@ static void mla_layer(const Cfg *c, const GLayer *l, const float *x, int tokens,
                 if (score[used] > top) top = score[used];
                 used++;
             }
-            float *result = context + (size_t)h * V;
+            float *result = context + ((size_t)(batch_math ? t : 0) * H + h) * V;
+            if (batch_math) pooled = pooled_all + ((size_t)t * H + h) * L;
+            memset(pooled, 0, (size_t)L * sizeof(float));
             memset(result, 0, (size_t)V * sizeof(float));
             if (!used) continue;
             double total = 0.0;
@@ -1151,11 +1193,15 @@ static void mla_layer(const Cfg *c, const GLayer *l, const float *x, int tokens,
                 const float *c_j = latent + (size_t)at * L;
                 for (int d = 0; d < L; d++) pooled[d] += weight * c_j[d];
             }
-            mv_rows(result, &l->kvb_v, pooled, h * V, V);
+            if (!batch_math) mv_rows(result, &l->kvb_v, pooled, h * V, V);
         }
-        mv(out + (size_t)t * c->hidden, &l->o, context);
+        if (!batch_math) mv(out + (size_t)t * c->hidden, &l->o, context);
     }
-    free(score); free(pooled);
+    if (batch_math) {
+        mm_heads(context, &l->kvb_v, pooled_all, tokens, H, L, V);
+        mm(out, &l->o, context, tokens);
+    }
+    free(score); free(pooled_all);
 
     free(context); free(selected); free(valid); free(head_w);
     free(iq); free(absorbed); free(queries); free(qa);
@@ -1451,12 +1497,12 @@ static Slot *expert_slot(GModel *m, int layer, int eid) {
 static void expert_mats(const GModel *m, const Slot *slot, Mat *gate, Mat *up, Mat *down) {
     const int hidden = m->c.hidden, inter = m->c.moe_inter;
     const Mat shape[3] = {
-        { 4, NULL, NULL, slot->base + m->e_at[0], (const float *)(slot->base + m->e_at[1]),
-          inter, hidden, 64 },
-        { 4, NULL, NULL, slot->base + m->e_at[2], (const float *)(slot->base + m->e_at[3]),
-          inter, hidden, 64 },
-        { 4, NULL, NULL, slot->base + m->e_at[4], (const float *)(slot->base + m->e_at[5]),
-          hidden, inter, 64 },
+        { .fmt = 4, .q4 = slot->base + m->e_at[0], .s = (const float *)(slot->base + m->e_at[1]),
+          .rows = inter, .columns = hidden, .gs = 64 },
+        { .fmt = 4, .q4 = slot->base + m->e_at[2], .s = (const float *)(slot->base + m->e_at[3]),
+          .rows = inter, .columns = hidden, .gs = 64 },
+        { .fmt = 4, .q4 = slot->base + m->e_at[4], .s = (const float *)(slot->base + m->e_at[5]),
+          .rows = hidden, .columns = inter, .gs = 64 },
     };
     *gate = shape[0]; *up = shape[1]; *down = shape[2];
 }
@@ -1477,6 +1523,10 @@ static void ffn_layer(GModel *m, const GLayer *l, int index, const float *x,
     const int wide = c->dense_inter > c->moe_inter ? c->dense_inter : c->moe_inter;
 
     if (index < c->first_dense) {                 /* layer denso: nessun router */
+        if (g_batch_prefill && tokens > 1) {
+            mlp3_batch(out, x, tokens, &l->dg, &l->du, &l->dd, c->swiglu_limit, 1);
+            return;
+        }
         float *sg = malloc((size_t)wide * sizeof(float));
         float *su = malloc((size_t)wide * sizeof(float));
         for (int t = 0; t < tokens; t++)
@@ -1539,7 +1589,9 @@ static void ffn_layer(GModel *m, const GLayer *l, int index, const float *x,
     if (!sg || !su || !tmp) { fprintf(stderr, "OOM nel MoE\n"); exit(1); }
 
     /* l'esperto condiviso e' sempre attivo e non passa dalla cache */
-    for (int t = 0; t < tokens; t++)
+    if (g_batch_prefill && tokens > 1)
+        mlp3_batch(out, x, tokens, &l->rg, &l->ru, &l->rd, c->swiglu_limit, 1);
+    else for (int t = 0; t < tokens; t++)
         mlp3(out + (size_t)t * c->hidden, x + (size_t)t * c->hidden,
              &l->rg, &l->ru, &l->rd, c->swiglu_limit, sg, su);
 
@@ -1602,6 +1654,15 @@ static void ffn_layer(GModel *m, const GLayer *l, int index, const float *x,
      * Gli slot gia' assegnati in questo blocco non sono sfrattabili: `used` li
      * marca oltre il clock d'inizio, ed e' l'unico ruolo che gli resta. */
     const long *use = &m->euse[(size_t)index * c->n_experts];
+    float *batch_x = NULL, *batch_y = NULL, *batch_scale = NULL;
+    int *batch_token = NULL;
+    if (g_batch_prefill && tokens > 1) {
+        batch_x = batch_floats((size_t)tokens * c->hidden);
+        batch_y = batch_floats((size_t)tokens * c->hidden);
+        batch_scale = batch_floats(tokens);
+        batch_token = malloc((size_t)tokens * sizeof(int));
+        if (!batch_token) { fprintf(stderr, "OOM in expert batch\n"); exit(1); }
+    }
     for (int base = 0; base < n_union; base += block) {
         const int here = base + block <= n_union ? block : n_union - base;
         /* Per blocco, non per layer. Con LRU la prenotazione si proteggeva da
@@ -1668,6 +1729,29 @@ static void ffn_layer(GModel *m, const GLayer *l, int index, const float *x,
             slot->used = ++m->clock;
             Mat gate, up, down;
             expert_mats(m, slot, &gate, &up, &down);
+            if (batch_x) {
+                int count = 0;
+                for (int t = 0; t < tokens; t++) {
+                    float scale = 0.0f;
+                    for (int k = 0; k < topk; k++)
+                        if (chosen[(size_t)t * topk + k] == eid) {
+                            scale = weight[(size_t)t * topk + k]; break;
+                        }
+                    if (scale == 0.0f) continue;
+                    batch_token[count] = t; batch_scale[count] = scale;
+                    memcpy(batch_x + (size_t)count * c->hidden, x + (size_t)t * c->hidden,
+                           (size_t)c->hidden * sizeof(float));
+                    count++;
+                }
+                if (count) mlp3_batch(batch_y, batch_x, count, &gate, &up, &down, c->swiglu_limit, 0);
+                /* Preserve expert accumulation order, including cache blocks. */
+                for (int r = 0; r < count; r++) {
+                    float *dst = out + (size_t)batch_token[r] * c->hidden;
+                    for (int d = 0; d < c->hidden; d++)
+                        dst[d] += batch_scale[r] * batch_y[(size_t)r * c->hidden + d];
+                }
+                continue;
+            }
             for (int t = 0; t < tokens; t++) {
                 float scale = 0.0f;
                 for (int k = 0; k < topk; k++)
@@ -1683,6 +1767,7 @@ static void ffn_layer(GModel *m, const GLayer *l, int index, const float *x,
             }
         }
     }
+    free(batch_token); free(batch_scale); free(batch_y); free(batch_x);
     free(to_read); free(slot_of); free(union_ids);
     free(tmp); free(su); free(sg); free(weight); free(chosen);
 }
@@ -1885,6 +1970,7 @@ static void model_load_range(GModel *m, const char *dir, int layer_begin,
      * da quanto hanno gia' preso i pesi, e prima del ciclo sui layer non
      * l'avevano ancora preso. */
     if (m->streaming) expert_cache_init(m);
+    gpu_init();
 }
 
 /* ---------- vision ----------
@@ -2088,6 +2174,7 @@ static float *run_layers(GModel *m, GSession *s, float *streams, float *next,
                              comb + (size_t)t * H * H, H, D);
             float *swap = streams; streams = next; next = swap;
         }
+        if (s->on_prefill_layer) s->on_prefill_layer(i - begin + 1, s->prefill_context);
     }
     free(comb); free(post); free(branch); free(normed); free(collapsed);
     return streams;
@@ -2174,6 +2261,7 @@ static void model_release(GModel *m) {
     free((void *)m->final_norm);
     glm_uring_release(&m->uring);
     st_destroy(&m->S);
+    gpu_release();
     memset(m, 0, sizeof(*m));
 }
 
@@ -2235,8 +2323,10 @@ static int mtp_step(GModel *m, GSession *s, int token, int pos, float *logits) {
     return best;
 }
 
-static float *forward_span(GModel *m, GSession *s, const int *tokens, int n,
-                           const float *vision, int n_vision) {
+/* Served prefill needs only the final prediction. Keep the full-row path
+ * for teacher forcing, verification and callers of forward_span. */
+static float *forward_span_logits(GModel *m, GSession *s, const int *tokens, int n,
+                                  const float *vision, int n_vision, int all_logits) {
     const Cfg *c = &m->c;
     const int start = s->filled;   /* NON 'base': nel ciclo dei layer e' gia' preso */
     if (start + n > s->cap) {
@@ -2283,34 +2373,38 @@ static float *forward_span(GModel *m, GSession *s, const int *tokens, int n,
     streams = run_layers(m, s, streams, next, n, start,
                          m->layer_begin, m->layer_end);
 
-    float *collapsed = malloc((size_t)n * D * sizeof(float));
-    float *normed = malloc((size_t)n * D * sizeof(float));
-    if (!collapsed || !normed) { fprintf(stderr, "OOM in chiusura\n"); exit(1); }
-
-    /* i flussi si richiudono con una media NON pesata */
-    for (int t = 0; t < n; t++)
+    const int rows = all_logits ? n : 1;
+    const int first = all_logits ? 0 : n - 1;
+    float *collapsed = batch_floats((size_t)rows * D);
+    float *normed = batch_floats((size_t)rows * D);
+    for (int t = 0; t < rows; t++)
         for (int d = 0; d < D; d++) {
             float sum = 0.0f;
-            for (int h = 0; h < H; h++) sum += streams[((size_t)t * H + h) * D + d];
+            for (int h = 0; h < H; h++)
+                sum += streams[((size_t)(first + t) * H + h) * D + d];
             collapsed[(size_t)t * D + d] = sum / H;
         }
-    /* La testa MTP vuole lo stato PRIMA della norma finale, che e' quello che
-     * il blocco successivo riceverebbe se ce ne fosse uno. Si tiene solo
-     * l'ultima posizione: e' l'unica da cui si specula. */
+    /* Preserve the final unnormalized hidden state used by MTP. */
     if (s->last_hidden && n > 0)
-        memcpy(s->last_hidden, collapsed + (size_t)(n - 1) * D,
+        memcpy(s->last_hidden, collapsed + (size_t)(rows - 1) * D,
                (size_t)D * sizeof(float));
-    for (int t = 0; t < n; t++)
+    for (int t = 0; t < rows; t++)
         rms(normed + (size_t)t * D, collapsed + (size_t)t * D, m->final_norm, D, c->eps);
 
-    float *logits = malloc((size_t)n * c->vocab * sizeof(float));
-    for (int t = 0; t < n; t++)
+    float *logits = batch_floats((size_t)rows * c->vocab);
+    if (g_batch_prefill && rows > 1) mm(logits, &m->head, normed, rows);
+    else for (int t = 0; t < rows; t++)
         mv(logits + (size_t)t * c->vocab, &m->head, normed + (size_t)t * D);
 
     free(normed); free(collapsed);
     free(next); free(streams);
     s->filled = start + n;
     return logits;
+}
+
+static float *forward_span(GModel *m, GSession *s, const int *tokens, int n,
+                           const float *vision, int n_vision) {
+    return forward_span_logits(m, s, tokens, n, vision, n_vision, 1);
 }
 
 /* Prefill a pezzi.
@@ -2328,11 +2422,26 @@ static float *forward_span(GModel *m, GSession *s, const int *tokens, int n,
  * Con `keep_all` si tengono i logit di ogni posizione, che serve solo al
  * confronto con l'oracolo; altrimenti si tiene l'ultima riga, che e' l'unica
  * che decide il token successivo. */
-static float *forward_prefill(GModel *m, GSession *s, const int *tokens, int n,
-                              const float *vision, int n_vision, int keep_all) {
+typedef struct {
+    int at, count, layers;
+    void (*emit)(int completed, double partial, void *context);
+    void *context;
+} PrefillChunkProgress;
+
+static void prefill_layer_progress(int completed_layers, void *context) {
+    const PrefillChunkProgress *p = context;
+    /* Count each transformer layer plus the output projection as one unit.
+     * Tokens remain incomplete until the entire chunk has finished. */
+    p->emit(p->at, (double)p->count * completed_layers / (p->layers + 1), p->context);
+}
+
+static float *forward_prefill_progress(GModel *m, GSession *s, const int *tokens, int n,
+                              const float *vision, int n_vision, int keep_all,
+                              void (*on_progress)(int completed, double partial, void *context),
+                              void *progress_context) {
     const Cfg *c = &m->c;
     const char *setting = getenv("GLM53_PREFILL_CHUNK");
-    int chunk = setting ? atoi(setting) : 128;
+    int chunk = setting ? atoi(setting) : 1024;
     if (chunk < 1) chunk = 1;
     if (chunk > n) chunk = n;
 
@@ -2350,10 +2459,16 @@ static float *forward_prefill(GModel *m, GSession *s, const int *tokens, int n,
         if (vision && c->image_token >= 0)
             for (int i = 0; i < here; i++)
                 if (tokens[at + i] == c->image_token) mine++;
-        float *part = forward_span(m, s, tokens + at, here,
+        PrefillChunkProgress progress = { at, here, m->layer_end - m->layer_begin, on_progress, progress_context };
+        s->on_prefill_layer = on_progress ? prefill_layer_progress : NULL;
+        s->prefill_context = &progress;
+        float *part = forward_span_logits(m, s, tokens + at, here,
                                    vision ? vision + (size_t)used_vision * c->hidden : NULL,
-                                   mine);
+                                   mine, keep_all);
+        s->on_prefill_layer = NULL;
+        s->prefill_context = NULL;
         used_vision += mine;
+        if (on_progress) on_progress(at + here, 0, progress_context);
         if (keep_all) {
             memcpy(all + (size_t)at * c->vocab, part,
                    (size_t)here * c->vocab * sizeof(float));
@@ -2361,15 +2476,6 @@ static float *forward_prefill(GModel *m, GSession *s, const int *tokens, int n,
         } else {
             free(last);
             last = part;
-            if (here > 1) {
-                /* si tiene solo l'ultima riga */
-                float *tail = malloc((size_t)c->vocab * sizeof(float));
-                if (!tail) { fprintf(stderr, "OOM sui logit\n"); exit(1); }
-                memcpy(tail, last + (size_t)(here - 1) * c->vocab,
-                       (size_t)c->vocab * sizeof(float));
-                free(last);
-                last = tail;
-            }
         }
     }
     if (vision && used_vision != n_vision) {
@@ -2378,6 +2484,12 @@ static float *forward_prefill(GModel *m, GSession *s, const int *tokens, int n,
         exit(1);
     }
     return keep_all ? all : last;
+}
+
+static float *forward_prefill(GModel *m, GSession *s, const int *tokens, int n,
+                              const float *vision, int n_vision, int keep_all) {
+    return forward_prefill_progress(m, s, tokens, n, vision, n_vision, keep_all,
+                                    NULL, NULL);
 }
 
 /* Il passaggio senza sessione: apre, macina tutto, chiude. E' quello che usano
@@ -2536,7 +2648,9 @@ static void slots_init(const GModel *m) {
     if (g_n_slots < 1) g_n_slots = 1;
     if (g_n_slots > GLM53_MAX_SLOTS) g_n_slots = GLM53_MAX_SLOTS;
     const char *context = getenv("GLM53_MAXT");
-    g_slot_context = context ? atoi(context) : 8192;
+    /* Direct API launches may only set the shared CTX name. The CLI sets both. */
+    if (!context || !*context) context = getenv("CTX");
+    g_slot_context = context && *context ? atoi(context) : 8192;
     if (g_slot_context < 64) g_slot_context = 64;
     if (getenv("GLM53_VERBOSE"))
         fprintf(stderr, "slot KV: %d da %d posizioni\n", g_n_slots, g_slot_context);
@@ -2693,6 +2807,20 @@ static int serve_read_req(ServeReq *q, char *verb, size_t verb_size) {
     return 1;
 }
 
+typedef struct {
+    unsigned long long request_id;
+    int cached, total;
+    double started;
+} ServePrefillProgress;
+
+static void serve_prefill_progress(int completed, double partial, void *context) {
+    const ServePrefillProgress *progress = context;
+    int milli_percent = (int)(100000.0 * (progress->cached + completed + partial) / progress->total);
+    serve_line("PREFILL_PROGRESS %llu %d %d %lld %d\n", progress->request_id,
+               progress->cached + completed, progress->total,
+               (long long)((now_s() - progress->started) * 1000.0), milli_percent);
+}
+
 /* Genera per una richiesta e chiude col suo DONE. */
 static void serve_one(GModel *m, Tok *tokenizer, ServeReq *q) {
     if (!q->plen) { serve_line("ERROR %llu EMPTY_PROMPT\n", q->id); return; }
@@ -2715,7 +2843,9 @@ static void serve_one(GModel *m, Tok *tokenizer, ServeReq *q) {
     }
     if (total >= room) {
         free(sequence);
-        serve_line("ERROR %llu BAD_REQUEST\n", q->id);
+        /* tok_encode caps its output at room: total is a lower bound when
+         * the prompt overflows. A full prompt also leaves no generation room. */
+        serve_line("ERROR %llu CONTEXT_EXCEEDED %d %d\n", q->id, total, room);
         return;
     }
 
@@ -2770,8 +2900,13 @@ static void serve_one(GModel *m, Tok *tokenizer, ServeReq *q) {
     }
 
     const int reused = shared;
-    float *logits = forward_prefill(m, slot->session, sequence + shared,
-                                    total - shared, vision, n_vision, 0);
+    ServePrefillProgress progress = { q->id, reused, prompt_tokens, now_s() };
+    serve_line("PREFILL_BEGIN %llu %d %d\n", q->id, prompt_tokens, reused);
+    float *logits = forward_prefill_progress(m, slot->session, sequence + shared,
+                                    total - shared, vision, n_vision, 0,
+                                    serve_prefill_progress, &progress);
+    serve_line("PREFILL_END %llu %d %lld\n", q->id, prompt_tokens,
+               (long long)((now_s() - progress.started) * 1000.0));
     GSession *session = slot->session;
     int rows = 1;
     for (int step = 0; step < budget; step++) {
@@ -2785,6 +2920,8 @@ static void serve_one(GModel *m, Tok *tokenizer, ServeReq *q) {
         char piece[512];
         int written = tok_decode(tokenizer, &next, 1, piece, sizeof(piece) - 1);
         serve_data(q->id, piece, written);
+        serve_line("DECODE_PROGRESS %llu %d %d %lld\n", q->id, emitted, budget,
+                   (long long)((now_s() - started) * 1000.0));
         if (step + 1 == budget) { limited = 1; break; }
         logits = forward_span(m, session, &next, 1, NULL, 0);
         rows = 1;
@@ -2884,6 +3021,7 @@ int main(int argc, char **argv) {
         arm_stops(snap, &serve_tok, batch && atoi(batch));
         serve_loop(&served, &serve_tok);
         tok_free(&serve_tok);
+        gpu_release();
         return 0;
     }
 
@@ -3096,6 +3234,7 @@ int main(int argc, char **argv) {
     session_close(&model, session);
     free(vision);
     free(tokens);
+    gpu_release();
     return 0;
 }
 #endif /* GLM53_NO_MAIN */

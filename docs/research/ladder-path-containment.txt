@@ -1,0 +1,26 @@
+We need to review the selected source for correctness. The code defines a function `download` that takes a root and requested path, resolves the target, checks if it's within root, and reads bytes. Potential issues: path traversal check is flawed because it uses string prefix check, which can be bypassed with paths like `/root/../outside`? Actually `resolve()` normalizes the path, so `Path(root) / requested` resolved will be absolute and normalized. The check `str(target).startswith(str(Path(root).resolve()))` is a common but flawed check because it doesn't account for path boundaries. For example, if root is `/tmp/root`, and requested is `../root_evil`, resolved target might be `/tmp/root_evil` which starts with `/tmp/root`? Actually `/tmp/root_evil` starts with `/tmp/root`? Yes, because string prefix. So it would pass the check even though it's outside root. That's a security vulnerability. Also, if root is `/tmp/root` and requested is `../root2`, resolved target `/tmp/root2` starts with `/tmp/root`? No, `/tmp/root2` does not start with `/tmp/root` because after root there is '2' not a slash. But `/tmp/root_evil` does start with `/tmp/root` because underscore is not a path separator. So the check is insufficient. The correct way is to use `target.is_relative_to(root_resolved)` or check `target.parent == root_resolved` etc. So this is a concrete defect.
+
+Also, the function returns `target.read_bytes()` which could raise if file doesn't exist, but that's expected.
+
+Line 4 is the problematic check.
+
+We should report this as a defect. Also, note that the function doesn't handle the case where root is not absolute? It resolves root, so it's fine.
+
+Thus verdict: REJECT with issue at line 4.
+
+We need to output JSON with "verdict": "REJECT" and "issues" array with path, line, explanation.
+
+Path is "download.py", line 4.
+
+Explanation: The path traversal check uses string prefix matching, which can be bypassed by a sibling directory with a name that shares the prefix (e.g., root `/tmp/root` and requested `../root_evil` resolves to `/tmp/root_evil` which passes the check). This allows reading files outside the intended root.
+
+We'll keep it concise.</think>{
+  "verdict": "REJECT",
+  "issues": [
+    {
+      "path": "download.py",
+      "line": 4,
+      "explanation": "The path traversal check uses string prefix matching, which can be bypassed by a sibling directory with a name that shares the prefix (e.g., root `/tmp/root` and requested `../root_evil` resolves to `/tmp/root_evil` which passes the check). This allows reading files outside the intended root."
+    }
+  ]
+}

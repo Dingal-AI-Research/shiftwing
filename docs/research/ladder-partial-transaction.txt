@@ -1,0 +1,10 @@
+We need to review the selected source file batch.py for correctness. The file defines a function insert_batch that takes a connection and rows, begins a transaction, inserts each row, and commits in a finally block. Potential issues: if an exception occurs during the loop, the finally block commits, which would commit partial inserts. Typically, you'd want to rollback on error. Also, the BEGIN and COMMIT are not properly paired with rollback. The code as written will commit even if an exception occurs, which is likely a defect. Also, the connection.execute("BEGIN") might not be appropriate for all DB APIs; but assuming it's valid. The main issue is that on exception, it commits partial data instead of rolling back. Also, if the BEGIN fails, the try block is not entered, but that's fine. The finally block always commits, even if an exception occurred. That's a concrete defect. Also, if the connection is in autocommit mode, BEGIN might not be needed, but that's not a defect per se. The issue is the lack of rollback. So we should report that. Also, the line numbers: line 7 is the commit in finally. We'll report that. Also, maybe the BEGIN should be inside try? But the main defect is the commit on error. So verdict: REJECT. Issues: path "batch.py", line 7, explanation: "The finally block commits the transaction even if an exception occurs during the insert loop, causing partial data to be committed. Should rollback on exception." Also, maybe line 2: BEGIN is outside try, but that's fine. We'll just report the commit issue. Also, note that the function doesn't handle the case where connection.execute("BEGIN") might fail, but that's not a defect in the code itself. So we'll keep it concise.</think>{
+  "verdict": "REJECT",
+  "issues": [
+    {
+      "path": "batch.py",
+      "line": 7,
+      "explanation": "The finally block unconditionally commits the transaction. If an exception occurs during the insert loop, partial inserts are committed instead of rolling back, leading to inconsistent data."
+    }
+  ]
+}

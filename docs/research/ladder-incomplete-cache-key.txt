@@ -1,0 +1,26 @@
+We need to review tax.py for correctness. The code defines a function total_with_tax that caches results based on subtotal only, ignoring tax_rate. This is a bug: if the same subtotal is used with different tax rates, the cached result from the first call will be returned incorrectly. Also, the cache key should include tax_rate. Additionally, the cache is global and never cleared, but that's not necessarily a defect. The main issue is the cache key.
+
+Line numbers: line 3 checks if subtotal in _cache, line 4 returns cached value, line 5 computes result, line 6 stores. The defect is that tax_rate is not part of the cache key. So if subtotal=100, tax_rate=0.1 -> result=110, then subtotal=100, tax_rate=0.2 -> returns 110 instead of 120. That's a concrete defect.
+
+Also, note that the cache is a dict, but using subtotal as key is insufficient. So we should report this.
+
+We need to output JSON with verdict REJECT and issues array with path, line, explanation.
+
+Path: tax.py, line 3 or 4? The issue is on line 3 where the check is done, but the root cause is the key selection. We can point to line 3 or line 6. I'll point to line 3.
+
+Explanation: The cache key only uses subtotal, ignoring tax_rate, causing incorrect results when the same subtotal is used with different tax rates.
+
+Also, there might be a minor issue: the cache is unbounded, but that's not a correctness defect per se. We'll focus on the main bug.
+
+Thus, verdict: REJECT, issues: [{path: "tax.py", line: 3, explanation: "Cache key only uses subtotal, ignoring tax_rate. If the same subtotal is passed with different tax rates, the cached result from the first call is returned, producing incorrect totals."}]
+
+We should keep under 300 words.</think>{
+  "verdict": "REJECT",
+  "issues": [
+    {
+      "path": "tax.py",
+      "line": 3,
+      "explanation": "Cache key only uses subtotal, ignoring tax_rate. If the same subtotal is passed with different tax rates, the cached result from the first call is returned, producing incorrect totals."
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "base": {
+    "expected_shards": 122,
+    "failures": [],
+    "ledger_sha256": "cf00084d2e534bed7f1fa8eb5de5fef5fd4dcc857737cfd6a78fa81f397ed67a",
+    "ledger_shards": 122,
+    "manifest": "/home/dinga/Projects/colib/docs/research/artifacts/ornith397_retirement/base-shards.json",
+    "passed": true,
+    "physical": {
+      "files": 122,
+      "hash_verified": 122,
+      "rehashed": 122,
+      "size_verified": 122
+    },
+    "quantization_sha256": "b0623a5f83d3890cbb095bbec25f0aeaec62edbc804fae918a2051189d1933a2",
+    "records_matched": 122
+  },
+  "generated_at": "2026-08-19T19:44:08.497747+00:00",
+  "passed": true,
+  "rehash": true,
+  "schema": "colib.ornith397-pinned-verification.v1",
+  "snapshot": "/home/dinga/Projects/colib/c/ornith397"
+}

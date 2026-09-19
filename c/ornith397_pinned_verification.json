@@ -1,0 +1,38 @@
+{
+  "base": {
+    "expected_shards": 122,
+    "failures": [],
+    "ledger_sha256": "cf00084d2e534bed7f1fa8eb5de5fef5fd4dcc857737cfd6a78fa81f397ed67a",
+    "ledger_shards": 122,
+    "manifest": "/home/dinga/Projects/colib/docs/research/artifacts/ornith397_retirement/base-shards.json",
+    "passed": true,
+    "physical": {
+      "files": 122,
+      "hash_verified": 122,
+      "rehashed": 122,
+      "size_verified": 122
+    },
+    "quantization_sha256": "b0623a5f83d3890cbb095bbec25f0aeaec62edbc804fae918a2051189d1933a2",
+    "records_matched": 122
+  },
+  "expert_q3": {
+    "expected_files": 480,
+    "failures": [],
+    "live_files": 480,
+    "live_manifest_sha256": "5231fbe79bc9edf27b86222e4df503066a0b8f04f02fc612ab993696096b0180",
+    "manifest": "/home/dinga/Projects/colib/docs/research/artifacts/ornith397_retirement/expert-q3.json",
+    "passed": true,
+    "physical": {
+      "files": 480,
+      "hash_verified": 480,
+      "rehashed": 480,
+      "size_verified": 480
+    },
+    "records_matched": 480
+  },
+  "generated_at": "2026-08-21T00:04:38.935124+00:00",
+  "passed": true,
+  "rehash": true,
+  "schema": "colib.ornith397-pinned-verification.v1",
+  "snapshot": "/home/dinga/Projects/colib/c/ornith397"
+}

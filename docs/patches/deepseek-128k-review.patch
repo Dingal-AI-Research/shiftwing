@@ -1,0 +1,621 @@
+--- /dev/null
++++ b/shiftwing/c/deepseek_v4_limits.h
+@@ -0,0 +1,11 @@
++#ifndef COLIB_DEEPSEEK_V4_LIMITS_H
++#define COLIB_DEEPSEEK_V4_LIMITS_H
++
++/* Serving policy: 128 Ki input tokens plus a separate 8 Ki response reserve.
++ * Keep in sync with tools/deepseek_v4_spec.py and LocalForge's review profile.
++ * These limits do not change the checkpoint's original RoPE context. */
++#define DSV4_REVIEW_INPUT_TOKENS 131072
++#define DSV4_REVIEW_OUTPUT_TOKENS 8192
++#define DSV4_MAX_CONTEXT (DSV4_REVIEW_INPUT_TOKENS + DSV4_REVIEW_OUTPUT_TOKENS)
++
++#endif
+--- a/shiftwing/c/deepseek_v4.h
++++ b/shiftwing/c/deepseek_v4.h
+@@ -4,6 +4,8 @@
+ /* Scalar, dependency-free DeepSeek-V4 reference math.  These routines favor
+  * auditability over speed and are the correctness oracle for the SM120
+  * kernels.  Tensor layouts match the pinned 0731 checkpoint. */
++
++#include "deepseek_v4_limits.h"
+ 
+ #include <float.h>
+ #include <math.h>
+--- a/shiftwing/c/deepseek_v4_session.h
++++ b/shiftwing/c/deepseek_v4_session.h
+@@ -4,6 +4,8 @@
+ /* Versioned DeepSeek session snapshots. The caller supplies SHA-256 identity
+  * bytes for the model manifest, tokenizer/protocol, and native engine source.
+  * Attention/cache arrays stay in their native BF16 representation. */
++
++#include "deepseek_v4_limits.h"
+ 
+ #include <fcntl.h>
+ #include <stdint.h>
+@@ -15,7 +17,7 @@
+ 
+ #define DSV4_SESSION_VERSION 1u
+ #define DSV4_SESSION_ENDIAN 0x01020304u
+-#define DSV4_SESSION_MAX_CONTEXT 65536u
++#define DSV4_SESSION_MAX_CONTEXT DSV4_MAX_CONTEXT
+ #define DSV4_SESSION_MAX_BYTES (2ull << 30)
+ 
+ typedef struct {
+--- a/shiftwing/c/deepseek_v4_runtime.h
++++ b/shiftwing/c/deepseek_v4_runtime.h
+@@ -66,7 +66,7 @@
+ }
+ 
+ static inline uint64_t dsv4_runtime_state_bytes(int context) {
+-    if (context < 1 || context > 65536) return 0;
++    if (context < 1 || context > DSV4_MAX_CONTEXT) return 0;
+     uint64_t floats = (uint64_t)DSV4_HC_MULT * DSV4_ATTN_HIDDEN +
+         DSV4_ATTN_HIDDEN;
+     uint64_t bytes = (uint64_t)context * sizeof(int32_t);
+@@ -270,7 +270,7 @@
+                                      dsv4_expert_cache *experts,
+                                      int context) {
+     if (!runtime || !store || !dense || !experts || context < 1 ||
+-        context > 65536 || !dsv4_runtime_state_bytes(context))
++        context > DSV4_MAX_CONTEXT || !dsv4_runtime_state_bytes(context))
+         return 0;
+     memset(runtime, 0, sizeof(*runtime));
+     runtime->store = store; runtime->dense = dense;
+--- a/shiftwing/c/deepseek_v4_runtime_session.h
++++ b/shiftwing/c/deepseek_v4_runtime_session.h
+@@ -18,7 +18,7 @@
+ 
+ static inline int dsv4_runtime_session_shape_for(
+     int context, dsv4_runtime_session_shape *shape) {
+-    if (!shape || context < 1 || context > 65536 ||
++    if (!shape || context < 1 || context > DSV4_MAX_CONTEXT ||
+         DSV4_RUNTIME_LAYERS != 43 || DSV4_ATTN_HIDDEN != 4096)
+         return 0;
+     memset(shape, 0, sizeof(*shape));
+--- a/shiftwing/c/deepseek_v4_attention_batch.h
++++ b/shiftwing/c/deepseek_v4_attention_batch.h
+@@ -11,10 +11,10 @@
+     const float *sink;
+ } dsv4_attention_collection;
+ static inline uint64_t dsv4_attention_collection_bytes(int count) {
+-    uint64_t compressed=(65536+DSV4_INDEX_RATIO-1)/DSV4_INDEX_RATIO;
++    uint64_t compressed=(DSV4_MAX_CONTEXT+DSV4_INDEX_RATIO-1)/DSV4_INDEX_RATIO;
+     uint64_t selected=DSV4_INDEX_TOPK;
+-    if (selected<(65536+DSV4_COMPRESS_RATIO-1)/DSV4_COMPRESS_RATIO)
+-        selected=(65536+DSV4_COMPRESS_RATIO-1)/DSV4_COMPRESS_RATIO;
++    if (selected<(DSV4_MAX_CONTEXT+DSV4_COMPRESS_RATIO-1)/DSV4_COMPRESS_RATIO)
++        selected=(DSV4_MAX_CONTEXT+DSV4_COMPRESS_RATIO-1)/DSV4_COMPRESS_RATIO;
+     return ((uint64_t)DSV4_ATTN_WINDOW+count+compressed)*DSV4_ATTN_HEAD_DIM*sizeof(float)+
+         (uint64_t)count*(DSV4_ATTN_WINDOW+selected+1)*sizeof(int);
+ }
+--- a/shiftwing/c/deepseek_v4.c
++++ b/shiftwing/c/deepseek_v4.c
+@@ -118,8 +118,8 @@
+         json_string(root, "colib_model_family", "deepseek-v4", 1) &&
+         json_string(root, "colib_source_revision", DSV4_SOURCE_REVISION, 1);
+     if (!ok) fprintf(stderr, "deepseek_v4: pinned configuration validation failed\n");
+-    if (context < 1 || context > 65536) {
+-        fprintf(stderr, "deepseek_v4: CTX must be in 1..65536\n");
++    if (context < 1 || context > DSV4_MAX_CONTEXT) {
++        fprintf(stderr, "deepseek_v4: CTX must be in 1..%d\n", DSV4_MAX_CONTEXT);
+         ok = 0;
+     }
+     free(text);
+@@ -142,7 +142,7 @@
+ }
+ 
+ static int dsv4_run_smoke(dsv4_store *store, int context, int token) {
+-    if (!store || context < 1 || context > 65536 ||
++    if (!store || context < 1 || context > DSV4_MAX_CONTEXT ||
+         token < 0 || token >= DSV4_VOCAB) {
+         fprintf(stderr, "deepseek_v4: invalid smoke token/context\n");
+         return 2;
+@@ -395,7 +395,7 @@
+         return 1;
+     }
+     const char *context_text = getenv("CTX");
+-    int context = context_text ? atoi(context_text) : 40960;
++    int context = context_text ? atoi(context_text) : DSV4_MAX_CONTEXT;
+     const char *dspark = getenv("DSPARK");
+     if (dspark && strcmp(dspark,"off")) {
+         fprintf(stderr,"deepseek_v4: native reviewer requires DSPARK=off\n");return 2;
+--- a/shiftwing/c/deepseek_v4_execute.h
++++ b/shiftwing/c/deepseek_v4_execute.h
+@@ -158,9 +158,9 @@
+     int count=dsv4_tok_encode(&e->tokenizer,request->payload,(int)request->bytes,tokens,(int)request->bytes);
+     result.prompt_tokens=count;
+     if (count<1) { result.error="EMPTY_PROMPT";goto done; }
+-    if (count>32768 || request->maximum>e->memory.context-count) {
++    if (count>DSV4_REVIEW_INPUT_TOKENS || request->maximum>e->memory.context-count) {
+         result.error="CONTEXT_EXCEEDED";
+-        snprintf(result.detail,sizeof(result.detail),"%d %d",count,count>32768 ? 32768 : e->memory.context-request->maximum);goto done;
++        snprintf(result.detail,sizeof(result.detail),"%d %d",count,count>DSV4_REVIEW_INPUT_TOKENS ? DSV4_REVIEW_INPUT_TOKENS : e->memory.context-request->maximum);goto done;
+     }
+     if (dsv4_cancelled(server)) goto done;
+     logits=malloc((size_t)DSV4_VOCAB*sizeof(*logits));
+--- a/shiftwing/c/deepseek_v4_prefill.h
++++ b/shiftwing/c/deepseek_v4_prefill.h
+@@ -379,7 +379,7 @@
+ }
+ static inline uint64_t dsv4_prefill_bank_bytes(int tokens) {
+     /* HC state plus bounded full-prompt FFN input/sum and routing metadata. */
+-    return tokens<1 || tokens>32768 ? 0 : (uint64_t)tokens*((DSV4_HC_MULT+2)*DSV4_ATTN_HIDDEN*sizeof(float)+
++    return tokens<1 || tokens>DSV4_REVIEW_INPUT_TOKENS ? 0 : (uint64_t)tokens*((DSV4_HC_MULT+2)*DSV4_ATTN_HIDDEN*sizeof(float)+
+         (DSV4_HC_MULT+DSV4_HC_MULT*DSV4_HC_MULT+DSV4_TOPK)*sizeof(float)+2*DSV4_TOPK*sizeof(int));
+ }
+ /* Layer-major across the entire prompt, with bounded GEMM chunks. Keeping one
+@@ -387,7 +387,7 @@
+  * Partial layer state is never reused after cancellation or reported committed. */
+ static inline int dsv4_runtime_prefill_prompt(dsv4_runtime *r,const int *tokens,int count,int chunk,float *logits,
+     dsv4_prefill_progress_fn progress,void *opaque) {
+-    if (!r || r->poisoned || !tokens || count<1 || count>32768 || chunk<1 || chunk>2048 || count>r->context-r->position) return 0;
++    if (!r || r->poisoned || !tokens || count<1 || count>DSV4_REVIEW_INPUT_TOKENS || chunk<1 || chunk>2048 || count>r->context-r->position) return 0;
+     for (int b=0;b<count;b++) if (tokens[b]<0 || tokens[b]>=DSV4_VOCAB) return 0;
+     size_t width=(size_t)DSV4_ATTN_HIDDEN*DSV4_HC_MULT;
+     if (!dsv4_expert_prefill_begin(r->experts)) return 0;
+--- a/shiftwing/c/deepseek_v4_memory.h
++++ b/shiftwing/c/deepseek_v4_memory.h
+@@ -8,7 +8,7 @@
+ /* Current attention state is host-backed. Keep every persistent scratch buffer
+  * in this accounting, including ones shared by compressed attention modes. */
+ static inline uint64_t dsv4_runtime_scratch_bytes(int context) {
+-    if (context < 1 || context > 65536) return 0;
++    if (context < 1 || context > DSV4_MAX_CONTEXT) return 0;
+     uint64_t query = DSV4_ATTN_HEADS * DSV4_ATTN_HEAD_DIM;
+     uint64_t selection = DSV4_ATTN_WINDOW +
+         (DSV4_INDEX_TOPK > (context+127)/128 ? DSV4_INDEX_TOPK : (context+127)/128);
+@@ -41,10 +41,12 @@
+     uint64_t grouped = (uint64_t)DSV4_TOPK*(6*sizeof(void*)+sizeof(float)+
+         2*DSV4_MOE_INTERMEDIATE*sizeof(float)+DSV4_EXPERT_HIDDEN*sizeof(float)+
+         DSV4_MOE_INTERMEDIATE+(DSV4_MOE_INTERMEDIATE+127)/128);
+-    uint64_t attention = ((uint64_t)DSV4_ATTN_WINDOW+(65536+DSV4_INDEX_RATIO-1)/DSV4_INDEX_RATIO)*DSV4_ATTN_HEAD_DIM*sizeof(float) +
+-        ((uint64_t)65536+DSV4_INDEX_RATIO-1)/DSV4_INDEX_RATIO*DSV4_INDEX_DIM*sizeof(float) +
++    uint64_t selected = (DSV4_MAX_CONTEXT+DSV4_COMPRESS_RATIO-1)/DSV4_COMPRESS_RATIO;
++    if (selected < DSV4_INDEX_TOPK) selected = DSV4_INDEX_TOPK;
++    uint64_t attention = ((uint64_t)DSV4_ATTN_WINDOW+(DSV4_MAX_CONTEXT+DSV4_INDEX_RATIO-1)/DSV4_INDEX_RATIO)*DSV4_ATTN_HEAD_DIM*sizeof(float) +
++        ((uint64_t)DSV4_MAX_CONTEXT+DSV4_INDEX_RATIO-1)/DSV4_INDEX_RATIO*DSV4_INDEX_DIM*sizeof(float) +
+         (uint64_t)chunk*(2*width*sizeof(float)+DSV4_ATTN_HEAD_DIM*sizeof(float)+
+-            (DSV4_ATTN_WINDOW+DSV4_INDEX_TOPK+1)*sizeof(int))+65536*sizeof(float)+DSV4_ATTN_HEADS*sizeof(float);
++            (DSV4_ATTN_WINDOW+selected+1)*sizeof(int))+DSV4_MAX_CONTEXT*sizeof(float)+DSV4_ATTN_HEADS*sizeof(float);
+     return dense + expert + grouped + attention;
+ }
+ 
+@@ -62,7 +64,7 @@
+     uint64_t host_available, uint64_t device_available, int cuda,
+     uint64_t host_budget, uint64_t device_budget, uint64_t device_headroom) {
+     memset(p, 0, sizeof(*p));
+-    if (context < 1 || context > 65536 ||
++    if (context < 1 || context > DSV4_MAX_CONTEXT ||
+         (chunk != 256 && chunk != 512 && chunk != 1024 && chunk != 2048)) {
+         snprintf(p->error, sizeof(p->error), "invalid context or prefill chunk"); return 0;
+     }
+@@ -83,7 +85,7 @@
+     for (; chunk >= 256; chunk /= 2) {
+         p->chunk=chunk;
+         p->host_scratch=dsv4_runtime_scratch_bytes(context)+dsv4_prefill_host_bytes(chunk)+
+-            dsv4_prefill_bank_bytes(context<32768 ? context : 32768);
++            dsv4_prefill_bank_bytes(context<DSV4_REVIEW_INPUT_TOKENS ? context : DSV4_REVIEW_INPUT_TOKENS);
+         p->device_scratch=cuda ? dsv4_device_scratch_bytes(chunk) : 0;
+         uint64_t fixed=p->dense_bytes+p->state_bytes+p->host_scratch+
+             p->staging_bytes+p->request_bytes+p->host_headroom;
+--- a/shiftwing/c/tests/probe_deepseek_v4_prefill.c
++++ b/shiftwing/c/tests/probe_deepseek_v4_prefill.c
+@@ -21,7 +21,7 @@
+ int main(int argc,char **argv) {
+     if (argc!=6) { fprintf(stderr,"usage: probe SNAP TOKENS_BIN COUNT CHUNK OUTPUT_HC\n");return 2; }
+     int count=atoi(argv[3]),chunk=atoi(argv[4]);
+-    if (count<1 || count>32768 || chunk<1 || chunk>2048) return 2;
++    if (count<1 || count>DSV4_REVIEW_INPUT_TOKENS || chunk<1 || chunk>2048) return 2;
+     int *tokens=malloc(count*sizeof(int));
+     FILE *f=fopen(argv[2],"rb");
+     if (!tokens || !f || fread(tokens,sizeof(int),count,f)!=(size_t)count || fgetc(f)!=EOF) return 2;
+--- a/shiftwing/c/tools/deepseek_v4_spec.py
++++ b/shiftwing/c/tools/deepseek_v4_spec.py
+@@ -20,10 +20,11 @@
+ MODEL_FAMILY = "deepseek-v4"
+ 
+ DEFAULT_CONTEXT = 16_384
+-REVIEW_INPUT_TOKENS = 32_768
++REVIEW_INPUT_TOKENS = 131_072
+ REVIEW_OUTPUT_TOKENS = 8_192
+ REVIEW_CONTEXT = REVIEW_INPUT_TOKENS + REVIEW_OUTPUT_TOKENS
+-MAX_CONTEXT = 65_536
++MAX_CONTEXT = REVIEW_CONTEXT
++ORIGINAL_CONTEXT = 65_536
+ UPSTREAM_MAX_CONTEXT = 1_048_576
+ WEIGHT_SHARDS = 48
+ 
+@@ -109,7 +110,7 @@
+     "beta_fast": 32,
+     "beta_slow": 1,
+     "factor": 16,
+-    "original_max_position_embeddings": MAX_CONTEXT,
++    "original_max_position_embeddings": ORIGINAL_CONTEXT,
+     "type": "yarn",
+ }
+ 
+@@ -139,7 +140,7 @@
+         raise ValueError("context must be positive")
+     if context > MAX_CONTEXT:
+         raise ValueError(
+-            f"DeepSeek context {context} exceeds validated maximum {MAX_CONTEXT}"
++            f"DeepSeek context {context} exceeds configured maximum {MAX_CONTEXT}"
+         )
+     return context
+ 
+--- a/shiftwing/c/shiftwing
++++ b/shiftwing/c/shiftwing
+@@ -39,6 +39,13 @@
+ def _runtime_env(args: argparse.Namespace) -> dict[str, str]:
+     from openai_server import apply_engine_defaults
+ 
++    from tools.deepseek_v4_spec import validate_context
++
++    deepseek = _is_deepseek(args.model)
++    if deepseek:
++        validate_context(args.context)
++    elif not 1 <= args.context <= 65_536:
++        raise SystemExit("context must be between 1 and 65536 for this engine")
+     env = os.environ.copy()
+     env.setdefault("SERVE_RESIDENT", "1")
+     apply_engine_defaults(env)
+@@ -106,7 +113,7 @@
+                 "CUDA_PINNED_UPLOAD": "1",
+             }
+         )
+-    if _is_deepseek(args.model):
++    if deepseek:
+         env["DSPARK"] = getattr(args, "dspark", "off")
+         env["DSV4_EXPERIMENTAL"] = "1" if getattr(args, "experimental_deepseek", False) else "0"
+         env.setdefault("RAM_GB", "8")
+@@ -257,8 +264,9 @@
+         context = int(value)
+     except ValueError as error:
+         raise argparse.ArgumentTypeError("context must be an integer") from error
+-    if not 1 <= context <= 65_536:
+-        raise argparse.ArgumentTypeError("context must be between 1 and 65536")
++    from tools.deepseek_v4_spec import MAX_CONTEXT
++    if not 1 <= context <= MAX_CONTEXT:
++        raise argparse.ArgumentTypeError(f"context must be between 1 and {MAX_CONTEXT}")
+     return context
+ 
+ 
+--- a/localforge/src/inference/deepseek-review.ts
++++ b/localforge/src/inference/deepseek-review.ts
+@@ -3,7 +3,7 @@
+ import path from "node:path";
+ import type { InferenceRoute } from "./types.ts";
+ 
+-export const DEEPSEEK_REVIEW = Object.freeze({ inputTokens: 32768, outputTokens: 8192, contextTokens: 40960,
++export const DEEPSEEK_REVIEW = Object.freeze({ inputTokens: 131072, outputTokens: 8192, contextTokens: 139264,
+   sourceRevision: "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+   tokenizerSha256: "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf",
+   encodingSha256: "abc0d26120250dda0ae077dc64aa28836026e61e970854aaeb792445e6a0dde6" });
+--- a/shiftwing/c/tests/test_deepseek_v4_count.py
++++ b/shiftwing/c/tests/test_deepseek_v4_count.py
+@@ -37,7 +37,7 @@
+         prompt = render_deepseek_chat([{'role': 'system', 'content': 'Keep every changed line.'},
+                                       {'role': 'user', 'content': '你好\n- old\n+ new\n' + ' evidence' * 32768}],
+                                      reasoning_effort='low')
+-        for tokens, fits in ((32768, True), (32769, False)):
++        for tokens, fits in ((32768, True), (32769, True), (131072, True), (131073, False)):
+             with mock.patch.object(subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout=json.dumps({'tokens': tokens}).encode())) as run:
+                 result = self.counter.count(prompt, reasoning_effort='low')
+             raw = prompt.encode()
+@@ -46,9 +46,9 @@
+             self.assertEqual(result['prompt_sha256'], hashlib.sha256(raw).hexdigest())
+             self.assertEqual(result['prompt_tokens'], tokens)
+             self.assertEqual(result['fits'], fits)
+-            self.assertEqual(result['input_limit'], 32768)
++            self.assertEqual(result['input_limit'], 131072)
+             self.assertEqual(result['output_budget'], 8192)
+-            self.assertEqual(result['review_context'], 40960)
++            self.assertEqual(result['review_context'], 139264)
+             self.assertEqual(result['reasoning_effort'], 'low')
+ 
+     def test_changed_tokenizer_fails_before_helper_execution(self):
+@@ -168,6 +168,18 @@
+         self.assertEqual(rows[2]['ids'], [9, 3916])
+         self.assertEqual(rows[0]['tokens'], 0)
+ 
++    def test_native_rendered_prompt_at_128k_input_boundary(self):
++        native = counter.DeepSeekTokenCounter(self.tokenizer.parent, self.binary)
++        def render(words):
++            return render_deepseek_chat([{'role': 'user', 'content': ' evidence' * words}])
++        overhead = native.count(render(1))['prompt_tokens'] - 1
++        for target, fits in ((131072, True), (131073, False)):
++            counted = native.count(render(target - overhead))
++            self.assertEqual(counted['prompt_tokens'], target)
++            self.assertEqual(counted['fits'], fits)
++            self.assertEqual(counted['input_limit'], 131072)
++            self.assertEqual(counted['review_context'], 139264)
++
+     def test_invalid_or_truncated_frames_fail(self):
+         for frame in (b'COUNT -1\n', b'COUNT 16777217\n', b'COUNT 4 junk\n', b'COUNT 4\nabc', b'COUNT 1\nx!'):
+             result = subprocess.run([self.binary, self.tokenizer], input=frame, capture_output=True, timeout=10)
+--- a/shiftwing/c/tests/test_deepseek_v4_tooling.py
++++ b/shiftwing/c/tests/test_deepseek_v4_tooling.py
+@@ -40,8 +40,10 @@
+     def test_context_reasoning_and_sampling_contracts(self):
+         self.assertEqual(spec.validate_context(16_384), 16_384)
+         self.assertEqual(spec.validate_context(65_536), 65_536)
+-        with self.assertRaisesRegex(ValueError, "validated maximum"):
+-            spec.validate_context(65_537)
++        self.assertEqual(spec.validate_context(139_264), 139_264)
++        self.assertEqual(spec.EXPECTED_ROPE_SCALING["original_max_position_embeddings"], 65_536)
++        with self.assertRaisesRegex(ValueError, "configured maximum"):
++            spec.validate_context(139_265)
+         self.assertIsNone(spec.validate_reasoning_effort(None))
+         self.assertEqual(spec.validate_reasoning_effort("high"), "high")
+         for value in ("low", "max"):
+--- a/shiftwing/c/tests/test_openai_server_deepseek.py
++++ b/shiftwing/c/tests/test_openai_server_deepseek.py
+@@ -58,7 +58,7 @@
+                     "--model",
+                     str(snapshot),
+                     "--context",
+-                    "65536",
++                    "139264",
+                     "--dspark",
+                     "off",
+                 ]
+@@ -73,12 +73,24 @@
+                 "deepseek-v4-flash-0731-colib",
+             )
+             environment = namespace["_runtime_env"](args)
+-            self.assertEqual(environment["CTX"], "65536")
++            self.assertEqual(environment["CTX"], "139264")
+             self.assertEqual(environment["DSPARK"], "off")
+             with self.assertRaises(SystemExit):
+                 parser.parse_args(
+-                    ["serve", "--model", str(snapshot), "--context", "65537"]
++                    ["serve", "--model", str(snapshot), "--context", "139265"]
+                 )
++
++    def test_cli_retains_other_engines_context_limit(self):
++        namespace = runpy.run_path(str(ROOT / "shiftwing"), run_name="deepseek_cli_test")
++        with tempfile.TemporaryDirectory() as tmp:
++            snapshot = Path(tmp)
++            (snapshot / "config.json").write_text(json.dumps({"model_type": "qwen3_5"}))
++            args = namespace["build_parser"]().parse_args(
++                ["serve", "--model", str(snapshot), "--context", "65536"])
++            self.assertEqual(namespace["_runtime_env"](args)["CTX"], "65536")
++            args.context = 65537
++            with self.assertRaisesRegex(SystemExit, "65536 for this engine"):
++                namespace["_runtime_env"](args)
+ 
+     def test_render_dispatches_to_pinned_official_encoder(self):
+         messages = [{"role": "user", "content": "Hello"}]
+--- a/shiftwing/c/tests/test_deepseek_v4_runtime.c
++++ b/shiftwing/c/tests/test_deepseek_v4_runtime.c
+@@ -35,10 +35,10 @@
+     dsv4_expert_cache experts = {0};
+     dsv4_runtime runtime = {0};
+     CHECK(dsv4_runtime_state_bytes(1) > 0);
+-    CHECK(dsv4_runtime_state_bytes(65536) >
++    CHECK(dsv4_runtime_state_bytes(DSV4_MAX_CONTEXT) >
+           dsv4_runtime_state_bytes(1));
+     CHECK(dsv4_runtime_state_bytes(0) == 0);
+-    CHECK(dsv4_runtime_state_bytes(65537) == 0);
++    CHECK(dsv4_runtime_state_bytes(DSV4_MAX_CONTEXT+1) == 0);
+     CHECK(dsv4_runtime_init(&runtime, &store, &dense, &experts, 1));
+     CHECK(runtime.context == 1 && runtime.position == 0 &&
+           !runtime.poisoned);
+--- a/shiftwing/c/tests/test_deepseek_v4_memory.c
++++ b/shiftwing/c/tests/test_deepseek_v4_memory.c
+@@ -8,7 +8,7 @@
+     assert(p.host_capacity>=DSV4_TOPK && p.state_bytes==dsv4_runtime_state_bytes(40960));
+     assert(!dsv4_plan_memory(&p,40960,1024,29*DSV4_GIB,2*DSV4_GIB,1,8*DSV4_GIB,2*DSV4_GIB,3*DSV4_GIB/2));
+     assert(!dsv4_plan_memory(&p,40960,1024,8*DSV4_GIB,15*DSV4_GIB,1,8*DSV4_GIB,2*DSV4_GIB,3*DSV4_GIB/2));
+-    assert(!dsv4_plan_memory(&p,65537,1024,29*DSV4_GIB,15*DSV4_GIB,1,8*DSV4_GIB,2*DSV4_GIB,3*DSV4_GIB/2));
++    assert(!dsv4_plan_memory(&p,DSV4_MAX_CONTEXT+1,1024,29*DSV4_GIB,15*DSV4_GIB,1,8*DSV4_GIB,2*DSV4_GIB,3*DSV4_GIB/2));
+     assert(!dsv4_plan_memory(&p,40960,333,29*DSV4_GIB,15*DSV4_GIB,1,8*DSV4_GIB,2*DSV4_GIB,3*DSV4_GIB/2));
+     uint64_t dense=DSV4_BASE_DENSE_BYTES+(uint64_t)DSV4_BASE_DENSE_RECORDS*DSV4_DENSE_ALIGNMENT;
+     uint64_t minimum=(uint64_t)DSV4_TOPK*dsv4_expert_payload_bytes();
+@@ -16,6 +16,11 @@
+     assert(dsv4_plan_memory(&p,40960,2048,29*DSV4_GIB,tight,1,8*DSV4_GIB,2*DSV4_GIB,3*DSV4_GIB/2));
+     assert(p.chunk==256 && p.device_cache==minimum);
+     assert(!dsv4_plan_memory(&p,40960,256,29*DSV4_GIB,tight-1,1,8*DSV4_GIB,2*DSV4_GIB,3*DSV4_GIB/2));
++    assert(dsv4_plan_memory(&p,139264,1024,29*DSV4_GIB,15*DSV4_GIB,1,8*DSV4_GIB,2*DSV4_GIB,3*DSV4_GIB/2));
++    assert(p.context==139264 && p.host_required<=p.host_available && p.device_required<=p.device_available);
++    assert(p.state_bytes>dsv4_runtime_state_bytes(65536));
++    assert(dsv4_prefill_bank_bytes(131072)==4*dsv4_prefill_bank_bytes(32768));
++    assert(!dsv4_prefill_bank_bytes(131073));
+     puts("DeepSeek memory bounds, occupied GPU rejection and chunk shrink: ok");
+     return 0;
+ }
+--- a/shiftwing/c/tests/test_deepseek_v4_runtime_session.c
++++ b/shiftwing/c/tests/test_deepseek_v4_runtime_session.c
+@@ -57,6 +57,11 @@
+ }
+ 
+ int main(void) {
++    dsv4_runtime_session_shape large_shape;
++    CHECK(dsv4_runtime_session_shape_for(139264, &large_shape));
++    CHECK(!dsv4_runtime_session_shape_for(139265, &large_shape));
++    CHECK((large_shape.compressed_kv + large_shape.window_kv + large_shape.mhc)*sizeof(uint16_t)
++          + large_shape.compressor*sizeof(float) + 139264*sizeof(int32_t) < DSV4_SESSION_MAX_BYTES);
+     dsv4_store store = {0};
+     dsv4_dense_arena dense = {0};
+     dsv4_expert_cache experts = {0};
+--- a/localforge/src/mediated-agent-harness/__tests__/deepseek-review.test.ts
++++ b/localforge/src/mediated-agent-harness/__tests__/deepseek-review.test.ts
+@@ -10,11 +10,11 @@
+ import type { InferenceRoute } from "../../inference/types.ts";
+ 
+ const route: InferenceRoute = { provider: "colib", model: "deepseek-v4-flash-0731-colib", baseURL: "http://deepseek.test",
+-  reviewProfile: "deepseek-v4", contextTokens: 40960, maxOutputTokens: 8192, profile: { noThink: false } as InferenceRoute["profile"] };
+-function receipt(tokens = 32768): ExactReviewCount {
++  reviewProfile: "deepseek-v4", contextTokens: 139264, maxOutputTokens: 8192, profile: { noThink: false } as InferenceRoute["profile"] };
++function receipt(tokens = 131072): ExactReviewCount {
+   const prompt = "a".repeat(tokens);
+   return { prompt, prompt_bytes: tokens, prompt_tokens: tokens, prompt_sha256: createHash("sha256").update(prompt).digest("hex"),
+-    input_limit: 32768, output_budget: 8192, review_context: 40960, fits: tokens <= 32768,
++    input_limit: 131072, output_budget: 8192, review_context: 139264, fits: tokens <= 131072,
+     source_revision: DEEPSEEK_REVIEW.sourceRevision, tokenizer_sha256: DEEPSEEK_REVIEW.tokenizerSha256,
+     encoding_sha256: DEEPSEEK_REVIEW.encodingSha256, tokenizer_binary_sha256: "a".repeat(64), reasoning_effort: "low" };
+ }
+@@ -23,7 +23,7 @@
+ const count = async (messages: ChatMessage[]) => messages.reduce((n,m) => n + String(m.content).length, 0);
+ 
+ describe("native DeepSeek reviewer integration", () => {
+-  it("recognizes the explicit engine and retains the 32768/8192/40960 profile", () => {
++  it("recognizes the explicit engine and retains the 131072/8192/139264 profile", () => {
+     assert.equal(isDeepSeekEngine("/opt/shiftwing/c/deepseek_v4"), true);
+     assert.equal(isDeepSeekEngine("C:\\shiftwing\\deepseek_v4.exe"), true);
+     assert.equal(isDeepSeekEngine("/opt/shiftwing/c/glm53"), false);
+@@ -31,7 +31,7 @@
+     assert.equal(payload.max_tokens, 8192); assert.equal(payload.reasoning_effort, "low");
+     assert.equal(payload.enable_thinking, true);
+     assert.equal(bindCountedReview(payload, validateDeepSeekCount(receipt())).expected_prompt_sha256, receipt().prompt_sha256);
+-    assert.throws(() => bindCountedReview(payload, validateDeepSeekCount(receipt(32769))), /split it before the GPU swap/);
++    assert.throws(() => bindCountedReview(payload, validateDeepSeekCount(receipt(131073))), /split it before the GPU swap/);
+     assert.throws(() => bindCountedReview({ ...payload, max_tokens: 8193 }, receipt()), /8192/);
+   });
+   it("rejects mismatched tokenizer, prompt hash and claimed fit status", () => {
+--- a/localforge/src/mediated-agent-harness/__tests__/production-inference-service.test.ts
++++ b/localforge/src/mediated-agent-harness/__tests__/production-inference-service.test.ts
+@@ -595,7 +595,10 @@
+     lane.engineEnv = { DIRECT: "0", URING: "0", DSV4_EXPERIMENTAL: "1", DSPARK: "on" };
+     const resolved = resolveProductionInferenceConfig(settings, "/workspace/project");
+     const model = resolved.colib.models.auditor397b;
+-    assert.equal(model.contextTokens, 40960);
++    assert.equal(model.contextTokens, 139264);
++    const launchContext = buildColibLaunchSpec(resolved.colib, model, {});
++    assert.equal(launchContext.args[launchContext.args.indexOf("--context") + 1], "139264");
++    assert.equal(launchContext.options.env?.CTX, "139264");
+     assert.equal(model.maxOutputTokens, 8192);
+     assert.equal(model.ramGb, 8);
+     assert.equal(model.cudaExpertGb, 2);
+--- a/shiftwing/docs/research/deepseek-exact-count.md
++++ b/shiftwing/docs/research/deepseek-exact-count.md
+@@ -34,9 +34,11 @@
+ ```
+ 
+ The response includes `prompt` (the exact rendered string), `prompt_sha256`,
+-`prompt_bytes`, `prompt_tokens`, `input_limit: 32768`, `output_budget: 8192`,
+-`review_context: 40960`, and `fits`. An oversized prompt is returned intact with
++`prompt_bytes`, `prompt_tokens`, `input_limit: 131072`, `output_budget: 8192`,
++`review_context: 139264`, and `fits`. An oversized prompt is returned intact with
+ `fits: false`; the caller must split the review and recount its final packets.
++The 128k input cap is separate from the 8k response reserve (136k total context).
++LocalForge uses this profile for both code and scaffold reviews.
+ The counter never selects, summarizes, or removes evidence. `fits` describes the
+ input budget only; it does not qualify or approve a review.
+ 
+@@ -47,9 +49,9 @@
+ stays non-thinking; `low` opens the thinking block without the high/max prefix.
+ 
+ In tokenizer-only mode, generation endpoints return HTTP 503. Authentication and
+-host restrictions remain those of the existing gateway. The production reviewer
+-is still unavailable pending native serving and qualification. LocalForge has not
+-yet been wired to this endpoint; its current settings are unchanged.
++host restrictions remain those of the existing gateway. LocalForge invokes the CPU-only counter helper before swapping in DeepSeek
++for code and scaffold reviews. Counting and the configured input cap are
++independent of native serving qualification and measured review performance.
+ 
+ ## Native integration
+ 
+--- a/localforge/docs/bounded-review-preparation.md
++++ b/localforge/docs/bounded-review-preparation.md
+@@ -53,3 +53,24 @@
+ Provider truncation remains a dispatch blocker, with a preparation-specific
+ 2048-token diagnostic. The main orchestrator's 4096-token tool-call limit is
+ separate. Formatting failures are not a reason to discard scaffold requirements.
++
++## DeepSeek review input cap
++
++DeepSeek code, scaffold and approved-plan reviews share a 131,072-token (128k)
++input cap, with 8,192 tokens reserved separately for the response: 139,264 tokens
++of native context. The exact counter includes the rendered instructions,
++requirements, work specification and selected evidence before the model swap.
++Requests above the cap are split and recounted; every coverage part must pass.
++The preparer's own input budget remains separate from the reviewer's budget.
++
++The native engine, prefill buffers, memory planner and launch context use the
++same cap. The checkpoint's original 65,536-position RoPE scaling parameter is
++unchanged. This is a configured limit, not a new long-context performance result;
++older 32k benchmark and qualification records retain their measured scope.
++
++128k cap validation: code and scaffold dispatch tests accept the exact input
++boundary and reject oversized mandatory context before inference. Native
++counter tests count real rendered prompts at 131,072 and 131,073 tokens;
++allocation, prefill and session fixtures also pass. The CUDA binary builds.
++This change does not include a live 128k model benchmark. Existing processes
++pick up the new profile and executable on their next restart.
+--- /dev/null
++++ b/localforge/src/mediated-agent-harness/__tests__/deepseek-review-budget.test.ts
+@@ -0,0 +1,71 @@
++import assert from "node:assert/strict";
++import { it } from "node:test";
++import { DEEPSEEK_REVIEW } from "../../inference/deepseek-review.ts";
++import { executeOrchestratorToolCall, hashStructuredValue } from "../../orchestrator/tools.ts";
++import { createAuditGateState, createScaffoldAuditWorkSpec } from "../audit-agent.ts";
++import type { ToolExecutionContext, MediatedHarnessResult } from "../types.ts";
++
++const scaffold = { goal: "Preserve inventory contract", task_type: "editing", evidence_needed: [],
++  intended_files: ["src/inventory.ts"], suspected_files: [], suspected_functions: [], steps: ["Implement inventory"],
++  risks: [], acceptance_checks: ["Preserve the API"], verification: ["Focused tests"] };
++const result = (text: string): MediatedHarnessResult => ({ text, toolCalls: [], iterations: 1, usage: null, messages: [] });
++const approval = JSON.stringify({ verdict: "approved", required_actions: [], non_blocking_notes: [],
++  focused_test_evidence_reviewed: "pending", recommendation: "Test now" });
++
++for (const kind of ["code_review", "strategy_scaffold"] as const) {
++  for (const actualTokens of [131072, 131073]) {
++    it(`${kind} ${actualTokens === 131072 ? "accepts 128k" : "rejects mandatory context above 128k"} before dispatch`, async () => {
++      let counted = 0, dispatched = 0;
++      const ctx: ToolExecutionContext = {
++        cwd: process.cwd(), workspaceId: "deepseek-budget-test", allowedPaths: ["*"],
++        readFiles: async () => ({}), writeFiles: async () => {},
++        gitDiff: async () => "diff --git a/src/inventory.ts b/src/inventory.ts\n--- a/src/inventory.ts\n+++ b/src/inventory.ts\n@@ -1 +1 @@\n-old\n+new",
++        gitStatus: async () => " M src/inventory.ts",
++        runNamedCommand: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
++        auditRootRequest: "Preserve the original inventory API contract",
++        auditInputTokenLimit: DEEPSEEK_REVIEW.inputTokens, auditContextTokens: DEEPSEEK_REVIEW.contextTokens,
++        auditMaxOutputTokens: DEEPSEEK_REVIEW.outputTokens, auditGateEnforced: true, scaffoldAmendmentsEnabled: true,
++        taskComplexity: "complex", auditAgentModel: "deepseek-v4-flash-0731-colib",
++        swePhase: kind === "code_review" ? "review" : "localize", codeReviewRequired: kind === "code_review",
++        runReviewPreparation: async messages => {
++          assert.match(String(messages[0].content), /131072 actual rendered tokens/);
++          return JSON.stringify({ summary: "Check the API boundary.", excerpts: [] });
++        },
++        // Mock the native counter receipt to exercise exact boundary decisions,
++        // independently of the character estimator and without loading a model.
++        countReviewTokens: async (_messages, outputTokens) => {
++          counted++;
++          assert.equal(outputTokens, 8192);
++          return actualTokens;
++        },
++        runAuditAgent: async (messages, _model, _event, _id, options) => {
++          dispatched++;
++          assert.equal(options?.maxOutputTokens, 8192);
++          assert.match(JSON.stringify(messages), /original inventory API contract/);
++          return result(kind === "code_review" ? approval : JSON.stringify({ amended_scaffold: scaffold, notes: [], unresolved_issues: [] }));
++        },
++      };
++      if (kind === "code_review") {
++        ctx.strategyScaffold = structuredClone(scaffold);
++        ctx.strategyScaffoldHash = hashStructuredValue(scaffold);
++        ctx.auditGate = createAuditGateState({ workSpec: createScaffoldAuditWorkSpec(scaffold), rawText: JSON.stringify({
++          verdict: "approved", summary: "Ready", required_changes: [], risks: [], acceptance_gaps: [], recommendation: "Proceed",
++        }) });
++      }
++      const response = await executeOrchestratorToolCall({ id: "budget-" + kind, name: kind,
++        args: kind === "code_review" ? { tasks: ["Check the complete change"] } : structuredClone(scaffold) }, ctx);
++      assert.ok(counted > 0, response.output);
++      const gate = kind === "code_review" ? ctx.codeReviewGate : ctx.auditGate;
++      if (actualTokens === 131072) {
++        assert.notEqual(response.isError, true, response.output);
++        assert.equal(dispatched, 1);
++        assert.equal(gate?.passed, true);
++      } else {
++        assert.equal(response.isError, true, response.output);
++        assert.equal(dispatched, 0);
++        assert.equal(gate?.passed, false);
++        assert.match(response.output, /budget/);
++      }
++    });
++  }
++}
